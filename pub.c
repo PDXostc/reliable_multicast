@@ -8,7 +8,10 @@
 #include "rmc_pub.h"
 #include <assert.h>
 
-// A packet that can 
+
+// A packet that is either waiting to be sent,
+// or has been sent and is collecting acks from all subscribers.
+//
 typedef struct pending_packet {
     packet_id_t pid;
     // If ref_count == 0, then the packet has not yet been sent.
@@ -17,6 +20,7 @@ typedef struct pending_packet {
     uint32_t ref_count; 
     list_node_t* pending_node; // Back pointer to pub_context::pending
     payload_len_t payload_len;
+    usec_timestamp_t send_ts; // When was the packet sent.
     void *payload;
 } pending_packet_t;
 
@@ -123,7 +127,7 @@ packet_id_t pub_queue_packet(pub_context* ctx, void* payload, payload_len_t payl
     hpack->payload = payload;
     hpack->payload_len = payload_len;
     hpack->ref_count = 0;
-
+    hpack->send_ts = 0; // Will be set by pub_packet_sent()
 
     // Insert into ctx->pending, sorted in ascending order.
     // Store the node in hpack as a back pointer for easier future
@@ -147,6 +151,9 @@ void pub_packet_sent(pub_context* ctx, pending_packet_t* hpack)
     list_node_t* sub_node = 0; // Subscribers in ctx,
 
     assert(ctx);
+
+    // Record the usec timestamp when it was sent.
+    hpack->send_ts = get_usec_monotonic_timestamp(); 
 
     // Traverse all subscribers and insert hpack as 
     sub_node = list_head(ctx->sub

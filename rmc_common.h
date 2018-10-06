@@ -12,11 +12,14 @@
 #include <stdint.h>
 
 // TODO: Split up into multiple files. Some available as library
-// headers, some not.
+// headers, some as included by code that uses this library.
 
+// TODO: Rename externally accessible structs and functions
+//       rmc_xxx
+//
 typedef uint64_t packet_id_t;
 typedef uint16_t payload_len_t;
-typedef uint64_t timestamp_t;
+typedef uint64_t usec_timestamp_t;
 
 typedef struct list {
     struct list_node* head; 
@@ -79,7 +82,7 @@ extern uint32_t get_packet_intervals(list_t* packets,
 
 
 
-extern timestamp_t get_usec_monotonic_timestamp(void);
+extern usec_timestamp_t get_usec_monotonic_timestamp(void);
 
 #ifdef INCLUDE_TEST
 extern void test_packet_interval();

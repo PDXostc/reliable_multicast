@@ -6,15 +6,15 @@
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
 
-#include "rel_mcast_common.h"
+#include "rmc_common.h"
 #include <time.h>
 
-timestamp_t get_usec_monotonic_timestamp(void)
+usec_timestamp_t get_usec_monotonic_timestamp(void)
 {
     struct timespec res;
 
     clock_gettime(CLOCK_BOOTTIME, &res);
 
-    return res.tv_sec * 1000000 + res.tv_nsec / 1000; 
+    return (usec_timestamp_t) res.tv_sec * 1000000 + res.tv_nsec / 1000; 
 }
      

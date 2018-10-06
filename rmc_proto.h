@@ -90,10 +90,7 @@ typedef struct cmd_ack_multi {
 typedef struct cmd_ack_block_bitmap {
     packet_id_t first; // ID of first packet in bitmap
     payload_len_t length; // Number of bytes in 'data' bitmap
-    uuint8_t data[];
+    uint8_t data[];
 } cmd_ack_block_bitmap_t;
-
-
-
 
 #endif // __DSTC_H__
