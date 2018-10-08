@@ -521,14 +521,14 @@ void test_pub(void)
         exit(0);
     }        
 
-    // Inspect ctx inflighjt to see that its only remaining inflight packet is pid 2
+    // Inspect ctx inflighjt to see that its only remaining inflight
+    // packet is pid 2
     pack = (pending_packet_t*) list_head(&ctx.inflight)->data.data;
     if (pack->pid != 2) {
         printf("Failed pub test 8.3. Wanted size 2, got %lu\n",
                pack->pid);
         exit(0);
     }
-
 
     // 
     // Ack packet 2, which is the last one
@@ -553,11 +553,89 @@ void test_pub(void)
         exit(0);
     }        
 
-    test_print_context(&ctx);
+    // Send the rest of the packags.
+    pack = pub_next_queued_packet(&ctx);
+    if (pack->pid != 4) {
+        printf("Failed pub test 10.1. Wanted packet id 4, got %lu\n",
+               pack->pid);
+        exit(0);
+    }
+    pub_packet_sent(&ctx, pack, rmc_usec_monotonic_timestamp());
+
+    pack = pub_next_queued_packet(&ctx);
+    if (pack->pid != 5) {
+        printf("Failed pub test 10.2. Wanted packet id 5, got %lu\n",
+               pack->pid);
+        exit(0);
+    }
+    pub_packet_sent(&ctx, pack, rmc_usec_monotonic_timestamp());
+    
+    pack = pub_next_queued_packet(&ctx);
+    if (pack->pid != 6) {
+        printf("Failed pub test 10.3. Wanted packet id 6, got %lu\n",
+               pack->pid);
+        exit(0);
+    }
+    pub_packet_sent(&ctx, pack, rmc_usec_monotonic_timestamp());
+    
+    pack = pub_next_queued_packet(&ctx);
+    if (pack->pid != 7) {
+        printf("Failed pub test 10.4. Wanted packet id 7, got %lu\n",
+               pack->pid);
+        exit(0);
+    }
+    pub_packet_sent(&ctx, pack, rmc_usec_monotonic_timestamp());
+
+    // Ack all the packages in a semi-random order
+    pub_packet_ack(&sub1, 5);
+    pub_packet_ack(&sub2, 5);
+    pub_packet_ack(&sub3, 5);
+
+    pub_packet_ack(&sub1, 7);
+    pub_packet_ack(&sub2, 7);
+    pub_packet_ack(&sub3, 7);
+
+    pub_packet_ack(&sub1, 6);
+    pub_packet_ack(&sub2, 6);
+    pub_packet_ack(&sub3, 6);
+
+    pub_packet_ack(&sub1, 4);
+    pub_packet_ack(&sub2, 4);
+    pub_packet_ack(&sub3, 4);
+
+
+    // Check that everything is empty
+    if (list_size(&ctx.inflight) != 0) {
+        printf("Failed pub test 11.1. Wanted size 0, got %d\n",
+               list_size(&ctx.inflight));
+        exit(0);
+    }        
+    
+    if (list_size(&ctx.queued) != 0) {
+        printf("Failed pub test 11.2. Wanted size 0, got %d\n",
+               list_size(&ctx.queued));
+        exit(0);
+    }        
+    
+    
+    if (list_size(&sub1.inflight) != 0) {
+        printf("Failed pub test 11.3. Wanted size 0, got %d\n",
+               list_size(&sub1.inflight));
+        exit(0);
+    }        
+    
+    if (list_size(&sub2.inflight) != 0) {
+        printf("Failed pub test 11.4. Wanted size 0, got %d\n",
+               list_size(&sub2.inflight));
+        exit(0);
+    }        
+    
+    if (list_size(&sub3.inflight) != 0) {
+        printf("Failed pub test 11.5. Wanted size 0, got %d\n",
+               list_size(&sub3.inflight));
+        exit(0);
+    }        
     
 }
 #endif
-
-
-
 
