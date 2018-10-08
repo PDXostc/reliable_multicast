@@ -3,7 +3,7 @@
 #
 
 
-OBJ=list.o interval.o time.o
+OBJ=list.o interval.o time.o pub.o
 HDR=rmc_common.h
 
 CFLAGS = -g -DINCLUDE_TEST

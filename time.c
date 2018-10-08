@@ -9,7 +9,7 @@
 #include "rmc_common.h"
 #include <time.h>
 
-usec_timestamp_t get_usec_monotonic_timestamp(void)
+usec_timestamp_t rmc_usec_monotonic_timestamp(void)
 {
     struct timespec res;
 

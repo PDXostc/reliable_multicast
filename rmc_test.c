@@ -11,4 +11,5 @@ int main(int argc, char* argv[])
     test_list();
     test_packet_interval();
     test_packet_intervals();
+    test_pub();
 }
