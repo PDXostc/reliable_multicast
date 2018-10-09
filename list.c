@@ -31,7 +31,6 @@ static void _free_list_node(list_node_t* node)
     free((void*) node);
 }
 
-
 void list_init(list_t* list)
 {
     list->head = 0;
@@ -301,6 +300,29 @@ void list_for_each(list_t* list,
 }
 
 
+list_node_t* list_find_node(list_t* list,
+                            list_data_t data,
+                            int (*compare_func)(list_data_t new_elem,
+                                                list_data_t existing_elem))
+{
+    list_node_t* node = 0;
+
+    assert(list);
+    node = list_head(list);
+
+    //
+    // Traverse list until we find a pid greater than ours.
+    //
+    while(node) {
+        if ((*compare_func)(node->data, data) != 0) 
+            return node;
+
+        node = node->next;
+    }
+    return (list_node_t*) 0;
+}
+
+
 list_node_t* list_insert_sorted_node(list_t* list,
                                      list_node_t* new_node,
                                      int (*compare_func)(list_data_t new_elem,
@@ -319,12 +341,38 @@ list_node_t* list_insert_sorted_node(list_t* list,
             // Insert before the element that was greater than us.
             return list_insert_before_node(node, new_node);
         }
-        node = node->next;
+        node = list_next(node);
     }
 
     // Add to end of list.
     return list_push_tail_node(list, new_node);
 }
+
+list_node_t* list_insert_sorted_node_rev(list_t* list,
+                                         list_node_t* new_node,
+                                         int (*compare_func)(list_data_t new_elem,
+                                                         list_data_t existing_elem))
+{
+    list_node_t* node = 0;
+
+    assert(list);
+    node = list_tail(list);
+
+    //
+    // Traverse list until we find a pid greater than ours.
+    //
+    while(node) {
+        if ((*compare_func)(new_node->data, node->data) >= 0) {
+            // Insert before the element that was greater than us.
+            return list_insert_before_node(node, new_node);
+        }
+        node = list_prev(node);
+    }
+
+    // Add to end of list.
+    return list_push_head_node(list, new_node);
+}
+
 
 list_node_t* list_insert_sorted(list_t* list,
                                 list_data_t new_elem,
@@ -341,6 +389,23 @@ list_node_t* list_insert_sorted(list_t* list,
     new_node->data = new_elem;
     return list_insert_sorted_node(list, new_node, compare_func);
 }
+
+list_node_t* list_insert_sorted_rev(list_t* list,
+                                    list_data_t new_elem,
+                                    int (*compare_func)(list_data_t new_elem,
+                                                        list_data_t existing_elem))
+{
+    list_node_t* node = 0;
+    list_node_t* new_node = 0;
+    assert(list);
+
+    new_node = _alloc_list_node();
+    assert(new_node);
+
+    new_node->data = new_elem;
+    return list_insert_sorted_node_rev(list, new_node, compare_func);
+}
+
 
 #ifdef INCLUDE_TEST
 
