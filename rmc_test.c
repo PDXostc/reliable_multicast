@@ -6,6 +6,15 @@
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
 #include "rmc_common.h"
+
+extern void test_packet_interval();
+extern void test_packet_intervals();
+extern void test_list();
+extern void test_pub(void);
+
+
+
+
 int main(int argc, char* argv[])
 {
     test_list();
