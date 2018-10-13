@@ -54,10 +54,10 @@ typedef struct sub_context {
 extern void sub_init_context(sub_context_t* ctx,
                              void (*payload_free)(void*, payload_len_t));
 
-extern void sub_packet_received(sub_publisher_t* pub,
-                                packet_id_t pid,
-                                void* payload,
-                                payload_len_t payload_len);
+extern int sub_packet_received(sub_publisher_t* pub,
+                               packet_id_t pid,
+                               void* payload,
+                               payload_len_t payload_len);
 
 // Go through all received packets and move those that are ready to
 // be dispathed to the ready queue
