@@ -302,7 +302,7 @@
         node = LISTTYPE##_head(list);                                   \
                                                                         \
         while(node) {                                                   \
-            if ((*compare_func)(node->data, data) != 0)                \
+            if ((*compare_func)(data, node->data) != 0)                            \
                 return node;                                            \
                                                                         \
             node = node->next;                                          \
