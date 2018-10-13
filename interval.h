@@ -10,7 +10,7 @@
 #define __INTERVAL_H__
 #include <stdint.h>
 
-typedef uint64_t packet_id_t;
+#include "rmc_common.h"
 
 typedef struct packet_interval {
     packet_id_t first_pid; // First packet ID in interval

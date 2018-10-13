@@ -12,20 +12,20 @@
 
 #include "rmc_list_template.h"
 
-RMC_LIST_IMPL(pend_list, pend_node, pub_pending_packet_t*) 
-RMC_LIST_IMPL(subs_list, subs_node, pub_subscriber_t*) 
+RMC_LIST_IMPL(pub_packet_list, pub_packet_node, pub_packet_t*) 
+RMC_LIST_IMPL(pub_sub_list, pub_sub_node, pub_subscriber_t*) 
 
 // TODO: Ditch malloc and use a stack-based alloc/free setup that operates
 //       on static-sized heap memory allocated at startup. 
-static pub_pending_packet_t* _alloc_pending_packet()
+static pub_packet_t* _alloc_pending_packet()
 {
-    pub_pending_packet_t* res = (pub_pending_packet_t*) malloc(sizeof(pub_pending_packet_t));
+    pub_packet_t* res = (pub_packet_t*) malloc(sizeof(pub_packet_t));
 
     assert(res);
     return res;
 }
 
-static void _free_pending_packet(pub_pending_packet_t* ppack)
+static void _free_pending_packet(pub_packet_t* ppack)
 {
     assert(ppack);
     free((void*) ppack);
@@ -61,9 +61,9 @@ void pub_init_context(pub_context_t* ctx,
 {
     assert(ctx);
 
-    subs_list_init(&ctx->subscribers, 0, 0, 0);
-    pend_list_init(&ctx->queued, 0, 0, 0);
-    pend_list_init(&ctx->inflight, 0, 0, 0);
+    pub_sub_list_init(&ctx->subscribers, 0, 0, 0);
+    pub_packet_list_init(&ctx->queued, 0, 0, 0);
+    pub_packet_list_init(&ctx->inflight, 0, 0, 0);
     ctx->payload_free = payload_free;
     ctx->next_pid = 1;
 
@@ -77,8 +77,8 @@ void pub_init_subscriber(pub_subscriber_t* sub, pub_context_t* ctx)
     assert(ctx);
 
     sub->context = ctx;
-    pend_list_init(&sub->inflight, 0, 0, 0);
-    subs_list_push_tail(&ctx->subscribers, sub);
+    pub_packet_list_init(&sub->inflight, 0, 0, 0);
+    pub_sub_list_push_tail(&ctx->subscribers, sub);
 }
 
 
@@ -86,8 +86,8 @@ packet_id_t pub_queue_packet(pub_context_t* ctx,
                              void* payload,
                              payload_len_t payload_len)
 {
-    pend_node_t *node = 0;
-    pub_pending_packet_t* ppack = 0;
+    pub_packet_node_t *node = 0;
+    pub_packet_t* ppack = 0;
     assert(ctx);
     assert(payload);
 
@@ -107,32 +107,31 @@ packet_id_t pub_queue_packet(pub_context_t* ctx,
     // the pending packet in ctx->queed for quick unlinking.
     //
     ppack->parent_node = 
-        pend_list_insert_sorted(&ctx->queued,
+        pub_packet_list_insert_sorted(&ctx->queued,
                                 ppack,
-                                lambda(int, (pub_pending_packet_t* n_dt, pub_pending_packet_t* o_dt) {
+                                lambda(int, (pub_packet_t* n_dt, pub_packet_t* o_dt) {
                                         (n_dt->pid > o_dt->pid)?1:
                                             ((n_dt->pid < o_dt->pid)?-1:
                                              0);
                                     }
                                     ));
 
-    
     return ppack->pid;
 }
 
-pub_pending_packet_t* pub_next_queued_packet(pub_context_t* ctx)
+pub_packet_t* pub_next_queued_packet(pub_context_t* ctx)
 {
     assert(ctx);
     
-    return  pend_list_tail(&ctx->queued)->data;
+    return  pub_packet_list_tail(&ctx->queued)->data;
 }
 
 void pub_packet_sent(pub_context_t* ctx,
-                     pub_pending_packet_t* ppack,
+                     pub_packet_t* ppack,
                      usec_timestamp_t send_ts)
 {
-    subs_node_t* sub_node = 0; // Subscribers in ctx,
-    pend_node_t* ppack_node = 0;
+    pub_sub_node_t* sub_node = 0; // Subscribers in ctx,
+    pub_packet_node_t* ppack_node = 0;
 
     assert(ctx);
 
@@ -143,15 +142,15 @@ void pub_packet_sent(pub_context_t* ctx,
     // ppack->parent will still be allocated and can be reused
     // when we insert the ppack into the inflight packets
     // of context
-    pend_list_unlink(ppack->parent_node);
+    pub_packet_list_unlink(ppack->parent_node);
     
     // Insert existing ppack->parent list_node_t struct into
     // the context's inflight packets. 
     // Sorted on ascending pid.
     //
-    pend_list_insert_sorted_node(&ctx->inflight,
+    pub_packet_list_insert_sorted_node(&ctx->inflight,
                                  ppack->parent_node,
-                                 lambda(int, (pub_pending_packet_t* n_dt, pub_pending_packet_t* o_dt) {
+                                 lambda(int, (pub_packet_t* n_dt, pub_packet_t* o_dt) {
                                          if (n_dt->pid > o_dt->pid)
                                              return 1;
 
@@ -166,15 +165,15 @@ void pub_packet_sent(pub_context_t* ctx,
     // inflight list.
     // List is sorted on ascending order.
     //
-    sub_node = subs_list_head(&ctx->subscribers);
+    sub_node = pub_sub_list_head(&ctx->subscribers);
     while(sub_node) {
         pub_subscriber_t* sub = sub_node->data;
 
-        // Insert the new pub_pending_packet_t in the descending
+        // Insert the new pub_packet_t in the descending
         // packet_id sorted list of the subscriber's inflight packets.
-        pend_list_insert_sorted(&sub->inflight,
+        pub_packet_list_insert_sorted(&sub->inflight,
                                 ppack,
-                                lambda(int, (pub_pending_packet_t* n_dt, pub_pending_packet_t* o_dt) {
+                                lambda(int, (pub_packet_t* n_dt, pub_packet_t* o_dt) {
                                    if (n_dt->pid < o_dt->pid)
                                        return -1;
 
@@ -185,28 +184,28 @@ void pub_packet_sent(pub_context_t* ctx,
                                }
                                ));
         ppack->ref_count++;
-        sub_node = subs_list_next(sub_node);
+        sub_node = pub_sub_list_next(sub_node);
     }
 }
 
 
 void pub_packet_ack(pub_subscriber_t* sub, packet_id_t pid)
 {
-    pend_node_t* node = 0; // Packets
-    pub_pending_packet_t* ppack = 0;
+    pub_packet_node_t* node = 0; // Packets
+    pub_packet_t* ppack = 0;
 
     assert(sub);
 
     // Traverse all inflight packets of the subscriber and find the
     // one matching pid. We do this from the rear since we are more likely
     // to get an ack on an older packet with a lower pid than a newer one
-    node = pend_list_tail(&sub->inflight);
+    node = pub_packet_list_tail(&sub->inflight);
 
     while(node) {
         if (node->data->pid == pid)
             break;
 
-        node = pend_list_prev(node);
+        node = pub_packet_list_prev(node);
     }
 
     // No inflight packet found for the ack.
@@ -218,7 +217,7 @@ void pub_packet_ack(pub_subscriber_t* sub, packet_id_t pid)
     }
 
     // Delete from subscriber's inflight packets
-    pend_list_unlink(node);
+    pub_packet_list_unlink(node);
 
     // Decrease ref counter
     ppack = node->data;
@@ -230,7 +229,7 @@ void pub_packet_ack(pub_subscriber_t* sub, packet_id_t pid)
     // list that is to be unlinked and deleted.
     //
     if (!ppack->ref_count) {
-        pend_list_delete(ppack->parent_node);
+        pub_packet_list_delete(ppack->parent_node);
 
         // Free data using function provided to pub_init_context
         (*sub->context->payload_free)(ppack->payload, ppack->payload_len);

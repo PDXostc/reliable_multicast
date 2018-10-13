@@ -19,7 +19,7 @@ struct pub_subscriber;
 // A packet that is either waiting to be sent,
 // or has been sent and is collecting acks from all subscribers.
 //
-typedef struct pub_pending_packet {
+typedef struct pub_packet {
     packet_id_t pid;
     // If ref_count == 0, then the packet has not yet been sent.
     // If ref_count > 0, then the packet has been sent and can be found
@@ -29,17 +29,17 @@ typedef struct pub_pending_packet {
     // Back pointer to pub_context::queued or pub_context::pending, depending
     // on if the packet has been queud or sent.
     // Allows for quick movement of packet as it changes status.
-    struct _pend_node* parent_node; 
+    struct _pub_packet_node* parent_node; 
 
     usec_timestamp_t send_ts;   // When was the packet sent
     void *payload;              // Payload provided by pub_queue_packet()
     payload_len_t payload_len;  // Payload length provided by pub_queue_packet()
-} pub_pending_packet_t;
+} pub_packet_t;
 
 
-RMC_LIST(pend_list, pend_node, pub_pending_packet_t*) 
-typedef pend_list pend_list_t;
-typedef pend_node pend_node_t;
+RMC_LIST(pub_packet_list, pub_packet_node, pub_packet_t*) 
+typedef pub_packet_list pub_packet_list_t;
+typedef pub_packet_node pub_packet_node_t;
 
 // Each subscriber is hosted by a context.
 // Each subscriber has a list of pointers to pending_packet_t owned by
@@ -58,12 +58,12 @@ typedef struct pub_subscriber {
     struct pub_context* context;
     // Contains pointers to pending_packet_t sent but not
     // acknowledged.
-    pend_list_t inflight;
+    pub_packet_list_t inflight;
 } pub_subscriber_t; 
 
-RMC_LIST(subs_list, subs_node, pub_subscriber_t*) 
-typedef subs_list subs_list_t;
-typedef subs_node subs_node_t;
+RMC_LIST(pub_sub_list, pub_sub_node, pub_subscriber_t*) 
+typedef pub_sub_list pub_sub_list_t;
+typedef pub_sub_node pub_sub_node_t;
 
 
 // A publisher context.  Each publisher can have one or more
@@ -87,16 +87,13 @@ typedef subs_node subs_node_t;
 // list and is freed.
 //
 typedef struct pub_context {
-    subs_list_t subscribers; // of subscriber_t
-    pend_list_t queued;   // of pending_packet_t of packets waiting to be sent.
-    pend_list_t inflight; // of pending_packet_t sent and awaiting
-                     // acks. Used by subscriber_t::inflights
+    pub_sub_list_t subscribers; // of pub_subscriber_t
+    pub_packet_list_t queued;   // of pub_packet_t of packets waiting to be sent.
+    pub_packet_list_t inflight; // of pub_packet_t sent and awaiting
+                              // acks. Used by subscriber_t::inflights
     packet_id_t next_pid;
     void (*payload_free)(void*, payload_len_t);
 } pub_context_t;
-
-
-
 
 
 // Init a new context.
@@ -110,10 +107,10 @@ extern void pub_init_context(pub_context_t* ctx,
 extern void pub_init_subscriber(pub_subscriber_t* sub, pub_context_t* ctx);
 extern packet_id_t pub_queue_packet(pub_context_t* ctx, void* payload, payload_len_t payload_len);
 extern void pub_packet_sent(pub_context_t* ctx,
-                            pub_pending_packet_t* ppack,
+                            pub_packet_t* ppack,
                             usec_timestamp_t send_ts);
 
-extern pub_pending_packet_t* pub_next_queued_packet(pub_context_t* ctx);
+extern pub_packet_t* pub_next_queued_packet(pub_context_t* ctx);
 extern void pub_packet_ack(pub_subscriber_t* sub, packet_id_t pid);
 
 #endif // __RMC_PUB_H__

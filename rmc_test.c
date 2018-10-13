@@ -9,16 +9,18 @@
 
 extern void test_packet_interval();
 extern void test_packet_intervals();
-extern void test_list();
+extern void run_list_tests();
 extern void test_pub(void);
+extern void test_sub(void);
 
 
 
 
 int main(int argc, char* argv[])
 {
-    test_list();
+    run_list_tests();
     test_packet_interval();
     test_packet_intervals();
     test_pub();
+    test_sub();
 }

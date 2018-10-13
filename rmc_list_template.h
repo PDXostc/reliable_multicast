@@ -9,14 +9,14 @@
 #include <assert.h>
 
 #define RMC_LIST_IMPL(LISTTYPE, NODETYPE, DATATYPE)                     \
-    static NODETYPE* NODETYPE##_rmc_alloc_node(void* user_data)                   \
+    static inline NODETYPE* NODETYPE##_rmc_alloc_node(void* user_data)  \
     {                                                                   \
         NODETYPE* res = (NODETYPE*) malloc(sizeof(NODETYPE));           \
         assert(res);                                                    \
         return res;                                                     \
     }                                                                   \
                                                                         \
-    static void NODETYPE##_rmc_free_node(NODETYPE* node, void* user_data)         \
+    static inline void NODETYPE##_rmc_free_node(NODETYPE* node, void* user_data) \
     {                                                                   \
         assert(node);                                                   \
         free((void*) node);                                             \
@@ -31,31 +31,25 @@
         list->tail = 0;                                                 \
         list->elem_count = 0;                                           \
         list->user_data = user_data;                                    \
-        list->alloc_node = alloc_node?alloc_node:NODETYPE##_rmc_alloc_node;       \
-        list->free_node = free_node?free_node:NODETYPE##_rmc_free_node;           \
+        list->alloc_node = alloc_node?alloc_node:NODETYPE##_rmc_alloc_node; \
+        list->free_node = free_node?free_node:NODETYPE##_rmc_free_node; \
     }                                                                   \
                                                                         \
-    DATATYPE LISTTYPE##_data(NODETYPE* node)                            \
-    {                                                                   \
-        assert(node);                                                   \
-        return node->data;                                              \
-    }                                                                   \
-                                                                        \
-    NODETYPE* LISTTYPE##_head(LISTTYPE* list)                           \
+    inline NODETYPE* LISTTYPE##_head(LISTTYPE* list)                    \
     {                                                                   \
         assert(list);                                                   \
                                                                         \
         return list->head;                                              \
     }                                                                   \
                                                                         \
-    NODETYPE* LISTTYPE##_tail(LISTTYPE* list)                           \
+    inline NODETYPE* LISTTYPE##_tail(LISTTYPE* list)                    \
     {                                                                   \
         assert(list);                                                   \
                                                                         \
         return list->tail;                                              \
     }                                                                   \
                                                                         \
-    NODETYPE* LISTTYPE##_prev(NODETYPE* node)                           \
+    inline NODETYPE* LISTTYPE##_prev(NODETYPE* node)                    \
     {                                                                   \
         if (node)                                                       \
             return node->prev;                                          \
@@ -63,7 +57,7 @@
         return 0;                                                       \
     }                                                                   \
                                                                         \
-    NODETYPE* LISTTYPE##_next(NODETYPE* node)                           \
+    inline NODETYPE* LISTTYPE##_next(NODETYPE* node)                    \
     {                                                                   \
         if (node)                                                       \
             return node->next;                                          \
@@ -72,7 +66,7 @@
     }                                                                   \
                                                                         \
                                                                         \
-    uint32_t LISTTYPE##_size(LISTTYPE* list)                            \
+    inline uint32_t LISTTYPE##_size(LISTTYPE* list)                     \
     {                                                                   \
         assert(list);                                                   \
                                                                         \
@@ -80,7 +74,7 @@
     }                                                                   \
                                                                         \
                                                                         \
-    NODETYPE* LISTTYPE##_push_head_node(LISTTYPE* owner, NODETYPE* node) \
+    inline NODETYPE* LISTTYPE##_push_head_node(LISTTYPE* owner, NODETYPE* node) \
     {                                                                   \
         assert(owner);                                                  \
         assert(node);                                                   \
@@ -110,7 +104,7 @@
         return LISTTYPE##_push_head_node(list, node);                   \
     }                                                                   \
                                                                         \
-    NODETYPE* LISTTYPE##_push_tail_node(LISTTYPE* owner, NODETYPE* node) \
+    inline NODETYPE* LISTTYPE##_push_tail_node(LISTTYPE* owner, NODETYPE* node) \
     {                                                                   \
         NODETYPE* tail = 0;                                             \
                                                                         \
@@ -144,7 +138,7 @@
         return LISTTYPE##_push_tail_node(list, node);                   \
     }                                                                   \
                                                                         \
-    NODETYPE* LISTTYPE##_insert_before_node(NODETYPE* next, NODETYPE* node) \
+    inline NODETYPE* LISTTYPE##_insert_before_node(NODETYPE* next, NODETYPE* node) \
     {                                                                   \
         assert(node);                                                   \
         assert(next != 0);                                              \
@@ -174,7 +168,7 @@
         return LISTTYPE##_insert_before_node(next, node);               \
     }                                                                   \
                                                                         \
-    NODETYPE* LISTTYPE##_insert_after_node(NODETYPE* prev, NODETYPE* node) \
+    inline NODETYPE* LISTTYPE##_insert_after_node(NODETYPE* prev, NODETYPE* node) \
     {                                                                   \
         assert(prev != 0);                                              \
         assert(prev->owner != 0);                                       \
@@ -203,7 +197,7 @@
     }                                                                   \
                                                                         \
                                                                         \
-    NODETYPE* LISTTYPE##_unlink(NODETYPE* node)                         \
+    inline NODETYPE* LISTTYPE##_unlink(NODETYPE* node)                         \
     {                                                                   \
         assert(node);                                                   \
         assert(node->owner);                                            \
@@ -232,7 +226,7 @@
     }                                                                   \
                                                                         \
                                                                         \
-    NODETYPE* LISTTYPE##_pop_head_node(LISTTYPE* list)                  \
+    inline NODETYPE* LISTTYPE##_pop_head_node(LISTTYPE* list)                  \
     {                                                                   \
         assert(list);                                                   \
                                                                         \
@@ -242,7 +236,7 @@
         return LISTTYPE##_unlink(list->head);                           \
     }                                                                   \
                                                                         \
-    DATATYPE LISTTYPE##_pop_head(LISTTYPE* list)                        \
+    inline DATATYPE LISTTYPE##_pop_head(LISTTYPE* list)                        \
     {                                                                   \
         DATATYPE data;                                                 \
         assert(list);                                                   \
@@ -272,7 +266,7 @@
         return data;                                                    \
     }                                                                   \
                                                                         \
-    NODETYPE* LISTTYPE##_pop_tail_node(LISTTYPE* list)                  \
+    inline NODETYPE* LISTTYPE##_pop_tail_node(LISTTYPE* list)                  \
     {                                                                   \
         assert(list);                                                   \
                                                                         \
@@ -349,7 +343,7 @@
                                                                         \
         while(node) {                                                   \
             if ((*compare_func)(new_node->data, node->data) >= 0) {     \
-                return LISTTYPE##_insert_before_node(node, new_node);   \
+                return LISTTYPE##_insert_after_node(node, new_node);   \
             }                                                           \
             node = LISTTYPE##_prev(node);                               \
         }                                                               \

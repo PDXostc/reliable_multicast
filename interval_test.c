@@ -37,7 +37,7 @@ void test_packet_interval()
     if (intv.first_pid != 1 || intv.last_pid != 5) {
         printf("Failed interval test 1.1. Wanted 1:5. Got %lu:%lu\n",
                intv.first_pid, intv.last_pid);
-        exit(0);
+        exit(255);
     }
 
     intv.first_pid = 0;
@@ -46,7 +46,7 @@ void test_packet_interval()
     if (intv.first_pid != 7 || intv.last_pid != 9) {
         printf("Failed interval test 1.2. Wanted 7:9. Got %lu:%lu\n",
                intv.first_pid, intv.last_pid);
-        exit(0);
+        exit(255);
     }
 
     intv.first_pid = 0;
@@ -55,7 +55,7 @@ void test_packet_interval()
     if (intv.first_pid != 223 || intv.last_pid != 224) {
         printf("Failed interval test 1.3. Wanted 223:224. Got %lu:%lu\n",
                intv.first_pid, intv.last_pid);
-        exit(0);
+        exit(255);
     }
 
     intv.first_pid = 0;
@@ -64,7 +64,7 @@ void test_packet_interval()
     if (intv.first_pid != 226 || intv.last_pid != 226) {
         printf("Failed interval test 1.4. Wanted 226:226. Got %lu:%lu\n",
                intv.first_pid, intv.last_pid);
-        exit(0);
+        exit(255);
     }
 
     while(pid_list_size(&p1))
@@ -79,7 +79,7 @@ void test_packet_interval()
     if (intv.first_pid != 100 || intv.last_pid != 100) {
         printf("Failed interval test 1.1. Wanted 100:100. Got %lu:%lu\n",
                intv.first_pid, intv.last_pid);
-        exit(0);
+        exit(255);
     }
 
     while(pid_list_size(&p1))
@@ -95,7 +95,7 @@ void test_packet_interval()
     if (intv.first_pid != 300 || intv.last_pid != 301) {
         printf("Failed interval test 1.1. Wanted 300-103. Got %lu %lu\n",
                intv.first_pid, intv.last_pid);
-        exit(0);
+        exit(255);
     }
 }
 
@@ -127,7 +127,7 @@ void test_packet_intervals()
 
     if (res != 9) {
         printf("Failed intervals test 1.1. Wanted 8. Got %u\n", res);
-        exit(0);
+        exit(255);
     }
 
     node = intv_list_head(&intv_lst);
@@ -135,7 +135,7 @@ void test_packet_intervals()
     if (intv.first_pid != 1 || intv.last_pid != 5) {
         printf("Failed intervals test 1.2. Wanted 1:5. Got %lu:%lu\n",
                intv.first_pid, intv.last_pid);
-        exit(0);
+        exit(255);
     }
 
     node = intv_list_next(node);
@@ -143,7 +143,7 @@ void test_packet_intervals()
     if (intv.first_pid != 7 || intv.last_pid != 7) {
         printf("Failed intervals test 1.3. Wanted 7:7. Got %lu:%lu\n",
                intv.first_pid, intv.last_pid);
-        exit(0);
+        exit(255);
     }
 
     node = intv_list_next(node);
@@ -151,7 +151,7 @@ void test_packet_intervals()
     if (intv.first_pid != 223 || intv.last_pid != 224) {
         printf("Failed intervals test 1.4. Wanted 223:224. Got %lu:%lu\n",
                intv.first_pid, intv.last_pid);
-        exit(0);
+        exit(255);
     }
 
     node = intv_list_next(node);
@@ -159,6 +159,6 @@ void test_packet_intervals()
     if (intv.first_pid != 226 || intv.last_pid != 226) {
         printf("Failed intervals test 1.4. Wanted 226:226. Got %lu:%lu\n",
                intv.first_pid, intv.last_pid);
-        exit(0);
+        exit(255);
     }
 }

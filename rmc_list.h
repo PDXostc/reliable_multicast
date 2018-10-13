@@ -68,7 +68,7 @@
                                                                         \
     extern void LISTTYPE##_for_each(LISTTYPE* list,                     \
                                     uint8_t (*func)(NODETYPE*node, void* user_data), \
-                                    void*);                             \
+                                    void*user_data);                    \
                                                                         \
     extern NODETYPE* LISTTYPE##_find_node(LISTTYPE* list,               \
                                           DATATYPE data,                \
@@ -81,10 +81,19 @@
                                               int (*compare_func)(DATATYPE new_elem, \
                                                                   DATATYPE existing_elem)); \
                                                                         \
+    extern NODETYPE* LISTTYPE##_insert_sorted_rev(LISTTYPE* list,       \
+                                                  DATATYPE new_elem,    \
+                                                  int (*compare_func)(DATATYPE new_elem, \
+                                                                  DATATYPE existing_elem)); \
+                                                                        \
     extern NODETYPE* LISTTYPE##_insert_sorted_node(LISTTYPE* list,      \
                                                    NODETYPE* node,      \
                                                    int (*compare_func)(DATATYPE new_elem, \
                                                                        DATATYPE existing_elem)); \
+    extern NODETYPE* LISTTYPE##_insert_sorted_node_rev(LISTTYPE* list,  \
+                                                       NODETYPE* node,  \
+                                                       int (*compare_func)(DATATYPE new_elem, \
+                                                                           DATATYPE existing_elem)); \
 
 #endif // __RMC_LIST_H__
 
