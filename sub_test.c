@@ -220,7 +220,6 @@ void test_sub(void)
                          0, 0);
 
 
-    // test_print_context(&ctx);
 
     // Check sequence
     test_sequence("1.1", &pub1->received, 1, 5);
@@ -397,10 +396,12 @@ void test_sub(void)
                        0,0);
     
 
+    //
     //--------
     // Test that we correctly can handle a package stream 
     // that starts later than pid 1
     //--------
+    //
     pub1 = reset_publisher(&ctx, pub1);
 
     add_received_packets(pub1,
@@ -473,7 +474,6 @@ void test_sub(void)
 
     // We should still have the same holes
     sub_get_missing_packets(pub1, &holes);
-
 
     test_interval_list("5.3", &holes,
                        3,3,
@@ -610,6 +610,92 @@ void test_sub(void)
         exit(255);
     }
 
+
+    //--------
+    // Test that we correctly drop dup packets
+    //--------
+
+    pub1 = reset_publisher(&ctx, pub1);
+
+    add_received_packets(pub1,
+                         1, 2,
+                         // 3-5
+                         6, 7,
+                         // 8-9
+                         10, 10,
+                         // 11-13
+                         14, 15,
+                         // 16-19
+                         20, 21,
+                         0, 0);
+    
+    // Check that we drop dups in the received queue
+    if (sub_packet_received(pub1, 1, "1", 2)) {
+        printf("Failed test 6.1 Wanted failure on dup packet [1] insert, got success\n");
+        exit(255);
+    }
+
+    // Process packet 1 and 2.
+    sub_process_received_packets(pub1);
+
+    // Check that we drop dups in the ready queue
+    if (sub_packet_received(pub1, 1, "1", 2)) {
+        printf("Failed test 6.2 Wanted failure on dup packet [1] insert, got success\n");
+        exit(255);
+    }
+    
+    // Plug the 3-5 hole
+    add_received_packets(pub1,
+                         3, 5,
+                         0, 0);
+
+    // Process packet 3-5.
+    sub_process_received_packets(pub1);
+
+    // Check that we drop dups in the ready queue
+    if (sub_packet_received(pub1, 1, "1", 2)) {
+        printf("Failed test 6.3 Wanted failure on dup packet [1] insert, got success\n");
+        exit(255);
+    }
+
+    // Check that we drop dups in the ready queue
+    if (sub_packet_received(pub1, 10, "10", 3)) {
+        printf("Failed test 6.4 Wanted failure on dup packet [10] insert, got success\n");
+        exit(255);
+    }
+
+    // Dispatch packet 1-4
+    // 1
+    pack = sub_next_ready_packet(pub1);
+    sub_packet_dispatched(pack);
+
+    // 2
+    pack = sub_next_ready_packet(pub1);
+    sub_packet_dispatched(pack);
+
+    // 3
+    pack = sub_next_ready_packet(pub1);
+    sub_packet_dispatched(pack);
+
+    // 4
+    pack = sub_next_ready_packet(pub1);
+    sub_packet_dispatched(pack);
+
+    // Check that we cannot dup dispatched packets
+    if (sub_packet_received(pub1, 1, "1", 2)) {
+        printf("Failed test 6.5 Wanted failure on dup packet [1] insert, got success\n");
+        exit(255);
+    }
+
+    if (sub_packet_received(pub1, 5, "5", 2)) {
+        printf("Failed test 6.6 Wanted failure on dup packet [5] insert, got success\n");
+        exit(255);
+    }
+
+    if (sub_packet_received(pub1, 10, "10", 10)) {
+        printf("Failed test 6.7 Wanted failure on dup packet [10] insert, got success\n");
+        exit(255);
+    }
 }
 
 
