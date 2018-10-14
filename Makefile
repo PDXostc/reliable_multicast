@@ -5,7 +5,7 @@
 
 # OBJ=list.o interval.o time.o pub.o
 OBJ=interval.o pub.o time.o sub.o
-TEST_OBJ = interval_test.o pub_test.o list_test.o rmc_test.o sub_test.o
+TEST_OBJ = interval_test.o pub_test.o list_test.o rmc_test.o sub_test.o rmc_proto.o
 HDR=rmc_common.h rmc_list_template.h rmc_pub.h interval.h
 
 

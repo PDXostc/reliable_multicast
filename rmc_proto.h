@@ -8,16 +8,13 @@
 
 #ifndef __REL_MCAST_PROTO_H__
 #define __REL_MCAST_PROTO_H__
-#include <stdint.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/epoll.h>
-#include "rel_mcast_common.h"
-#include "list.h"
+#include "rmc_common.h"
+
 
 
 typedef struct packet {
     packet_id_t id;
+    payload_len_t len;
     uint8_t payload[];
 } packet_t;
 
@@ -46,17 +43,7 @@ typedef struct cmd_init {
 typedef struct cmd_init_reply {
     uint8_t version; // Version supported;
     packet_id_t last_sent; // ID of last sent packet.
-} cmt_init_t;
-
-
-//
-// Single packet
-//
-typedef struct cmd_packet {
-    packet_id_t packet_id; // Packet ID in payload
-    payload_len_t length;    // Payload length of data[]
-    uint8_t data[];
-} cmt_init_t;
+} cmt_init_reply_t;
 
 
 // 
@@ -65,7 +52,7 @@ typedef struct cmd_packet {
 typedef struct cmd_ack {
     payload_len_t length;    // Payload length of data[]
     uint8_t data[];       // One or more block data elements
-} cmt_init_t;
+} cmt_ack_t;
 
 enum ack_block {
     BLOCK_SINGLE = 0,
@@ -92,5 +79,47 @@ typedef struct cmd_ack_block_bitmap {
     payload_len_t length; // Number of bytes in 'data' bitmap
     uint8_t data[];
 } cmd_ack_block_bitmap_t;
+
+#define RMC_MAX_SUBSCRIPTIONS 1024
+
+
+typedef struct rmc_context {
+    int socket_count;
+    int sockets[RMC_MAX_SUBSCRIPTIONS];
+    char multicast_addr[256];
+    int multicast_port;
+    char listen_ip[80];
+    int listen_port;
+    void (*socket_added)(int, int); // Callback for each socket opened
+    void (*socket_deleted)(int, int);  // Callback for each socket closed.
+} rmc_context_t;
+
+
+
+// All functions return error codes from error
+extern int rmc_init(rmc_context_t* context,
+                    char* multicast_addr,  // Domain name or IP
+                    int multicast_port,
+                    char* listen_ip, // For subscription management. TCP
+                    int listen_port, // For subscription management
+                    void (*socket_added)(int socket, int connection_index), // Callback for each socket opened
+                    void (*socket_deleted)(int socket, int  connection_index));  // Callback for each socket closed.
+
+extern int rmc_listen(rmc_context_t* context);
+
+extern int rmc_connect(rmc_context_t* context,
+                       char* server_ip,
+                       int server_port);
+
+
+extern int rmc_read(rmc_context_t* context, int connection_index);
+extern int rmc_write(rmc_context_t* context, int connection_index);
+extern int rmc_queue_packet(rmc_context_t* context, void* payload, payload_len_t payload_len);
+extern int rmc_get_socket_count(rmc_context_t* context, int *result);
+extern int rmc_get_sockets(rmc_context_t* context, int* sockets, int* max_len);
+extern int rmc_read_tcp(rmc_context_t* context);
+extern int rmc_read_multicast(rmc_context_t* context);
+extern int rmc_get_ready_packet_count(rmc_context_t* context);
+extern int rmc_get_packet(rmc_context_t* context, void** packet, int* payload_len);
 
 #endif // __DSTC_H__
