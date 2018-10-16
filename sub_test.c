@@ -183,13 +183,18 @@ static void test_interval_list(char* test,
 sub_publisher_t* reset_publisher(sub_context_t* ctx, sub_publisher_t* pub)
 {
     sub_packet_t* pack = 0;
+    uint8_t address[RMC_SUB_MAX_ADDR_LEN];
+    int address_len;
+
+    address_len = pub->address_len;
+    memcpy(address, pub->address, address_len);
 
     sub_process_received_packets(pub);
     while((pack = sub_next_ready_packet(pub)))
         sub_packet_dispatched(pack);
 
     sub_delete_publisher(pub);
-    return sub_add_publisher(ctx);
+    return sub_add_publisher(ctx, address, address_len);
 }
 
 void test_sub(void)
@@ -206,9 +211,9 @@ void test_sub(void)
     sub_init_context(&ctx, _test_sub_free);
     intv_list_init(&holes, 0, 0, 0);
 
-    pub1 = sub_add_publisher(&ctx);
-    pub2 = sub_add_publisher(&ctx);
-    pub3 = sub_add_publisher(&ctx);
+    pub1 = sub_add_publisher(&ctx, "p1", 2);
+    pub2 = sub_add_publisher(&ctx, "p2", 2);
+    pub3 = sub_add_publisher(&ctx, "p3", 3);
 
 
     //--------
@@ -267,8 +272,7 @@ void test_sub(void)
     }
 
     // Reset pub1
-    sub_delete_publisher(pub1);
-    pub1 = sub_add_publisher(&ctx);
+    pub1 = reset_publisher(&ctx, pub1);
     
     //--------
     // Out of order packages.
