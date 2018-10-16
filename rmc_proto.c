@@ -41,6 +41,38 @@ static int _get_free_slot(rmc_context_t* ctx)
 }
 
 
+static int _process_multicast_write(rmc_context_t* ctx)
+{
+    pub_context_t* pctx = &ctx->pub_ctx;
+    pub_packet_t* pack = pub_next_queued_packet(pctx);
+    uint8_t packet[RMC_MAX_SUBSCRIPTIONS];
+    uint8_t *packet_ptr = packet;
+    payload_len_t *hdr_len = (payload_len_t*) packet_ptr;
+    packet_id_t pid = 0;
+    usec_timestamp_t ts = rmc_usec_monotonic_timestamp();
+
+    // Initialize first two bytes (total multticast payload length) to 0.
+    *hdr_len = 0;
+    packet_ptr += sizeof(payload_len_t);
+
+    while(pack &&
+          *hdr_len <= RMC_MAX_SUBSCRIPTIONS) {
+
+        *((packet_id_t*) packet_ptr) = pack->pid;
+        packet_ptr += sizeof(packet_id_t);
+
+        *((payload_len_t*) packet_ptr) = pack->payload_len;
+        packet_ptr += sizeof(payload_len_t);
+        
+        memcpy(packet_ptr, pack->payload, pack->payload_len);
+        packet_ptr += pack->payload_len;
+
+        *hdr_len += sizeof(packet_id_t) + sizeof(payload_len_t) + pack->payload_len;
+        pub_packet_sent(pctx, pack, ts);
+        pack = pub_next_queued_packet(pctx);
+    }
+}
+
 
 static int _process_multicast_read(rmc_context_t* ctx)
 {
@@ -48,15 +80,13 @@ static int _process_multicast_read(rmc_context_t* ctx)
 }
     
 
-static int _process_multicast_write(rmc_context_t* ctx)
-{
-    return 0;
-}
+
     
 static int _process_listen(rmc_context_t* ctx)
 {
     return 0;
 }
+
 
 static int _process_subscription_read(rmc_context_t* ctx, int c_ind)
 {
@@ -75,6 +105,8 @@ int rmc_init(rmc_context_t* ctx,
              int multicast_port,
              char* listen_ip, // For subscription management
              int listen_port, // For subscription management
+             void* (*payload_alloc)(payload_len_t),
+             void (*payload_free)(void*, payload_len_t),
              void (*socket_added)(int, int), // Callback for each socket opened
              void (*socket_deleted)(int, int))  // Callback for each socket closed.
 {
@@ -97,9 +129,14 @@ int rmc_init(rmc_context_t* ctx,
 
     ctx->listen_port = listen_port;
     ctx->socket_added = socket_added;
-    ctx->socket_deleted = socket_added;
-    return 0;
+    ctx->socket_deleted = socket_deleted;
+    ctx->payload_alloc = payload_alloc;
+    ctx->payload_free = payload_free;
 
+    pub_init_context(&ctx->pub_ctx, payload_free);
+    sub_init_context(&ctx->sub_ctx, payload_free);
+
+    return 0;
 }
 
 
@@ -249,11 +286,11 @@ int rmc_read(rmc_context_t* ctx, int c_ind)
 
 
 
+
 int rmc_write(rmc_context_t* ctx, int c_ind)
 {
 
     assert(ctx);
-
 
     if (c_ind == RMC_MULTICAST_SOCKET)
         return _process_multicast_write(ctx);
@@ -287,13 +324,17 @@ int rmc_close_subscription(rmc_context_t* ctx, int c_ind)
         return errno;
 
     ctx->sockets[c_ind] = 0;
+
 }
 
 
 int rmc_queue_packet(rmc_context_t* ctx, void* payload, payload_len_t payload_len)
 {
+    pub_queue_packet(&ctx->pub_ctx, payload, payload_len);
     return 0;
 }
+            
+
 
 int rmc_get_socket_count(rmc_context_t* ctx, int *result)
 {
@@ -310,9 +351,80 @@ int rmc_read_tcp(rmc_context_t* ctx)
     return 0;
 }
 
+static int decode_multicast(rmc_context_t* ctx,
+                            uint8_t* packet,
+                            ssize_t packet_len,
+                            sub_publisher_t* pub)
+{
+    payload_len_t len = (payload_len_t) packet_len;
+    
+    // Traverse the received datagram and extract all packets
+    while(len) {
+        void* payload = 0;
+        packet_id_t pid = 0;
+        payload_len_t payload_len = 0;
+
+        pid = *(packet_id_t*) packet;
+        packet += sizeof(pid);
+
+        payload_len = *(payload_len_t*) packet;
+        packet += sizeof(payload_len);
+
+        payload = (*ctx->payload_alloc)(payload_len);
+        
+        if (!payload)
+            return ENOMEM;
+
+        memcpy(payload, packet, payload_len);
+        if (!sub_packet_received(pub, pid, payload, payload_len)) {
+            fprintf(stderr, "rmc_proto::decode_multicast(): Duplicate packet ID %lu. Ignored.\n", pid);
+            (*ctx->payload_free)(payload, payload_len);
+        }
+        len -= (payload_len + sizeof(pid) + sizeof(payload_len));
+    }
+
+    // Process received packages, moving consectutive ones
+    // over to the ready queue.
+    sub_process_received_packets(pub);
+
+    return 0;
+}
+
+
+
 int rmc_read_multicast(rmc_context_t* ctx)
 {
-    return 0;
+    uint8_t buffer[RMC_MAX_PAYLOAD];
+    payload_len_t payload_len;
+    struct sockaddr_in src_addr;
+    socklen_t addr_len = sizeof(src_addr);
+    ssize_t res;
+    sub_publisher_t* pub = 0;
+    if (!ctx)
+        return EINVAL;
+
+    if (ctx->sockets[RMC_MULTICAST_SOCKET] == -1)
+        return ENOTCONN;
+    
+    res = recvfrom(ctx->sockets[RMC_MULTICAST_SOCKET],
+                   buffer, sizeof(buffer),
+                   MSG_DONTWAIT,
+                   (struct sockaddr*) &src_addr, &addr_len);
+
+    if (res == -1) {
+        perror("rmc_proto::rmc_read_multicast(): recvfrom()");
+        return errno;
+    }
+    
+    pub = sub_find_publisher(&ctx->sub_ctx, &src_addr, addr_len);
+    
+    if (!pub) {
+        fprintf(stderr, "rmc_proto::rmc_read_multicast(): Publisher not found for %s\n",
+                inet_ntoa(src_addr.sin_addr));
+        return ENOENT;
+    }
+
+    return decode_multicast(ctx, buffer, res, pub);
 }
 
 int rmc_get_ready_packet_count(rmc_context_t* ctx)

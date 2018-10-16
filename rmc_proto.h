@@ -9,7 +9,8 @@
 #ifndef __REL_MCAST_PROTO_H__
 #define __REL_MCAST_PROTO_H__
 #include "rmc_common.h"
-
+#include "rmc_pub.h"
+#include "rmc_sub.h"
 
 
 typedef struct packet {
@@ -80,10 +81,13 @@ typedef struct cmd_ack_block_bitmap {
     uint8_t data[];
 } cmd_ack_block_bitmap_t;
 
+#define RMC_MAX_PAYLOAD 0x10000
 #define RMC_MAX_SUBSCRIPTIONS 1024
 
 
 typedef struct rmc_context {
+    pub_context_t pub_ctx;
+    sub_context_t sub_ctx;
     int socket_count;
     int sockets[RMC_MAX_SUBSCRIPTIONS];
     char multicast_addr[256];
@@ -92,6 +96,8 @@ typedef struct rmc_context {
     int listen_port;
     void (*socket_added)(int, int); // Callback for each socket opened
     void (*socket_deleted)(int, int);  // Callback for each socket closed.
+    void* (*payload_alloc)(payload_len_t payload_len);  // Free payload provided by rmc_queue_packet()
+    void (*payload_free)(void* payload, payload_len_t payload_len);  // Free payload provided by rmc_queue_packet()
 } rmc_context_t;
 
 
@@ -102,6 +108,10 @@ extern int rmc_init(rmc_context_t* context,
                     int multicast_port,
                     char* listen_ip, // For subscription management. TCP
                     int listen_port, // For subscription management
+                    // Funcation to call to free memory specified
+                    // by queue_packet(...,payload,payload_len)
+                    void* (*payload_alloc)(payload_len_t payload_len),
+                    void (*payload_free)(void* payload, payload_len_t payload_len),
                     void (*socket_added)(int socket, int connection_index), // Callback for each socket opened
                     void (*socket_deleted)(int socket, int  connection_index));  // Callback for each socket closed.
 
