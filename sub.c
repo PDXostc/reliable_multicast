@@ -9,6 +9,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <memory.h>
 
 #include "rmc_list_template.h"
 
@@ -249,13 +250,46 @@ void sub_get_missing_packets(sub_publisher_t* pub, intv_list_t* res)
 }
 
 
-sub_publisher_t* sub_add_publisher(sub_context_t* ctx)
+// FIXME: Replace linear search with hash table.
+static sub_publisher_node_t* _sub_find_publisher_node(sub_context_t* ctx, void* address, int address_len)
 {
-    sub_publisher_t* pub = _alloc_publisher();
+    sub_publisher_t tmp;
+
+    assert(address_len <= RMC_SUB_MAX_ADDR_LEN);
+
+    assert (ctx);
+    memcpy(tmp.address, address, address_len);
+    tmp.address_len = address_len;
+
+    return sub_publisher_list_find_node(&ctx->publishers,
+                                        &tmp,
+                                        lambda(int, (sub_publisher_t* dt1,
+                                                     sub_publisher_t* dt2) {
+                                                   return !memcmp(dt1->address, dt2->address, address_len);
+                                               }));
+}
+
+sub_publisher_t* sub_find_publisher(sub_context_t* ctx, void* address, int address_len)
+{
+    sub_publisher_node_t* node = _sub_find_publisher_node(ctx, address, address_len);
+
+    return node?node->data:0;
+}
+
+sub_publisher_t* sub_add_publisher(sub_context_t* ctx, void* address, int address_len) 
+{
+    sub_publisher_t* pub = 0;
+
+    assert(address_len <= RMC_SUB_MAX_ADDR_LEN);
+
+    pub = _alloc_publisher();
 
     pub->owner = ctx;
     pub->max_pid_received = 0;
     pub->max_pid_ready = 0;
+    memcpy(pub->address, address, address_len);
+    pub->address_len = address_len;
+
     sub_packet_list_init(&pub->received, 0, 0, 0);
     sub_packet_list_init(&pub->ready, 0, 0, 0);
     sub_publisher_list_push_head(&ctx->publishers, pub);
@@ -263,22 +297,24 @@ sub_publisher_t* sub_add_publisher(sub_context_t* ctx)
     return pub;
 }
 
+
 void sub_delete_publisher(sub_publisher_t* pub)
 {
-    sub_publisher_node_t* pub_node = 0;
     sub_context_t* ctx = 0;
-
-    assert(pub);
+    sub_publisher_node_t* pub_node = 0;
+    if (!pub)
+        return;
 
     ctx = pub->owner;
-    pub_node = sub_publisher_list_find_node(&ctx->publishers,
-                                            pub,
-                                            lambda(int, (sub_publisher_t* dt1,
-                                                         sub_publisher_t* dt2) {
-                                                       return dt1 == dt2;
-                                                   }));
-                   
-    // We should have a hit in the publisher's list
+    
+    // Find the publisher list node in ctx->publisher so that we
+    // can delete it.
+    pub_node =  sub_publisher_list_find_node(&ctx->publishers,
+                                             pub,
+                                             lambda(int, (sub_publisher_t* dt1,
+                                                          sub_publisher_t* dt2) {
+                                                        return dt1 == dt2;
+                                                    }));
     assert(pub_node);
     sub_publisher_list_delete(pub_node);
 
@@ -289,7 +325,6 @@ void sub_delete_publisher(sub_publisher_t* pub)
         _free_pending_packet(pack);
     }
 
-
     while(sub_packet_list_size(&pub->ready)) {
         sub_packet_t* pack = sub_packet_list_pop_head(&pub->ready);
         (*ctx->payload_free)(pack->payload, pack->payload_len);
@@ -298,6 +333,17 @@ void sub_delete_publisher(sub_publisher_t* pub)
 
 
     _free_publisher(pub);
+    return;
+}
+
+void sub_delete_publisher_by_address(sub_context_t* ctx, void* address, int address_len)
+{
+    sub_publisher_node_t* pub_node = _sub_find_publisher_node(ctx, address, address_len);
+
+    if (!pub_node)
+        return;
+
+    sub_delete_publisher(pub_node->data);
     return;
 }
 
