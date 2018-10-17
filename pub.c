@@ -121,9 +121,11 @@ packet_id_t pub_queue_packet(pub_context_t* ctx,
 
 pub_packet_t* pub_next_queued_packet(pub_context_t* ctx)
 {
+    pub_packet_node_t* node = 0;
     assert(ctx);
     
-    return  pub_packet_list_tail(&ctx->queued)->data;
+    node = pub_packet_list_tail(&ctx->queued);
+    return  node?node->data:0;
 }
 
 void pub_packet_sent(pub_context_t* ctx,
