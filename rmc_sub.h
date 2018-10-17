@@ -75,5 +75,7 @@ extern sub_publisher_t* sub_add_publisher(sub_context_t* ctx, void* address, int
 extern sub_publisher_t* sub_find_publisher(sub_context_t* ctx, void* address, int address_len);
 extern void sub_delete_publisher(sub_publisher_t* pub);
 extern void sub_delete_publisher_by_address(sub_context_t* ctx, void* address, int address_len);
+extern sub_packet_t* sub_get_next_ready_packet(sub_context_t* ctx);
+extern int sub_get_ready_packet_count(sub_context_t* ctx);
 
 #endif // __REL_MCAST_SUB__

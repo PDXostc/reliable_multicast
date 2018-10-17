@@ -159,8 +159,8 @@ void sub_packet_dispatched(sub_packet_t* pack)
 
     ctx = pack->publisher->owner;
 
-    // Unlink from ready list. Save the node
-    sub_packet_list_unlink(pack->owner_node);
+    // Unlink from ready list. 
+    sub_packet_list_delete(pack->owner_node);
 
     if (ctx->payload_free)
         (*ctx->payload_free)(pack->payload, pack->payload_len);
@@ -302,6 +302,7 @@ void sub_delete_publisher(sub_publisher_t* pub)
 {
     sub_context_t* ctx = 0;
     sub_publisher_node_t* pub_node = 0;
+
     if (!pub)
         return;
 
@@ -353,4 +354,33 @@ void sub_init_context(sub_context_t* ctx,
 {
     sub_publisher_list_init(&ctx->publishers, 0, 0, 0);
     ctx->payload_free = payload_free;
+}
+
+
+int sub_get_ready_packet_count(sub_context_t* ctx)
+{
+    int res = 0;
+    sub_publisher_list_for_each(&ctx->publishers,
+                                lambda(uint8_t, (sub_publisher_node_t* pub_node, void* res) {
+                                        *((int*) res) += sub_packet_list_size(&pub_node->data->ready);
+                                        return 1;
+                                    }),
+                                (void*) &res);
+    return res;
+}
+
+
+sub_packet_t* sub_get_next_ready_packet(sub_context_t* ctx)
+{
+    sub_publisher_node_t* node = sub_publisher_list_head(&ctx->publishers);
+
+    while(node) {
+        sub_packet_t* res = sub_next_ready_packet(node->data);
+        if (res) 
+            return res;
+
+        node = sub_publisher_list_next(node);
+    }
+
+    return 0;
 }
