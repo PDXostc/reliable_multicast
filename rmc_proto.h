@@ -11,6 +11,7 @@
 #include "rmc_common.h"
 #include "rmc_pub.h"
 #include "rmc_sub.h"
+#include <netinet/in.h>
 
 
 typedef struct packet {
@@ -84,6 +85,8 @@ typedef struct cmd_ack_block_bitmap {
 #define RMC_MAX_PAYLOAD 0x10000
 #define RMC_MAX_SUBSCRIPTIONS 1024
 
+#define RMC_MULTICAST_SOCKET_INDEX 0
+#define RMC_LISTEN_SOCKET_INDEX 1
 
 typedef struct rmc_context {
     pub_context_t pub_ctx;
@@ -92,6 +95,7 @@ typedef struct rmc_context {
     int sockets[RMC_MAX_SUBSCRIPTIONS];
     char multicast_addr[256];
     int multicast_port;
+    struct sockaddr_in mcast_dest_addr;
     char listen_ip[80];
     int listen_port;
     void (*socket_added)(int, int); // Callback for each socket opened
@@ -103,23 +107,26 @@ typedef struct rmc_context {
 
 
 // All functions return error codes from error
-extern int rmc_init(rmc_context_t* context,
-                    char* multicast_addr,  // Domain name or IP
-                    int multicast_port,
-                    char* listen_ip, // For subscription management. TCP
-                    int listen_port, // For subscription management
-                    // Funcation to call to free memory specified
-                    // by queue_packet(...,payload,payload_len)
-                    void* (*payload_alloc)(payload_len_t payload_len),
-                    void (*payload_free)(void* payload, payload_len_t payload_len),
-                    void (*socket_added)(int socket, int connection_index), // Callback for each socket opened
-                    void (*socket_deleted)(int socket, int  connection_index));  // Callback for each socket closed.
+extern int rmc_init_context(rmc_context_t* context,
+                            char* multicast_addr,  // Domain name or IP
+                            int multicast_port,
+                            char* listen_ip, // For subscription management. TCP
+                            int listen_port, // For subscription management
+                            // Funcation to call to free memory specified
+                            // by queue_packet(...,payload,payload_len)
+                            void* (*payload_alloc)(payload_len_t payload_len),
+                            void (*payload_free)(void* payload, payload_len_t payload_len),
+                            void (*socket_added)(int socket, int connection_index), // Callback for each socket opened
+                            void (*socket_deleted)(int socket, int  connection_index));  // Callback for each socket closed.
 
 extern int rmc_listen(rmc_context_t* context);
 
-extern int rmc_connect(rmc_context_t* context,
-                       char* server_ip,
-                       int server_port);
+extern int rmc_connect_subscription(rmc_context_t* ctx,
+                                    char* server_addr,
+                                    int server_port,
+                                    int* result_socket,
+                                    int* result_connection_index);
+
 
 
 extern int rmc_read(rmc_context_t* context, int connection_index);
@@ -130,6 +137,7 @@ extern int rmc_get_sockets(rmc_context_t* context, int* sockets, int* max_len);
 extern int rmc_read_tcp(rmc_context_t* context);
 extern int rmc_read_multicast(rmc_context_t* context);
 extern int rmc_get_ready_packet_count(rmc_context_t* context);
-extern int rmc_get_packet(rmc_context_t* context, void** packet, int* payload_len);
+extern sub_packet_t* rmc_get_next_ready_packet(rmc_context_t* context);
+extern void rmc_free_packet(sub_packet_t* packet);
 
 #endif // __DSTC_H__

@@ -24,10 +24,6 @@
 #include <netdb.h>
 #include <assert.h>
 
-#define RMC_MULTICAST_SOCKET 0
-#define RMC_LISTEN_SOCKET 1
-
-
 static int _get_free_slot(rmc_context_t* ctx)
 {
     int i = 2; // First two slots are pre-allocated for multicast and listen
@@ -50,7 +46,8 @@ static int _process_multicast_write(rmc_context_t* ctx)
     payload_len_t *hdr_len = (payload_len_t*) packet_ptr;
     packet_id_t pid = 0;
     usec_timestamp_t ts = rmc_usec_monotonic_timestamp();
-
+    ssize_t res = 0;
+    
     // Initialize first two bytes (total multticast payload length) to 0.
     *hdr_len = 0;
     packet_ptr += sizeof(payload_len_t);
@@ -71,6 +68,19 @@ static int _process_multicast_write(rmc_context_t* ctx)
         pub_packet_sent(pctx, pack, ts);
         pack = pub_next_queued_packet(pctx);
     }
+
+    res = sendto(ctx->sockets[RMC_MULTICAST_SOCKET_INDEX],
+                 packet,
+                 sizeof(payload_len_t) + *hdr_len,
+                 0,                            
+                 (struct sockaddr*) &ctx->mcast_dest_addr,
+                 sizeof(ctx->mcast_dest_addr));
+
+    if (res == -1)
+        return errno;
+    
+    return 0;
+    
 }
 
 
@@ -100,15 +110,15 @@ static int _process_subscription_write(rmc_context_t* ctx, int c_ind)
 }
 
 
-int rmc_init(rmc_context_t* ctx,
-             char* multicast_addr, 
-             int multicast_port,
-             char* listen_ip, // For subscription management
-             int listen_port, // For subscription management
-             void* (*payload_alloc)(payload_len_t),
-             void (*payload_free)(void*, payload_len_t),
-             void (*socket_added)(int, int), // Callback for each socket opened
-             void (*socket_deleted)(int, int))  // Callback for each socket closed.
+int rmc_init_context(rmc_context_t* ctx,
+                     char* multicast_addr, 
+                     int multicast_port,
+                     char* listen_ip, // For subscription management
+                     int listen_port, // For subscription management
+                     void* (*payload_alloc)(payload_len_t),
+                     void (*payload_free)(void*, payload_len_t),
+                     void (*socket_added)(int, int), // Callback for each socket opened
+                     void (*socket_deleted)(int, int))  // Callback for each socket closed.
 {
     int i = sizeof(ctx->sockets) / sizeof(ctx->sockets[0]);
 
@@ -125,7 +135,7 @@ int rmc_init(rmc_context_t* ctx,
         strncpy(ctx->listen_ip, listen_ip, sizeof(ctx->listen_ip));
         ctx->listen_ip[sizeof(ctx->listen_ip)-1] = 0;
     } else
-        listen_ip[0] = 0;
+        ctx->listen_ip[0] = 0;
 
     ctx->listen_port = listen_port;
     ctx->socket_added = socket_added;
@@ -134,7 +144,7 @@ int rmc_init(rmc_context_t* ctx,
     ctx->payload_free = payload_free;
 
     pub_init_context(&ctx->pub_ctx, payload_free);
-    sub_init_context(&ctx->sub_ctx, payload_free);
+    sub_init_context(&ctx->sub_ctx, 0);
 
     return 0;
 }
@@ -149,16 +159,16 @@ int rmc_listen(rmc_context_t* ctx)
     assert(ctx);
 
 
-    ctx->sockets[RMC_MULTICAST_SOCKET] = socket (AF_INET, SOCK_DGRAM, 0);
-    if (ctx->sockets[RMC_MULTICAST_SOCKET] == -1)
+    ctx->sockets[RMC_MULTICAST_SOCKET_INDEX] = socket (AF_INET, SOCK_DGRAM, 0);
+    if (ctx->sockets[RMC_MULTICAST_SOCKET_INDEX] == -1)
         return errno;
 
-    if (setsockopt(ctx->sockets[RMC_MULTICAST_SOCKET], SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag)) < 0) {
+    if (setsockopt(ctx->sockets[RMC_MULTICAST_SOCKET_INDEX], SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag)) < 0) {
         perror("rmc_listen(): setsockopt(REUSEADDR)");
         return errno;
     }
 
-    if (setsockopt(ctx->sockets[RMC_MULTICAST_SOCKET], SOL_SOCKET, SO_REUSEPORT, &flag, sizeof(flag)) < 0) {
+    if (setsockopt(ctx->sockets[RMC_MULTICAST_SOCKET_INDEX], SOL_SOCKET, SO_REUSEPORT, &flag, sizeof(flag)) < 0) {
         perror("rmc_listen(): setsockopt(SO_REUSEPORT)");
         return errno;
     }
@@ -169,7 +179,7 @@ int rmc_listen(rmc_context_t* ctx)
 
     mreq.imr_interface.s_addr = htonl(INADDR_ANY);         
 
-    if (setsockopt(ctx->sockets[RMC_MULTICAST_SOCKET], IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+    if (setsockopt(ctx->sockets[RMC_MULTICAST_SOCKET_INDEX], IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
         perror("rmc_listen(): setsockopt(IP_ADD_MEMBERSHIP)");
         return errno;
     }         
@@ -179,17 +189,21 @@ int rmc_listen(rmc_context_t* ctx)
     sock_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     sock_addr.sin_port = htons(ctx->multicast_port);
 
-    if (bind(ctx->sockets[RMC_MULTICAST_SOCKET], (struct sockaddr *) &sock_addr, sizeof(sock_addr)) < 0) {        
+    if (bind(ctx->sockets[RMC_MULTICAST_SOCKET_INDEX], (struct sockaddr *) &sock_addr, sizeof(sock_addr)) < 0) {        
         perror("rmc_listen(): bind()");
         return errno;
     }    
 
+    // setup remote endpoint
+    memset((void*) &ctx->mcast_dest_addr, 0, sizeof(ctx->mcast_dest_addr));
+    ctx->mcast_dest_addr.sin_family = AF_INET;
+    ctx->mcast_dest_addr.sin_addr = mreq.imr_multiaddr;
+    ctx->mcast_dest_addr.sin_port = htons(ctx->multicast_port);
 
     // Setup TCP listen
     // Did we specify a local interface address to bind to?
-
-    ctx->sockets[RMC_LISTEN_SOCKET] = socket (AF_INET, SOCK_STREAM, 0);
-    if (ctx->sockets[RMC_LISTEN_SOCKET] == -1)
+    ctx->sockets[RMC_LISTEN_SOCKET_INDEX] = socket (AF_INET, SOCK_STREAM, 0);
+    if (ctx->sockets[RMC_LISTEN_SOCKET_INDEX] == -1)
         return errno;
     
     if (ctx->listen_ip[0]) {
@@ -200,12 +214,12 @@ int rmc_listen(rmc_context_t* ctx)
         sock_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     sock_addr.sin_port = htons(ctx->listen_port);
-    if (bind(ctx->sockets[RMC_LISTEN_SOCKET], (struct sockaddr *) &sock_addr, sizeof(sock_addr)) < 0) {        
+    if (bind(ctx->sockets[RMC_LISTEN_SOCKET_INDEX], (struct sockaddr *) &sock_addr, sizeof(sock_addr)) < 0) {        
         perror("rmc_listen(): bind()");
         return errno;
     }    
 
-    if (listen(ctx->sockets[RMC_LISTEN_SOCKET], 5) != 0) {
+    if (listen(ctx->sockets[RMC_LISTEN_SOCKET_INDEX], 5) != 0) {
         perror("rmc_listen(): listen()");
         return errno;
     }    
@@ -247,7 +261,7 @@ int rmc_connect_subscription(rmc_context_t* ctx,
         perror("rmc_connect():connect()");
         return errno;
     }       
-    
+
     if (result_socket)
         *result_socket = ctx->sockets[c_ind];
 
@@ -257,6 +271,7 @@ int rmc_connect_subscription(rmc_context_t* ctx,
     if (ctx->socket_added)
         (*ctx->socket_added)(ctx->sockets[c_ind], c_ind);
 
+    
     return 0;
 }
 
@@ -267,10 +282,10 @@ int rmc_read(rmc_context_t* ctx, int c_ind)
 
     assert(ctx);
 
-    if (c_ind == RMC_MULTICAST_SOCKET)
+    if (c_ind == RMC_MULTICAST_SOCKET_INDEX)
         return _process_multicast_read(ctx);
 
-    if (c_ind == RMC_LISTEN_SOCKET)
+    if (c_ind == RMC_LISTEN_SOCKET_INDEX)
         return _process_listen(ctx);
 
     // Is c_ind within our socket vector?
@@ -292,7 +307,7 @@ int rmc_write(rmc_context_t* ctx, int c_ind)
 
     assert(ctx);
 
-    if (c_ind == RMC_MULTICAST_SOCKET)
+    if (c_ind == RMC_MULTICAST_SOCKET_INDEX)
         return _process_multicast_write(ctx);
 
     // Is c_ind within our socket vector?
@@ -370,15 +385,23 @@ static int decode_multicast(rmc_context_t* ctx,
         payload_len = *(payload_len_t*) packet;
         packet += sizeof(payload_len);
 
-        payload = (*ctx->payload_alloc)(payload_len);
-        
+        if (ctx->payload_alloc) 
+            payload = (*ctx->payload_alloc)(payload_len);
+        else
+            payload = malloc(payload_len);
+            
         if (!payload)
             return ENOMEM;
 
         memcpy(payload, packet, payload_len);
+        packet += payload_len;
+
         if (!sub_packet_received(pub, pid, payload, payload_len)) {
             fprintf(stderr, "rmc_proto::decode_multicast(): Duplicate packet ID %lu. Ignored.\n", pid);
-            (*ctx->payload_free)(payload, payload_len);
+            if (ctx->payload_free) 
+                (*ctx->payload_free)(payload, payload_len);
+            else
+                free(payload);
         }
         len -= (payload_len + sizeof(pid) + sizeof(payload_len));
     }
@@ -403,10 +426,10 @@ int rmc_read_multicast(rmc_context_t* ctx)
     if (!ctx)
         return EINVAL;
 
-    if (ctx->sockets[RMC_MULTICAST_SOCKET] == -1)
+    if (ctx->sockets[RMC_MULTICAST_SOCKET_INDEX] == -1)
         return ENOTCONN;
     
-    res = recvfrom(ctx->sockets[RMC_MULTICAST_SOCKET],
+    res = recvfrom(ctx->sockets[RMC_MULTICAST_SOCKET_INDEX],
                    buffer, sizeof(buffer),
                    MSG_DONTWAIT,
                    (struct sockaddr*) &src_addr, &addr_len);
@@ -418,22 +441,30 @@ int rmc_read_multicast(rmc_context_t* ctx)
     
     pub = sub_find_publisher(&ctx->sub_ctx, &src_addr, addr_len);
     
-    if (!pub) {
-        fprintf(stderr, "rmc_proto::rmc_read_multicast(): Publisher not found for %s\n",
-                inet_ntoa(src_addr.sin_addr));
-        return ENOENT;
-    }
+    if (!pub) 
+        pub = sub_add_publisher(&ctx->sub_ctx, &src_addr, addr_len);
 
-    return decode_multicast(ctx, buffer, res, pub);
+    
+    payload_len = *(payload_len_t*) buffer;
+    return decode_multicast(ctx,
+                            buffer + sizeof(payload_len_t),
+                            payload_len,
+                            pub);
 }
+
 
 int rmc_get_ready_packet_count(rmc_context_t* ctx)
 {
-    return 0;
+    return sub_get_ready_packet_count(&ctx->sub_ctx);
 }
 
-int rmc_get_packet(rmc_context_t* ctx, void** packet, int* payload_len)
+sub_packet_t* rmc_get_next_ready_packet(rmc_context_t* ctx)
 {
-    return 0;
+    return sub_get_next_ready_packet(&ctx->sub_ctx);
 }
 
+void rmc_free_packet(sub_packet_t* packet)
+{
+    sub_packet_dispatched(packet);
+}
+    

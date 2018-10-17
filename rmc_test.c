@@ -12,6 +12,7 @@ extern void test_packet_intervals();
 extern void run_list_tests();
 extern void test_pub(void);
 extern void test_sub(void);
+extern void test_rmc_proto(void);
 
 
 
@@ -23,4 +24,5 @@ int main(int argc, char* argv[])
     test_packet_intervals();
     test_pub();
     test_sub();
+    test_rmc_proto();
 }
