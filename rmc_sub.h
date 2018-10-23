@@ -38,7 +38,7 @@ typedef struct sub_publisher {
     sub_packet_list_t received;     // Packets received but need additional packets. Desc
     sub_packet_list_t ready;        // Packets ready to be dispatched.
     uint8_t address[RMC_SUB_MAX_ADDR_LEN]; // s_addr for multicast source IP that publisher uses.
-    int16_t address_len;            // Number of bytes in address. Will be compared with source addr.
+    uint32_t address_len;            // Number of bytes in address. Will be compared with source addr.
 } sub_publisher_t; 
 
 
@@ -58,6 +58,9 @@ typedef struct sub_context {
 extern void sub_init_context(sub_context_t* ctx,
                              void (*payload_free)(void*, payload_len_t));
 
+extern int sub_packet_is_duplicate(sub_publisher_t* pub,
+                                   packet_id_t pid);
+
 extern int sub_packet_received(sub_publisher_t* pub,
                                packet_id_t pid,
                                void* payload,
@@ -71,7 +74,7 @@ void sub_process_received_packets(sub_publisher_t* pub);
 extern sub_packet_t* sub_next_ready_packet(sub_publisher_t* ctx);
 extern void sub_packet_dispatched(sub_packet_t* pack);
 extern void sub_get_missing_packets(sub_publisher_t* sub, intv_list_t* res);
-extern sub_publisher_t* sub_add_publisher(sub_context_t* ctx, void* address, int address_len);
+extern sub_publisher_t* sub_add_publisher(sub_context_t* ctx, void* address, uint32_t address_len);
 extern sub_publisher_t* sub_find_publisher(sub_context_t* ctx, void* address, int address_len);
 extern void sub_delete_publisher(sub_publisher_t* pub);
 extern void sub_delete_publisher_by_address(sub_context_t* ctx, void* address, int address_len);

@@ -11,10 +11,10 @@
 
 #include <stdint.h>
 
-// TODO: Split up into multiple files. Some available as library
+// FIXME: Split up into multiple files. Some available as library
 // headers, some as included by code that uses this library.
 
-// TODO: Rename externally accessible structs and functions
+// FIXME: Rename externally accessible structs and functions
 //       rmc_xxx
 //
 typedef uint64_t packet_id_t;

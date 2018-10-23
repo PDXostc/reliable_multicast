@@ -226,7 +226,7 @@
     }                                                                   \
                                                                         \
                                                                         \
-    inline NODETYPE* LISTTYPE##_pop_head_node(LISTTYPE* list)                  \
+    inline NODETYPE* LISTTYPE##_pop_head_node(LISTTYPE* list)           \
     {                                                                   \
         assert(list);                                                   \
                                                                         \
@@ -236,37 +236,34 @@
         return LISTTYPE##_unlink(list->head);                           \
     }                                                                   \
                                                                         \
-    inline DATATYPE LISTTYPE##_pop_head(LISTTYPE* list)                        \
+    inline int LISTTYPE##_pop_head(LISTTYPE* list, DATATYPE* data)      \
     {                                                                   \
-        DATATYPE data;                                                 \
         assert(list);                                                   \
                                                                         \
         if (!list->head)                                                \
-            return data;                                                \
+            return 0;                                                   \
                                                                         \
-        data = list->head->data;                                        \
+        *data = list->head->data;                                       \
                                                                         \
         LISTTYPE##_delete(list->head);                                  \
-        return data;                                                    \
+        return 1;                                                       \
     }                                                                   \
                                                                         \
                                                                         \
-    DATATYPE LISTTYPE##_pop_tail(LISTTYPE* list)                        \
+    inline int LISTTYPE##_pop_tail(LISTTYPE* list, DATATYPE* data)      \
     {                                                                   \
-        DATATYPE data;                                                  \
-                                                                        \
         assert(list);                                                   \
                                                                         \
         if (!list->tail)                                                \
-            return data;                                                \
+            return 0;                                                   \
                                                                         \
-        data = list->tail->data;                                        \
+        *data = list->tail->data;                                       \
                                                                         \
         LISTTYPE##_delete(list->tail);                                  \
-        return data;                                                    \
+        return 1;                                                       \
     }                                                                   \
                                                                         \
-    inline NODETYPE* LISTTYPE##_pop_tail_node(LISTTYPE* list)                  \
+    inline NODETYPE* LISTTYPE##_pop_tail_node(LISTTYPE* list)           \
     {                                                                   \
         assert(list);                                                   \
                                                                         \

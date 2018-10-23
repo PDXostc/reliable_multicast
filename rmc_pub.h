@@ -111,6 +111,7 @@ extern void pub_packet_sent(pub_context_t* ctx,
                             usec_timestamp_t send_ts);
 
 extern pub_packet_t* pub_next_queued_packet(pub_context_t* ctx);
+extern void pub_get_queued_packet_list(pub_context_t* ctx, pub_packet_t*);
 extern void pub_packet_ack(pub_subscriber_t* sub, packet_id_t pid);
 
 #endif // __RMC_PUB_H__

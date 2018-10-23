@@ -14,6 +14,7 @@ void test_packet_interval()
     pid_list_t p1;
     pid_node_t* node;
     packet_interval_t intv = { .first_pid = 0, .last_pid = 0 };
+    packet_id_t pid = 0;
 
     pid_list_init(&p1, 0, 0, 0);
     pid_list_push_tail(&p1, 1);
@@ -67,8 +68,7 @@ void test_packet_interval()
         exit(255);
     }
 
-    while(pid_list_size(&p1))
-        pid_list_pop_head(&p1);
+    while(pid_list_pop_head(&p1, &pid));
 
     pid_list_push_tail(&p1, 100);
     
@@ -82,8 +82,7 @@ void test_packet_interval()
         exit(255);
     }
 
-    while(pid_list_size(&p1))
-        pid_list_pop_head(&p1);
+    while(pid_list_pop_head(&p1, &pid));
 
     pid_list_push_tail(&p1, 300);
     pid_list_push_tail(&p1, 301);

@@ -47,28 +47,30 @@ static void _free_publisher(sub_publisher_t* pub)
 }
 
 
-
-int sub_packet_received(sub_publisher_t* pub,
-                        packet_id_t pid,
-                        void* payload,
-                        payload_len_t payload_len)
+int sub_packet_is_duplicate(sub_publisher_t* pub, packet_id_t pid)
 {
-    sub_packet_t* pack = 0;
     sub_packet_t cmp_pack = { .pid = pid };
-    assert(pub);
-
     // Is packet duplicate?
     // FIXME: Setup hash table for pub->received so that we
     // can find dups faster
     //
-    if ((pub->max_pid_ready != 0 && pid < pub->max_pid_ready) ||
-        sub_packet_list_find_node(&pub->received,
+    return ((pub->max_pid_ready != 0 && pid < pub->max_pid_ready) ||
+            sub_packet_list_find_node(&pub->received,
                                   &cmp_pack,
                                   lambda(int, (sub_packet_t* dt1,
                                                sub_packet_t* dt2) {
                                              return dt1->pid == dt2->pid;
-                                         })))
-        return 0;
+                                         })))?1:0;
+}
+                        
+
+int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
+                        void* payload,
+                        payload_len_t payload_len)
+{
+    sub_packet_t* pack = 0;
+    assert(pub);
+
         
     pack = _alloc_pending_packet();
     pack->pid = pid;
@@ -251,7 +253,7 @@ void sub_get_missing_packets(sub_publisher_t* pub, intv_list_t* res)
 
 
 // FIXME: Replace linear search with hash table.
-static sub_publisher_node_t* _sub_find_publisher_node(sub_context_t* ctx, void* address, int address_len)
+static sub_publisher_node_t* _sub_find_publisher_node(sub_context_t* ctx, void* address, uint32_t address_len)
 {
     sub_publisher_t tmp;
 
@@ -276,7 +278,7 @@ sub_publisher_t* sub_find_publisher(sub_context_t* ctx, void* address, int addre
     return node?node->data:0;
 }
 
-sub_publisher_t* sub_add_publisher(sub_context_t* ctx, void* address, int address_len) 
+sub_publisher_t* sub_add_publisher(sub_context_t* ctx, void* address, uint32_t address_len) 
 {
     sub_publisher_t* pub = 0;
 
@@ -302,6 +304,7 @@ void sub_delete_publisher(sub_publisher_t* pub)
 {
     sub_context_t* ctx = 0;
     sub_publisher_node_t* pub_node = 0;
+    sub_packet_t* pack = 0;
 
     if (!pub)
         return;
@@ -320,14 +323,12 @@ void sub_delete_publisher(sub_publisher_t* pub)
     sub_publisher_list_delete(pub_node);
 
     // Go through each list and wipe them.
-    while(sub_packet_list_size(&pub->received)) {
-        sub_packet_t* pack = sub_packet_list_pop_head(&pub->received);
+    while(sub_packet_list_pop_head(&pub->received, &pack)) {
         (*ctx->payload_free)(pack->payload, pack->payload_len);
         _free_pending_packet(pack);
     }
 
-    while(sub_packet_list_size(&pub->ready)) {
-        sub_packet_t* pack = sub_packet_list_pop_head(&pub->ready);
+    while(sub_packet_list_pop_head(&pub->ready, &pack)) {
         (*ctx->payload_free)(pack->payload, pack->payload_len);
         _free_pending_packet(pack);
     }

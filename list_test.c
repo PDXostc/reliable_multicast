@@ -215,10 +215,15 @@ void run_list_tests()
     //
     // Test sorted by pid
     //
-    while(test_list_size(&p1))
-        test_list_pop_head(&p1);
+    while(test_list_pop_head(&p1, &pid));
 
-
+    // Check that list is empty
+    if (test_list_pop_head(&p1, &pid) != 0) {
+        puts("Failed list test 4.0.\n");
+        exit(255);
+    }
+        
+   
     test_list_insert_sorted(&p1, 2, _compare_pid);
     if (_test_sequence(&p1, 2, 2)) {
         puts("Failed list test 4.1.\n");

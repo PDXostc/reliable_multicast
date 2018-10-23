@@ -207,6 +207,7 @@ void test_sub(void)
     packet_id_t pid = 0;
     intv_list_t holes;
     sub_packet_node_t* node = 0;
+    packet_interval_t intv = { .first_pid =0, .last_pid = 0};
 
     sub_init_context(&ctx, _test_sub_free);
     intv_list_init(&holes, 0, 0, 0);
@@ -355,8 +356,7 @@ void test_sub(void)
                          6, 7,
                          0, 0);
 
-    while(intv_list_size(&holes)) 
-        intv_list_pop_head(&holes);
+    while(intv_list_pop_head(&holes, &intv));
 
     // Check if we get a "3-5" as a missing packet
     sub_get_missing_packets(pub1, &holes);
@@ -384,8 +384,7 @@ void test_sub(void)
                          20, 21,
                          0, 0);
 
-    while(intv_list_size(&holes)) 
-        intv_list_pop_head(&holes);
+    while(intv_list_pop_head(&holes, &intv));
 
     // Check if we get a 3-5, 7-9, 11-13, 16-19 as a missing packets
 
@@ -414,8 +413,7 @@ void test_sub(void)
                          103, 104,
                          0, 0);
 
-    while(intv_list_size(&holes)) 
-        intv_list_pop_head(&holes);
+    while(intv_list_pop_head(&holes, &intv));
 
 
     sub_get_missing_packets(pub1, &holes);
@@ -451,8 +449,7 @@ void test_sub(void)
     
     test_sequence("5.1", &pub1->ready, 1, 2);
 
-    while(intv_list_size(&holes)) 
-        intv_list_pop_head(&holes);
+    while(intv_list_pop_head(&holes, &intv));
 
     // We should still have the same holes
     sub_get_missing_packets(pub1, &holes);
@@ -473,8 +470,7 @@ void test_sub(void)
     // need pid 3 and 5 to get a complete sequence from 1-7
     sub_process_received_packets(pub1);
 
-    while(intv_list_size(&holes)) 
-        intv_list_pop_head(&holes);
+    while(intv_list_pop_head(&holes, &intv));
 
     // We should still have the same holes
     sub_get_missing_packets(pub1, &holes);
@@ -495,8 +491,8 @@ void test_sub(void)
     // need pid 5 to get a complete sequence from 1-7
     sub_process_received_packets(pub1);
 
-    while(intv_list_size(&holes)) 
-        intv_list_pop_head(&holes);
+    while(intv_list_pop_head(&holes, &intv));
+
 
     // We should still have the same holes
     sub_get_missing_packets(pub1, &holes);
@@ -526,8 +522,8 @@ void test_sub(void)
     // Ready queue is empty.
     // We are still lacking pid 5 before we can
     // move 1-7 to 
-    while(intv_list_size(&holes)) 
-        intv_list_pop_head(&holes);
+    while(intv_list_pop_head(&holes, &intv));
+
 
     // We should still have the same holes
     sub_get_missing_packets(pub1, &holes);
@@ -549,8 +545,8 @@ void test_sub(void)
 
     sub_process_received_packets(pub1);
 
-    while(intv_list_size(&holes)) 
-        intv_list_pop_head(&holes);
+    while(intv_list_pop_head(&holes, &intv));
+
 
     // We should still have the same holes
     sub_get_missing_packets(pub1, &holes);
@@ -574,8 +570,8 @@ void test_sub(void)
     // 8-9 
     sub_process_received_packets(pub1);
 
-    while(intv_list_size(&holes)) 
-        intv_list_pop_head(&holes);
+    while(intv_list_pop_head(&holes, &intv));
+
 
     // We should still have the same holes
     sub_get_missing_packets(pub1, &holes);
@@ -599,8 +595,7 @@ void test_sub(void)
     // received packages to ready
     sub_process_received_packets(pub1);
 
-    while(intv_list_size(&holes)) 
-        intv_list_pop_head(&holes);
+    while(intv_list_pop_head(&holes, &intv));
 
     // We should still have the same holes
     sub_get_missing_packets(pub1, &holes);
@@ -634,8 +629,9 @@ void test_sub(void)
                          0, 0);
     
     // Check that we drop dups in the received queue
-    if (sub_packet_received(pub1, 1, "1", 2)) {
-        printf("Failed test 6.1 Wanted failure on dup packet [1] insert, got success\n");
+
+    if (!sub_packet_is_duplicate(pub1, 1)) {
+        printf("Failed test 6.1 Failed dup packet detection.\n");
         exit(255);
     }
 
@@ -643,8 +639,8 @@ void test_sub(void)
     sub_process_received_packets(pub1);
 
     // Check that we drop dups in the ready queue
-    if (sub_packet_received(pub1, 1, "1", 2)) {
-        printf("Failed test 6.2 Wanted failure on dup packet [1] insert, got success\n");
+    if (!sub_packet_is_duplicate(pub1, 1)) {
+        printf("Failed test 6.2 Failed dup packet detection.\n");
         exit(255);
     }
     
@@ -657,14 +653,14 @@ void test_sub(void)
     sub_process_received_packets(pub1);
 
     // Check that we drop dups in the ready queue
-    if (sub_packet_received(pub1, 1, "1", 2)) {
-        printf("Failed test 6.3 Wanted failure on dup packet [1] insert, got success\n");
+    if (!sub_packet_is_duplicate(pub1, 1)) {
+        printf("Failed test 6.3 Failed dup packet detection.\n");
         exit(255);
     }
 
     // Check that we drop dups in the ready queue
-    if (sub_packet_received(pub1, 10, "10", 3)) {
-        printf("Failed test 6.4 Wanted failure on dup packet [10] insert, got success\n");
+    if (!sub_packet_is_duplicate(pub1, 10)) {
+        printf("Failed test 6.4 Failed dup packet detection.\n");
         exit(255);
     }
 
@@ -684,22 +680,24 @@ void test_sub(void)
     // 4
     pack = sub_next_ready_packet(pub1);
     sub_packet_dispatched(pack);
+    
 
     // Check that we cannot dup dispatched packets
-    if (sub_packet_received(pub1, 1, "1", 2)) {
-        printf("Failed test 6.5 Wanted failure on dup packet [1] insert, got success\n");
+    if (!sub_packet_is_duplicate(pub1, 1)) {
+        printf("Failed test 6.5 Failed dup packet detection.\n");
         exit(255);
     }
 
-    if (sub_packet_received(pub1, 5, "5", 2)) {
-        printf("Failed test 6.6 Wanted failure on dup packet [5] insert, got success\n");
+    if (!sub_packet_is_duplicate(pub1, 5)) {
+        printf("Failed test 6.6 Failed dup packet detection.\n");
         exit(255);
     }
 
-    if (sub_packet_received(pub1, 10, "10", 10)) {
-        printf("Failed test 6.7 Wanted failure on dup packet [10] insert, got success\n");
+    if (!sub_packet_is_duplicate(pub1, 10)) {
+        printf("Failed test 6.7 Failed dup packet detection.\n");
         exit(255);
     }
+
 }
 
 

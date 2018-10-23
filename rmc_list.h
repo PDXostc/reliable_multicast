@@ -61,9 +61,9 @@
     extern NODETYPE* LISTTYPE##_unlink(NODETYPE* node);                 \
     extern void LISTTYPE##_delete(NODETYPE* node);                      \
                                                                         \
-    extern DATATYPE LISTTYPE##_pop_head(LISTTYPE* list);                \
+    extern int LISTTYPE##_pop_head(LISTTYPE* list, DATATYPE* data);     \
     extern NODETYPE* LISTTYPE##_pop_head_node(LISTTYPE* list);          \
-    extern DATATYPE LISTTYPE##_pop_tail(LISTTYPE* list);                \
+    extern int LISTTYPE##_pop_tail(LISTTYPE* list, DATATYPE* data);     \
     extern NODETYPE* LISTTYPE##_pop_tail_node(LISTTYPE* list);          \
                                                                         \
     extern void LISTTYPE##_for_each(LISTTYPE* list,                     \

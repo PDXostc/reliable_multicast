@@ -15,7 +15,7 @@
 RMC_LIST_IMPL(pub_packet_list, pub_packet_node, pub_packet_t*) 
 RMC_LIST_IMPL(pub_sub_list, pub_sub_node, pub_subscriber_t*) 
 
-// TODO: Ditch malloc and use a stack-based alloc/free setup that operates
+// FIXME: Ditch malloc and use a stack-based alloc/free setup that operates
 //       on static-sized heap memory allocated at startup. 
 static pub_packet_t* _alloc_pending_packet()
 {
@@ -25,14 +25,14 @@ static pub_packet_t* _alloc_pending_packet()
     return res;
 }
 
+
 static void _free_pending_packet(pub_packet_t* ppack)
 {
     assert(ppack);
     free((void*) ppack);
 }
 
-
-// TODO: Ditch malloc and use a stack-based alloc/free setup that operates
+// FIXME: Ditch malloc and use a stack-based alloc/free setup that operates
 //       on static-sized heap memory allocated at startup. 
 static pub_subscriber_t* _alloc_subscriber()
 {
@@ -42,11 +42,13 @@ static pub_subscriber_t* _alloc_subscriber()
     return res;
 }
 
+
 static void _free_subscriber(pub_subscriber_t* sub)
 {
     assert(sub);
     free((void*) sub);
 }
+
 
 static packet_id_t _next_pid(pub_context_t* ctx)
 {
@@ -122,10 +124,12 @@ packet_id_t pub_queue_packet(pub_context_t* ctx,
 pub_packet_t* pub_next_queued_packet(pub_context_t* ctx)
 {
     pub_packet_node_t* node = 0;
+
     assert(ctx);
-    
+
     node = pub_packet_list_tail(&ctx->queued);
-    return  node?node->data:0;
+
+    return node?node->data:0;
 }
 
 void pub_packet_sent(pub_context_t* ctx,
@@ -136,6 +140,7 @@ void pub_packet_sent(pub_context_t* ctx,
     pub_packet_node_t* ppack_node = 0;
 
     assert(ctx);
+    assert(ppack);
 
     // Record the usec timestamp when it was sent.
     ppack->send_ts = send_ts;
