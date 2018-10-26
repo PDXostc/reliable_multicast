@@ -14,6 +14,17 @@
 #define RMC_MAX(x,y) ((x)>(y)?(x):(y))
 #define RMC_MIN(x,y) ((x)<(y)?(x):(y))
 
+// circ_buf_t::start_ind = First byte of data in use.
+// circ_buf_t::stop_ind = First byte *AFTER* last data byte in use
+//
+// if circ_buf_t::start_ind == circ_buf_t::stop_ind then no data is stored.
+//
+// The last available byte in the buffer is resreved so that we can
+// distinguish between empty and full buffer, which in both cases
+// have start_ind and stop_ind point at the same index.
+//
+// 
+
 
 extern void circ_buf_init(circ_buf_t* circ_buf, uint8_t* buffer, uint32_t buffer_size)
 {
@@ -35,7 +46,8 @@ uint32_t circ_buf_in_use(circ_buf_t* circ_buf)
 
 uint32_t circ_buf_available(circ_buf_t* circ_buf)
 {
-    return circ_buf->size - circ_buf_in_use(circ_buf);
+    // Keep one byte reserved to distinguish between full and empty buffer.
+    return circ_buf->size - circ_buf_in_use(circ_buf) - 1;
 }
 
 int circ_buf_alloc(circ_buf_t* circ_buf,
@@ -45,8 +57,16 @@ int circ_buf_alloc(circ_buf_t* circ_buf,
                    uint8_t **segment2,
                    uint32_t* segment2_len)
 {
-    uint32_t buf_size = circ_buf->size;
-    uint32_t available_size = circ_buf_available(circ_buf);
+    uint32_t buf_size = 0;
+    uint32_t available_size = 0;
+
+    if (!circ_buf ||
+        !segment1 || !segment1_len ||
+        !segment2 || !segment2_len)
+        return EINVAL;
+        
+    buf_size = circ_buf->size;
+    available_size = circ_buf_available(circ_buf);
 
     // Do we have enough memory?
     if (available_size < len)
@@ -79,32 +99,58 @@ int circ_buf_alloc(circ_buf_t* circ_buf,
 
 
 
-// Return number of bytes left after discarding data.
-inline uint32_t circ_buf_free(circ_buf_t* circ_buf, uint32_t size)
+// Return number of bytes left in use after discarding data.
+inline int circ_buf_free(circ_buf_t* circ_buf, uint32_t size, uint32_t* in_use)
 {
-    uint32_t len = circ_buf_in_use(circ_buf);
+    uint32_t len = 0;
+
+    if (!circ_buf)
+        return 0;
+
+    if (!size)  {
+        if (in_use)
+            *in_use = circ_buf_in_use(circ_buf);
+        return 0;
+    }    
+
+    len = circ_buf_in_use(circ_buf);
 
     // Can we do a quickie?
+    // If we can reset the buffer we have a greater chance
+    // of circ_buf_alloc and circ_buf read being able to
+    // to fit the entire operation into one continuous
+    // segment of the buffer, this avoiding having to
+    // do split segments.
     if (size >= len) {
         circ_buf->start_ind = 0;
         circ_buf->stop_ind = 0;
+        if (in_use)
+            *in_use = 0;
+
         return 0;
     }
 
     circ_buf->start_ind += size;
     circ_buf->start_ind %= circ_buf->size;
 
-    return len - size;
+    if (in_use)
+        *in_use = len-size;
+
+    return 0;
 }
 
 
-inline uint32_t circ_buf_read(circ_buf_t* circ_buf,
-                              uint8_t* target,
-                              uint32_t size)
+inline int circ_buf_read(circ_buf_t* circ_buf,
+                         uint8_t* target,
+                         uint32_t size,
+                         uint32_t* bytes_read)
 {
     uint32_t len = circ_buf_in_use(circ_buf);
     uint32_t segment_len = 0;
     uint32_t copied_bytes = 0;
+    
+    if (!size || !circ_buf || !target)
+        return EINVAL;
     
     len = RMC_MIN(len, size);
 
@@ -113,7 +159,11 @@ inline uint32_t circ_buf_read(circ_buf_t* circ_buf,
     // and be done.
     if (circ_buf->stop_ind >= circ_buf->start_ind) {
         memcpy(target, circ_buf->buffer + circ_buf->start_ind, len);
-        return len;
+
+        if (bytes_read)
+            *bytes_read = len;
+
+        return 0;
     }
     
     // Copy out the first part of the circular buffer, spanning from
@@ -128,8 +178,12 @@ inline uint32_t circ_buf_read(circ_buf_t* circ_buf,
     
     // Return if the copied data was all that was requested by the
     // caller.
-    if (len <= segment_len) 
-        return copied_bytes;
+    if (len <= segment_len) {
+        if (bytes_read)
+            *bytes_read = copied_bytes;
+
+        return 0;
+    }
     
     // Copy out the secont part of the circular buffer, spanning from
     // 0 to either stop_ind (last data byte) or the number of bytes left
@@ -140,5 +194,9 @@ inline uint32_t circ_buf_read(circ_buf_t* circ_buf,
 
     copied_bytes += segment_len;
 
-    return copied_bytes;
+    if (bytes_read)
+        *bytes_read = copied_bytes;
+
+    return 0;
+
 }

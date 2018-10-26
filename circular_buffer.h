@@ -36,13 +36,14 @@ extern int circ_buf_alloc(circ_buf_t* circ_buf,
                           uint32_t* segment2_len);
 
 
-extern uint32_t circ_buf_free(circ_buf_t* circ_buf, uint32_t size);
+extern  int circ_buf_free(circ_buf_t* circ_buf, uint32_t size, uint32_t* in_use);
 
 
 
-extern uint32_t circ_buf_read(circ_buf_t* circ_buf,
-                              uint8_t* target,
-                              uint32_t size);
+extern int circ_buf_read(circ_buf_t* circ_buf,
+                         uint8_t* target,
+                         uint32_t size,
+                         uint32_t* bytes_read);
 
 
 #endif // __CIRCULAR_BUFFER_H__
