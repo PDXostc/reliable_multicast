@@ -106,7 +106,6 @@ void test_pub(void)
                pid);
         exit(255);
     }
-
     
     if (pub_packet_list_size(&ctx.queued) != 7) {
         printf("Failed pub test 1.2. Wanted size 7, got %d\n",
@@ -552,21 +551,61 @@ void test_pub(void)
     // 
     sptr1 = pub_sub_list_head(&sub_lst)->data;
     if (sptr1 == &sub2) {
-        printf("Failed pub test 12.3. Wanted sub1, got sub2\n");
+        printf("Failed pub test 14.2. Wanted sub1, got sub2\n");
         exit(255);
     }
 
     if (sptr1 == &sub3) {
-        printf("Failed pub test 12.4. Wanted sub1, got sub3\n");
+        printf("Failed pub test 14.3. Wanted sub1, got sub3\n");
 
         exit(255);
     }
 
     if (sptr1 != &sub1) {
-        printf("Failed pub test 12.5. Wanted sub1, got weird %p\n",
+        printf("Failed pub test 14.4. Wanted sub1, got weird %p\n",
                sptr1);
         exit(255);
     }
 
+    //
+    // Test oldest inflight packets
+    // 
+    pub_get_oldest_subscriber(&ctx, &sptr1, &pack);
+
+    if (!sptr1) {
+        printf("Failed pub test 15.1. Wanted oldest subscriber. Got nothing\n");
+        exit(255);
+    }
+
+    // Oldest pid is 2.
+    //
+    // sub1: - 2 3 4 5 6
+    // sub2: - - - 4 5 6
+    // sub3: - - - - - -
+    if (sptr1 == &sub2) {
+        printf("Failed pub test 15.2. Wanted sub1, got sub2\n");
+        exit(255);
+    }
+
+    if (sptr1 == &sub3) {
+        printf("Failed pub test 15.3. Wanted sub1, got sub3\n");
+
+        exit(255);
+    }
+
+    if (sptr1 != &sub1) {
+        printf("Failed pub test 15.4. Wanted sub1, got weird %p\n",
+               sptr1);
+        exit(255);
+    }
+
+    if (pack->pid != 2) {
+        printf("Failed pub test 15.5. Wanted pid 2, got %lu\n",
+               pack->pid);
+        exit(255);
+        
+    }
+
+            
 }
 

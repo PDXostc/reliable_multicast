@@ -261,4 +261,35 @@ void pub_get_timed_out_subscribers(pub_context_t* ctx,
                                       pub_sub_list_push_tail(result, sub_node->data);
                                   return 1;
                               }), 0);
+
+}
+
+
+void pub_get_oldest_subscriber(pub_context_t* ctx, pub_subscriber_t** subscriber, pub_packet_t** packet)
+{
+    usec_timestamp_t oldest = 0;
+
+    *subscriber = 0; // In case we have no subscribers with inflight packets
+    *packet = 0; 
+
+    // Traverse all subscribers.
+    pub_sub_list_for_each(&ctx->subscribers,
+                          // Check if the oldest inflight packet of this subscriber is older
+                          // than the oldest inflight packet found so far.
+                          lambda(uint8_t, (pub_sub_node_t* sub_node, void* udata) {
+                                  pub_packet_list_t* lst = &sub_node->data->inflight;
+                                  pub_packet_t* pack = 0;
+                                  if (!pub_packet_list_size(lst))
+                                      return 1;
+
+                                  pack = pub_packet_list_tail(lst)->data;
+                                  if (pack->send_ts < oldest || !oldest) {
+                                      *packet = pack;
+                                      *subscriber = sub_node->data;
+                                      oldest = pack->send_ts;
+                                  }
+                                  return 1;
+                              }), 0);
+    
+                          
 }

@@ -120,4 +120,10 @@ extern void pub_get_timed_out_subscribers(pub_context_t* ctx,
                                           usec_timestamp_t current_time,
                                           uint32_t max_age,
                                           pub_sub_list_t* result);
+
+// Find the subscriber with the oldest inflight packet that is awaiting an ack.
+void pub_get_oldest_subscriber(pub_context_t* ctx,
+                               pub_subscriber_t** subscriber,
+                               pub_packet_t** packet);
+
 #endif // __RMC_PUB_H__
