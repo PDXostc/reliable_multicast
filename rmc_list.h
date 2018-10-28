@@ -60,6 +60,7 @@
                                                                         \
     extern NODETYPE* LISTTYPE##_unlink(NODETYPE* node);                 \
     extern void LISTTYPE##_delete(NODETYPE* node);                      \
+    extern void LISTTYPE##_empty(LISTTYPE* list);                       \
                                                                         \
     extern int LISTTYPE##_pop_head(LISTTYPE* list, DATATYPE* data);     \
     extern NODETYPE* LISTTYPE##_pop_head_node(LISTTYPE* list);          \

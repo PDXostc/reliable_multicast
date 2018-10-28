@@ -381,4 +381,12 @@
         new_node->data = new_elem;                                      \
         return LISTTYPE##_insert_sorted_node_rev(list, new_node, compare_func); \
     }                                                                   \
+                                                                        \
+    inline void LISTTYPE##_empty(LISTTYPE* list)                        \
+    {                                                                   \
+        assert(list);                                                   \
+                                                                        \
+        while(LISTTYPE##_size(list))                                    \
+            LISTTYPE##_delete(list->head);                              \
+    }
 
