@@ -1,6 +1,6 @@
 // Copyright (C) 2018, Jaguar Land Rover
 // This program is licensed under the terms and conditions of the
-// Mozilla Public License, version 2.0.  The full text of the 
+// Mozilla Public License, version 2.0.  The full text of the
 // Mozilla Public License is at https://www.mozilla.org/MPL/2.0/
 //
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
@@ -12,11 +12,11 @@
 
 #include "rmc_list_template.h"
 
-RMC_LIST_IMPL(pub_packet_list, pub_packet_node, pub_packet_t*) 
-RMC_LIST_IMPL(pub_sub_list, pub_sub_node, pub_subscriber_t*) 
+RMC_LIST_IMPL(pub_packet_list, pub_packet_node, pub_packet_t*)
+RMC_LIST_IMPL(pub_sub_list, pub_sub_node, pub_subscriber_t*)
 
 // FIXME: Ditch malloc and use a stack-based alloc/free setup that operates
-//       on static-sized heap memory allocated at startup. 
+//       on static-sized heap memory allocated at startup.
 static pub_packet_t* _alloc_pending_packet()
 {
     pub_packet_t* res = (pub_packet_t*) malloc(sizeof(pub_packet_t));
@@ -33,7 +33,7 @@ static void _free_pending_packet(pub_packet_t* ppack)
 }
 
 // FIXME: Ditch malloc and use a stack-based alloc/free setup that operates
-//       on static-sized heap memory allocated at startup. 
+//       on static-sized heap memory allocated at startup.
 static pub_subscriber_t* _alloc_subscriber()
 {
     pub_subscriber_t* res = (pub_subscriber_t*) malloc(sizeof(pub_subscriber_t));
@@ -57,7 +57,7 @@ static packet_id_t _next_pid(pub_context_t* ctx)
     return ctx->next_pid++;
 }
 
-       
+
 void pub_init_context(pub_context_t* ctx,
                       void (*payload_free)(void*, payload_len_t))
 {
@@ -108,7 +108,7 @@ packet_id_t pub_queue_packet(pub_context_t* ctx,
     // Set parent node to the list_node_t representing
     // the pending packet in ctx->queed for quick unlinking.
     //
-    ppack->parent_node = 
+    ppack->parent_node =
         pub_packet_list_insert_sorted(&ctx->queued,
                                 ppack,
                                 lambda(int, (pub_packet_t* n_dt, pub_packet_t* o_dt) {
@@ -150,9 +150,9 @@ void pub_packet_sent(pub_context_t* ctx,
     // when we insert the ppack into the inflight packets
     // of context
     pub_packet_list_unlink(ppack->parent_node);
-    
+
     // Insert existing ppack->parent list_node_t struct into
-    // the context's inflight packets. 
+    // the context's inflight packets.
     // Sorted on ascending pid.
     //
     pub_packet_list_insert_sorted_node(&ctx->inflight,
@@ -244,4 +244,21 @@ void pub_packet_ack(pub_subscriber_t* sub, packet_id_t pid)
         // Delete the ppack.
         _free_pending_packet(ppack);
     }
+}
+
+void pub_get_timed_out_subscribers(pub_context_t* ctx,
+                                   usec_timestamp_t current_time,
+                                   uint32_t max_age,
+                                   pub_sub_list_t* result)
+{
+    // Traverse all subscribers.
+    pub_sub_list_for_each(&ctx->subscribers,
+                          // For each subscriber, check if their oldest inflight packet has a sent_ts
+                          // timestamp older than max_age. If so, add it to result.
+                          lambda(uint8_t, (pub_sub_node_t* sub_node, void* udata) {
+                                  if (pub_packet_list_size(&sub_node->data->inflight) &&
+                                      pub_packet_list_tail(&sub_node->data->inflight)->data->send_ts <= current_time - max_age)
+                                      pub_sub_list_push_tail(result, sub_node->data);
+                                  return 1;
+                              }), 0);
 }

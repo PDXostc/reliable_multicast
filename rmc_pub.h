@@ -1,6 +1,6 @@
 // Copyright (C) 2018, Jaguar Land Rover
 // This program is licensed under the terms and conditions of the
-// Mozilla Public License, version 2.0.  The full text of the 
+// Mozilla Public License, version 2.0.  The full text of the
 // Mozilla Public License is at https://www.mozilla.org/MPL/2.0/
 //
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
@@ -24,12 +24,12 @@ typedef struct pub_packet {
     // If ref_count == 0, then the packet has not yet been sent.
     // If ref_count > 0, then the packet has been sent and can be found
     // in 'ref_count' subscriber::inflight_packets lists
-    uint32_t ref_count; 
+    uint32_t ref_count;
 
     // Back pointer to pub_context::queued or pub_context::pending, depending
     // on if the packet has been queud or sent.
     // Allows for quick movement of packet as it changes status.
-    struct _pub_packet_node* parent_node; 
+    struct _pub_packet_node* parent_node;
 
     usec_timestamp_t send_ts;   // When was the packet sent
     void *payload;              // Payload provided by pub_queue_packet()
@@ -37,7 +37,7 @@ typedef struct pub_packet {
 } pub_packet_t;
 
 
-RMC_LIST(pub_packet_list, pub_packet_node, pub_packet_t*) 
+RMC_LIST(pub_packet_list, pub_packet_node, pub_packet_t*)
 typedef pub_packet_list pub_packet_list_t;
 typedef pub_packet_node pub_packet_node_t;
 
@@ -59,9 +59,9 @@ typedef struct pub_subscriber {
     // Contains pointers to pending_packet_t sent but not
     // acknowledged.
     pub_packet_list_t inflight;
-} pub_subscriber_t; 
+} pub_subscriber_t;
 
-RMC_LIST(pub_sub_list, pub_sub_node, pub_subscriber_t*) 
+RMC_LIST(pub_sub_list, pub_sub_node, pub_subscriber_t*)
 typedef pub_sub_list pub_sub_list_t;
 typedef pub_sub_node pub_sub_node_t;
 
@@ -76,7 +76,7 @@ typedef pub_sub_node pub_sub_node_t;
 // by a call to pub_packet_sent(), which will add a pointer to the
 // given pending_packet_t to 'subscriber_t::inflight_packets' of all
 // subscribers in 'subscriber'
-// 
+//
 // When a packet is acked by a subscriber via a pub_packet_ack() call,
 // the corresponding pending_packet_t struct will be removed from the
 // subscriber's 'inflight_packets' list, and the pending packets
@@ -106,12 +106,18 @@ extern void pub_init_context(pub_context_t* ctx,
 
 extern void pub_init_subscriber(pub_subscriber_t* sub, pub_context_t* ctx);
 extern packet_id_t pub_queue_packet(pub_context_t* ctx, void* payload, payload_len_t payload_len);
+
+extern pub_packet_t* pub_next_queued_packet(pub_context_t* ctx);
 extern void pub_packet_sent(pub_context_t* ctx,
                             pub_packet_t* ppack,
                             usec_timestamp_t send_ts);
 
-extern pub_packet_t* pub_next_queued_packet(pub_context_t* ctx);
-extern void pub_get_queued_packet_list(pub_context_t* ctx, pub_packet_t*);
 extern void pub_packet_ack(pub_subscriber_t* sub, packet_id_t pid);
 
+// Collect all subscribers that have unacknowledged
+// packets older than or equal to max_age usecs.
+extern void pub_get_timed_out_subscribers(pub_context_t* ctx,
+                                          usec_timestamp_t current_time,
+                                          uint32_t max_age,
+                                          pub_sub_list_t* result);
 #endif // __RMC_PUB_H__

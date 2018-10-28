@@ -22,6 +22,7 @@ static uint8_t _test_print_pending(pub_packet_node_t* node, void* dt)
 
     printf("%*cPending Packet  %p\n", indent*2, ' ', pack);
     printf("%*c  PID             %lu\n", indent*2, ' ', pack->pid);
+    printf("%*c  Sent timestamp  %lu\n", indent*2, ' ', pack->send_ts);
     printf("%*c  Reference count %d\n", indent*2, ' ', pack->ref_count);
     printf("%*c  Parent node     %p\n", indent*2, ' ', pack->parent_node);
     printf("%*c  Payload Length  %d\n", indent*2, ' ', pack->payload_len);
@@ -77,10 +78,14 @@ void test_pub(void)
     pub_subscriber_t sub1;
     pub_subscriber_t sub2;
     pub_subscriber_t sub3;
-
+    pub_subscriber_t* sptr1 = 0;
+    pub_subscriber_t* sptr2 = 0;
+    pub_subscriber_t* sptr3 = 0;
     pub_packet_t* pack;
     packet_id_t pid = 0;
-    
+    pub_sub_list_t sub_lst;
+    pub_packet_node_t* pnode = 0;
+
 
     pub_init_context(&ctx, _test_pub_free);
     pub_init_subscriber(&sub1, &ctx);
@@ -398,5 +403,170 @@ void test_pub(void)
                pub_packet_list_size(&sub3.inflight));
         exit(255);
     }     
+
+    
+
+    // Reset next_pid to make testing easier.
+    ctx.next_pid = 1;
+    //
+    // Check that collection of timed out packages works.
+    //
+    if ((pid = pub_queue_packet(&ctx, "1", 2)) != 1) {
+        printf("Failed pub test 12.1. Wanted pid 1, got %lu\n",
+               pid);
+        exit(255);
+    }            
+    // Queue integrity has already been tested. Trust rest of pids to
+    // be 2-6.
+    pub_queue_packet(&ctx, "2", 2);
+    pub_queue_packet(&ctx, "3", 2);
+    pub_queue_packet(&ctx, "4", 2);
+    pub_queue_packet(&ctx, "5", 2);
+    pub_queue_packet(&ctx, "6", 2);
+
+    // Send each packt in turn, increasing time stamp
+    // by one for each packet
+    pack = pub_next_queued_packet(&ctx);
+    pub_packet_sent(&ctx, pack, 1);
+
+    pack = pub_next_queued_packet(&ctx);
+    pub_packet_sent(&ctx, pack, 2);
+
+    pack = pub_next_queued_packet(&ctx);
+    pub_packet_sent(&ctx, pack, 3);
+
+    pack = pub_next_queued_packet(&ctx);
+    pub_packet_sent(&ctx, pack, 4);
+
+    pack = pub_next_queued_packet(&ctx);
+    pub_packet_sent(&ctx, pack, 5);
+
+    pack = pub_next_queued_packet(&ctx);
+    pub_packet_sent(&ctx, pack, 6);
+    
+    // All subs will have p1 acked
+    //
+    // Inflight pids after ack:
+    // sub1: - 2 3 4 5 6
+    // sub2: - 2 3 4 5 6
+    // sub3: - 2 3 4 5 6
+    //
+    pub_packet_ack(&sub1, 1);
+    pub_packet_ack(&sub2, 1);
+    pub_packet_ack(&sub3, 1);
+
+    // Sub3 will have all packes acked
+    //
+    // After:
+    // sub1: - 2 3 4 5 6
+    // sub2: - 2 3 4 5 6
+    // sub3: - - - - - -
+    //
+    pub_packet_ack(&sub3, 2);
+    pub_packet_ack(&sub3, 3);
+    pub_packet_ack(&sub3, 4);
+    pub_packet_ack(&sub3, 5);
+    pub_packet_ack(&sub3, 6);
+
+    // Ack p2 and p3 for sub2
+    //
+    // After:
+    // sub1: - 2 3 4 5 6
+    // sub2: - - - 4 5 6
+    // sub3: - - - - - -
+    pub_packet_ack(&sub2, 2);
+    pub_packet_ack(&sub2, 3);
+
+    // Get all packets sent >= 2 usecs ago.
+    // Expected hits of subscribers:
+    // sub1 - 2,3,4
+    // sub2 - 4
+    pub_sub_list_init(&sub_lst, 0,0,0);
+    pub_get_timed_out_subscribers(&ctx, 6, 2, &sub_lst);
+
+    // sub1 and sub2 should be in the list
+    if (pub_sub_list_size(&sub_lst) != 2) {
+        printf("Failed pub test 12.2. Wanted size 2, got %d\n",
+               pub_sub_list_size(&sub_lst));
+        exit(255);
+    }
+
+    //
+    // Check Sub1
+    // 
+    sptr1 = pub_sub_list_head(&sub_lst)->data;
+    if (sptr1 == &sub2) {
+        printf("Failed pub test 12.3. Wanted sub1, got sub2\n");
+        exit(255);
+    }
+
+    if (sptr1 == &sub3) {
+        printf("Failed pub test 12.4. Wanted sub1, got sub3\n");
+
+        exit(255);
+    }
+
+    if (sptr1 != &sub1) {
+        printf("Failed pub test 12.5. Wanted sub1, got weird %p\n",
+               sptr1);
+        exit(255);
+    }
+
+    //
+    // Check Sub2
+    // 
+    sptr2 = pub_sub_list_tail(&sub_lst)->data;
+    if (sptr2 == &sub3) {
+        printf("Failed pub test 13.1. Wanted sub2, got sub3\n");
+        exit(255);
+
+    }
+
+    if (sptr2 == &sub1) {
+        printf("Failed pub test 13.2. Wanted sub2, got sub1\n");
+
+        exit(255);
+    }
+
+    if (sptr2 != &sub2) {
+        printf("Failed pub test 13.3 Wanted sub2, got weird %p\n",
+               sptr1);
+        exit(255);
+    }
+
+    // Get all packets sent >= 3 usecs ago.
+    // Expected hits of subscribers:
+    // sub1 - 2,3
+    pub_sub_list_empty(&sub_lst);
+    pub_get_timed_out_subscribers(&ctx, 6, 3, &sub_lst);
+
+    // sub1 and sub2 should be in the list
+    if (pub_sub_list_size(&sub_lst) != 1) {
+        printf("Failed pub test 14.1. Wanted size 1, got %d\n",
+               pub_sub_list_size(&sub_lst));
+        exit(255);
+    }
+
+    //
+    // Check Sub1
+    // 
+    sptr1 = pub_sub_list_head(&sub_lst)->data;
+    if (sptr1 == &sub2) {
+        printf("Failed pub test 12.3. Wanted sub1, got sub2\n");
+        exit(255);
+    }
+
+    if (sptr1 == &sub3) {
+        printf("Failed pub test 12.4. Wanted sub1, got sub3\n");
+
+        exit(255);
+    }
+
+    if (sptr1 != &sub1) {
+        printf("Failed pub test 12.5. Wanted sub1, got weird %p\n",
+               sptr1);
+        exit(255);
+    }
+
 }
 
