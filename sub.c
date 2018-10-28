@@ -16,7 +16,7 @@
 RMC_LIST_IMPL(sub_packet_list, sub_packet_node, sub_packet_t*) 
 RMC_LIST_IMPL(sub_publisher_list, sub_publisher_node, sub_publisher_t*) 
 
-// TODO: Ditch malloc and use a stack-based alloc/free setup that operates
+// FIXME: Ditch malloc and use a stack-based alloc/free setup that operates
 //       on static-sized heap memory allocated at startup. 
 static sub_packet_t* _alloc_pending_packet()
 {
@@ -31,6 +31,7 @@ static void _free_pending_packet(sub_packet_t* ppack)
     assert(ppack);
     free((void*) ppack);
 }
+
 
 static sub_publisher_t* _alloc_publisher()
 {

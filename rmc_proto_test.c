@@ -1,6 +1,6 @@
 // Copyright (C) 2018, Jaguar Land Rover
 // This program is licensed under the terms and conditions of the
-// Mozilla Public License, version 2.0.  The full text of the 
+// Mozilla Public License, version 2.0.  The full text of the
 // Mozilla Public License is at https://www.mozilla.org/MPL/2.0/
 //
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
@@ -51,8 +51,8 @@ void test_rmc_proto(void)
     int epollfd;
     struct epoll_event ev, events[MAX_EVENTS];
 
-
     epollfd = epoll_create1(0);
+
     if (epollfd == -1) {
         perror("epoll_create1");
         exit(255);
@@ -95,15 +95,15 @@ void test_rmc_proto(void)
 //           }
 
     rmc_init_context(&ctx, "239.0.0.1", 0, 4723, 0, 0, 0, 0);
-        
-    _test("1.1", rmc_listen(&ctx));
-    
+
+    _test("1.1", rmc_activate_context(&ctx));
+
     rmc_queue_packet(&ctx, "p1", 2);
     uint16_t arm;
     rmc_write(&ctx, RMC_MULTICAST_SOCKET_INDEX, &arm);
 
     rmc_read(&ctx, RMC_MULTICAST_SOCKET_INDEX, &arm);
-    
+
     pack = rmc_get_next_ready_packet(&ctx);
     if (!pack) {
         printf("RMC protocol test 3.1: No packet received\n");
@@ -115,6 +115,3 @@ void test_rmc_proto(void)
         exit(255);
     }
 }
-
-
-

@@ -1,6 +1,6 @@
 // Copyright (C) 2018, Jaguar Land Rover
 // This program is licensed under the terms and conditions of the
-// Mozilla Public License, version 2.0.  The full text of the 
+// Mozilla Public License, version 2.0.  The full text of the
 // Mozilla Public License is at https://www.mozilla.org/MPL/2.0/
 //
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
@@ -21,17 +21,15 @@ typedef struct packet {
     uint8_t payload[];
 } packet_t;
 
-enum command {
-    CMD_INIT = 0,
-    CMD_INIT_REPLY = 1,
-    CMD_PACKET = 2,
-    CMD_ACK = 3,
-};
+#define RMC_CMD_INIT 0
+#define RMC_CMD_INIT_REPLY 1
+#define RMC_CMD_PACKET 2
+#define RMC_CMD_ACK 3
+
 
 typedef struct cmd {
     uint8_t command;
     payload_len_t length;
-    uint8_t data[];
 } cmd_t;
 
 //
@@ -50,7 +48,7 @@ typedef struct cmd_init_reply {
 } cmt_init_reply_t;
 
 
-// 
+//
 // Ack one or more packets
 //
 typedef struct cmd_ack {
@@ -66,15 +64,15 @@ enum ack_block {
 
 typedef struct cmd_ack_block {
     uint8_t block_type;     // See enum above.
-    uint8_t data[];    
+    uint8_t data[];
 } cmd_ack_block_t;
- 
+
 typedef struct cmd_ack_block_single {
     packet_id_t packet_id;
 } cmd_ack_block_single_t;
 
 typedef struct cmd_ack_multi {
-    packet_id_t first; // ID of first packet ID 
+    packet_id_t first; // ID of first packet ID
     packet_id_t last; // ID of last packet ID
 } cmd_ack_block_multi_t;
 
@@ -88,7 +86,7 @@ typedef struct cmd_ack_block_bitmap {
 // header data.
 #define RMC_MAX_PACKET 0xFFE3
 #define RMC_MAX_PAYLOAD 0xFFC3
-#define RMC_MAX_TCP_SOCKETS 256
+#define RMC_MAX_SOCKETS 256
 
 #define RMC_MULTICAST_SOCKET_INDEX 0
 #define RMC_LISTEN_SOCKET_INDEX 1
@@ -105,19 +103,29 @@ typedef struct rmc_socket {
     rmc_poll_t poll_info;
     int descriptor;
     circ_buf_t circ_buf;
-    uint8_t circ_buf_data[RMC_MAX_PAYLOAD];
+    uint8_t circ_buf_data[RMC_MAX_PAYLOAD + 1]; // One byte extra needed by circ buf.
 } rmc_socket_t;
+
+#define RMC_RESEND_TIMEOUT_DEFAULT 500000
+#define RMC_RESEND_RETRIES 2
 
 typedef struct rmc_context {
     pub_context_t pub_ctx;
     sub_context_t sub_ctx;
     int socket_count;
-    int max_socket_ind;  // Max socket index currently in use. 
-    rmc_socket_t sockets[RMC_MAX_TCP_SOCKETS]; // 
+    int max_socket_ind;  // Max socket index currently in use.
+    rmc_socket_t sockets[RMC_MAX_SOCKETS]; //
     char multicast_addr[256];
     struct sockaddr_in mcast_dest_addr;
     char listen_ip[80];
     int port;
+    // Once we have sent a packet how long do we wait for an ack, in usec, until
+    // we resend it?
+    uint32_t resend_timeout;
+
+    // How many resends to we attempt before sending it via TCP?
+    uint32_t resend_retries;
+
     void (*poll_add)(rmc_poll_t* poll); // When we want to know if a socket can be written to or read from
     void (*poll_modify)(rmc_poll_t* poll); // We have changed the action bitmap.
     void (*poll_remove)(rmc_poll_t* poll);  // Callback when we don't need socket ready notifications.
@@ -161,19 +169,24 @@ extern int rmc_init_context(rmc_context_t* context,
                             // argument) when the socket can be
                             // written to (asynchronously).
                             //
-                            void (*poll_add)(rmc_poll_t* poll), 
+                            void (*poll_add)(rmc_poll_t* poll),
 
                             // Callback to remove a socket previously added with poll_add().
                             void (*poll_remove)(rmc_poll_t* poll));
 
 
-extern int rmc_listen(rmc_context_t* context);
+extern int rmc_activate_context(rmc_context_t* context);
 
-extern int rmc_connect_subscription(rmc_context_t* ctx,
+extern int rmc_deactivate_context(rmc_context_t* context);
+
+extern int rmc_connect_subscription(rmc_context_t* context,
                                     char* server_addr,
                                     int server_port,
                                     int* result_socket,
                                     int* result_connection_index);
+
+extern int rmc_get_next_timeout(rmc_context_t* context, usec_timestamp_t* result);
+extern int rmc_process_timeout(rmc_context_t* context);
 
 extern int rmc_read(rmc_context_t* context, rmc_poll_index_t rmc_index, uint16_t* new_poll_action);
 extern int rmc_write(rmc_context_t* context, rmc_poll_index_t rmc_index, uint16_t* new_poll_action);
