@@ -32,23 +32,6 @@ static void _free_pending_packet(pub_packet_t* ppack)
     free((void*) ppack);
 }
 
-// FIXME: Ditch malloc and use a stack-based alloc/free setup that operates
-//       on static-sized heap memory allocated at startup.
-static pub_subscriber_t* _alloc_subscriber()
-{
-    pub_subscriber_t* res = (pub_subscriber_t*) malloc(sizeof(pub_subscriber_t));
-
-    assert(res);
-    return res;
-}
-
-
-static void _free_subscriber(pub_subscriber_t* sub)
-{
-    assert(sub);
-    free((void*) sub);
-}
-
 
 static packet_id_t _next_pid(pub_context_t* ctx)
 {
@@ -72,17 +55,22 @@ void pub_init_context(pub_context_t* ctx,
 }
 
 
-void pub_init_subscriber(pub_subscriber_t* sub, pub_context_t* ctx)
+void pub_init_subscriber(pub_subscriber_t* sub, pub_context_t* ctx, void* user_data)
 {
 
     assert(sub);
     assert(ctx);
 
     sub->context = ctx;
+    sub->user_data = user_data;
     pub_packet_list_init(&sub->inflight, 0, 0, 0);
     pub_sub_list_push_tail(&ctx->subscribers, sub);
 }
 
+inline void* pub_subscriber_user_data(pub_subscriber_t* sub)
+{
+    return sub?sub->user_data:0;
+}
 
 packet_id_t pub_queue_packet(pub_context_t* ctx,
                              void* payload,
@@ -247,8 +235,7 @@ void pub_packet_ack(pub_subscriber_t* sub, packet_id_t pid)
 }
 
 void pub_get_timed_out_subscribers(pub_context_t* ctx,
-                                   usec_timestamp_t current_time,
-                                   uint32_t max_age,
+                                   usec_timestamp_t timeout_ts,
                                    pub_sub_list_t* result)
 {
     // Traverse all subscribers.
@@ -257,10 +244,26 @@ void pub_get_timed_out_subscribers(pub_context_t* ctx,
                           // timestamp older than max_age. If so, add it to result.
                           lambda(uint8_t, (pub_sub_node_t* sub_node, void* udata) {
                                   if (pub_packet_list_size(&sub_node->data->inflight) &&
-                                      pub_packet_list_tail(&sub_node->data->inflight)->data->send_ts <= current_time - max_age)
+                                      pub_packet_list_tail(&sub_node->data->inflight)->data->send_ts <= timeout_ts)
                                       pub_sub_list_push_tail(result, sub_node->data);
                                   return 1;
                               }), 0);
+
+}
+
+void pub_get_timed_out_packets(pub_subscriber_t* sub,
+                               usec_timestamp_t timeout_ts,
+                               pub_packet_list_t* result)
+{
+    // Traverse all inflight packets for subscriber until we find one that is not timed out.x
+    pub_packet_list_for_each_rev(&sub->inflight,
+                                 // For each packet, check if their oldest inflight packet has a sent_ts
+                                 // timestamp older than max_age. If so, add it to result.
+                                 lambda(uint8_t, (pub_packet_node_t* pnode, void* udata) {
+                                         if (pnode->data->send_ts <= timeout_ts)
+                                             pub_packet_list_push_tail(result, pnode->data);
+                                         return 1;
+                                     }), 0);
 
 }
 

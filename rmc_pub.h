@@ -21,9 +21,10 @@ struct pub_subscriber;
 //
 typedef struct pub_packet {
     packet_id_t pid;
-    // If ref_count == 0, then the packet has not yet been sent.
-    // If ref_count > 0, then the packet has been sent and can be found
-    // in 'ref_count' subscriber::inflight_packets lists
+    // ref_count == 0 -> The packet has not yet been sent.
+    // ref_count > 0  -> The packet has been sent and can be found
+    //                   in 'ref_count' subscriber::inflight_packets
+    //                   lists.
     uint32_t ref_count;
 
     // Back pointer to pub_context::queued or pub_context::pending, depending
@@ -59,6 +60,7 @@ typedef struct pub_subscriber {
     // Contains pointers to pending_packet_t sent but not
     // acknowledged.
     pub_packet_list_t inflight;
+    void* user_data;
 } pub_subscriber_t;
 
 RMC_LIST(pub_sub_list, pub_sub_node, pub_subscriber_t*)
@@ -89,8 +91,10 @@ typedef pub_sub_node pub_sub_node_t;
 typedef struct pub_context {
     pub_sub_list_t subscribers; // of pub_subscriber_t
     pub_packet_list_t queued;   // of pub_packet_t of packets waiting to be sent.
-    pub_packet_list_t inflight; // of pub_packet_t sent and awaiting
-                              // acks. Used by subscriber_t::inflights
+
+    // List of pub_packet_t sent and awaiting acks. Packets in this list
+    // are referredd to by subscriber_t::inflight.
+    pub_packet_list_t inflight; 
     packet_id_t next_pid;
     void (*payload_free)(void*, payload_len_t);
 } pub_context_t;
@@ -104,7 +108,8 @@ typedef struct pub_context {
 extern void pub_init_context(pub_context_t* ctx,
                              void (*payload_free)(void*, payload_len_t));
 
-extern void pub_init_subscriber(pub_subscriber_t* sub, pub_context_t* ctx);
+extern void pub_init_subscriber(pub_subscriber_t* sub, pub_context_t* ctx, void* user_data);
+extern void* pub_subscriber_user_data(pub_subscriber_t* sub);
 extern packet_id_t pub_queue_packet(pub_context_t* ctx, void* payload, payload_len_t payload_len);
 
 extern pub_packet_t* pub_next_queued_packet(pub_context_t* ctx);
@@ -117,9 +122,12 @@ extern void pub_packet_ack(pub_subscriber_t* sub, packet_id_t pid);
 // Collect all subscribers that have unacknowledged
 // packets older than or equal to max_age usecs.
 extern void pub_get_timed_out_subscribers(pub_context_t* ctx,
-                                          usec_timestamp_t current_time,
-                                          uint32_t max_age,
+                                          usec_timestamp_t timeout_ts,
                                           pub_sub_list_t* result);
+
+extern void pub_get_timed_out_packets(pub_subscriber_t* sub,
+                                      usec_timestamp_t timeout_ts,
+                                      pub_packet_list_t* result);
 
 // Find the subscriber with the oldest inflight packet that is awaiting an ack.
 void pub_get_oldest_subscriber(pub_context_t* ctx,
