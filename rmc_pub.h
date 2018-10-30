@@ -37,7 +37,6 @@ typedef struct pub_packet {
     payload_len_t payload_len;  // Payload length provided by pub_queue_packet()
 } pub_packet_t;
 
-
 RMC_LIST(pub_packet_list, pub_packet_node, pub_packet_t*)
 typedef pub_packet_list pub_packet_list_t;
 typedef pub_packet_node pub_packet_node_t;

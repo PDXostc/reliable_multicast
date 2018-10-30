@@ -94,15 +94,13 @@ void test_rmc_proto(void)
 //               }
 //           }
 
-    rmc_init_context(&ctx, "239.0.0.1", 0, 4723, 0, 0, 0, 0);
+    rmc_init_context(&ctx, "239.0.0.1", 0, 4723, 0, 0, 0, 0, 0);
 
     _test("1.1", rmc_activate_context(&ctx));
 
     rmc_queue_packet(&ctx, "p1", 2);
-    uint16_t arm;
-    rmc_write(&ctx, RMC_MULTICAST_SOCKET_INDEX, &arm);
-
-    rmc_read(&ctx, RMC_MULTICAST_SOCKET_INDEX, &arm);
+    rmc_write(&ctx, RMC_MULTICAST_SOCKET_INDEX);
+    rmc_read(&ctx, RMC_MULTICAST_SOCKET_INDEX);
 
     pack = rmc_get_next_ready_packet(&ctx);
     if (!pack) {

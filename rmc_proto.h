@@ -5,7 +5,6 @@
 //
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
-
 #ifndef __RMC_PROTO_H__
 #define __RMC_PROTO_H__
 #include "rmc_common.h"
@@ -14,73 +13,29 @@
 #include "rmc_sub.h"
 #include <netinet/in.h>
 
+#define RMC_CMD_PACKET 1
+#define RMC_CMD_ACK_SINGLE 2
+#define RMC_CMD_ACK_INTERVAL 3
 
-typedef struct packet {
-    packet_id_t id;
-    payload_len_t len;
-    uint8_t payload[];
-} packet_t;
-
-#define RMC_CMD_INIT 0
-#define RMC_CMD_INIT_REPLY 1
-#define RMC_CMD_PACKET 2
-#define RMC_CMD_ACK 3
-
-
-typedef struct cmd {
+typedef struct cmd_ack_single {
     uint8_t command;
-    payload_len_t length;
-} cmd_t;
+    packet_id_t packet_id; // Packet ID to ac
+} cmd_ack_single_t;
 
-//
-// Init
-//
-typedef struct cmd_init {
-    uint8_t version; // Version supported;
-} cmt_init_t;
-
-//
-// Init reply
-//
-typedef struct cmd_init_reply {
-    uint8_t version; // Version supported;
-    packet_id_t last_sent; // ID of last sent packet.
-} cmt_init_reply_t;
+typedef struct cmd_ack_interval {
+    uint8_t command;
+    packet_id_t first;    // ID of first packet ID
+    packet_id_t last;     // ID of last packet ID
+} cmd_ack_interval_t;
 
 
-//
-// Ack one or more packets
-//
-typedef struct cmd_ack {
-    payload_len_t length;    // Payload length of data[]
-    uint8_t data[];       // One or more block data elements
-} cmt_ack_t;
+typedef struct cmd_packet {
+    uint8_t command;
+    packet_id_t pid;    // ID of first packet ID
+    payload_len_t payload_len;
+    uint8_t payload[];
+} cmd_packet_t;
 
-enum ack_block {
-    BLOCK_SINGLE = 0,
-    BLOCK_MULTI = 1,
-    BLOCK_MULTI_BITMAP = 2
-};
-
-typedef struct cmd_ack_block {
-    uint8_t block_type;     // See enum above.
-    uint8_t data[];
-} cmd_ack_block_t;
-
-typedef struct cmd_ack_block_single {
-    packet_id_t packet_id;
-} cmd_ack_block_single_t;
-
-typedef struct cmd_ack_multi {
-    packet_id_t first; // ID of first packet ID
-    packet_id_t last; // ID of last packet ID
-} cmd_ack_block_multi_t;
-
-typedef struct cmd_ack_block_bitmap {
-    packet_id_t first; // ID of first packet in bitmap
-    payload_len_t length; // Number of bytes in 'data' bitmap
-    uint8_t data[];
-} cmd_ack_block_bitmap_t;
 
 // Max UDP size is 0xFFE3 (65507). Subtract 0x20 (32) bytes for RMC
 // header data.
@@ -181,7 +136,7 @@ typedef struct rmc_context {
     uint32_t resend_timeout;
 
     void (*poll_add)(rmc_poll_t* poll); // When we want to know if a socket can be written to or read from
-    void (*poll_modify)(rmc_poll_t* poll); // We have changed the action bitmap.
+    void (*poll_modify)(rmc_poll_t* old_poll, rmc_poll_t* new_poll); // We have changed the action bitmap.
     void (*poll_remove)(rmc_poll_t* poll);  // Callback when we don't need socket ready notifications.
     void* (*payload_alloc)(payload_len_t payload_len);  // Called to alloc memory for incoming data.
     void (*payload_free)(void* payload, payload_len_t payload_len);  // Free payload provided by rmc_queue_packet()
@@ -225,6 +180,15 @@ extern int rmc_init_context(rmc_context_t* context,
                             //
                             void (*poll_add)(rmc_poll_t* poll),
 
+                            // The poll action either needs to be re-armed 
+                            // in cases where polling is oneshot (epoll(2) with EPOLLONESHOT),
+                            // or the poll action has changed.
+                            //
+                            // Rearming can be detected by checking if
+                            // old->action == new_poll->action.
+                            //
+                            void (*poll_modify)(rmc_poll_t* old_poll, rmc_poll_t* new_poll), 
+
                             // Callback to remove a socket previously added with poll_add().
                             void (*poll_remove)(rmc_poll_t* poll));
 
@@ -242,8 +206,8 @@ extern int rmc_connect_subscription(rmc_context_t* context,
 extern int rmc_get_next_timeout(rmc_context_t* context, usec_timestamp_t* result);
 extern int rmc_process_timeout(rmc_context_t* context);
 
-extern int rmc_read(rmc_context_t* context, rmc_poll_index_t rmc_index, uint16_t* new_poll_action);
-extern int rmc_write(rmc_context_t* context, rmc_poll_index_t rmc_index, uint16_t* new_poll_action);
+extern int rmc_read(rmc_context_t* context, rmc_poll_index_t rmc_index);
+extern int rmc_write(rmc_context_t* context, rmc_poll_index_t rmc_index);
 extern int rmc_queue_packet(rmc_context_t* context, void* payload, payload_len_t payload_len);
 extern int rmc_get_poll_size(rmc_context_t* context, int *result);
 extern int rmc_get_poll_vector(rmc_context_t* context, rmc_poll_t* result, int* len);
@@ -251,5 +215,22 @@ extern int rmc_get_poll(rmc_context_t* context, int rmc_index, rmc_poll_t* resul
 extern int rmc_get_ready_packet_count(rmc_context_t* context);
 extern sub_packet_t* rmc_get_next_ready_packet(rmc_context_t* context);
 extern void rmc_free_packet(sub_packet_t* packet);
+
+
+// FIXME: MOVE TO INTERNAL HEADER FILE
+extern void rmc_reset_socket(rmc_socket_t* sock, int index);
+
+extern int rmc_connect_tcp_by_address(rmc_context_t* ctx,
+                                      struct sockaddr_in* sock_addr,
+                                      rmc_poll_index_t* result_index);
+
+extern int rmc_connect_tcp_by_host(rmc_context_t* ctx,
+                                   char* server_addr,
+                                   rmc_poll_index_t* result_index);
+
+extern int rmc_process_accept(rmc_context_t* ctx,
+                              rmc_poll_index_t* result_index);
+
+extern int rmc_close_tcp(rmc_context_t* ctx, rmc_poll_index_t p_ind);
 
 #endif // __RMC_PROTO_H__
