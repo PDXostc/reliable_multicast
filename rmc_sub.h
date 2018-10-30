@@ -29,16 +29,13 @@ RMC_LIST(sub_packet_list, sub_packet_node, sub_packet_t*)
 typedef sub_packet_list sub_packet_list_t;
 typedef sub_packet_node sub_packet_node_t;
 
-#define RMC_SUB_MAX_ADDR_LEN 64
-
 typedef struct sub_publisher {
     struct sub_context* owner;      // Owning context.
     packet_id_t max_pid_ready;      // Highest pid that is ready to be dispatched.
     packet_id_t max_pid_received;   // Maximum PID received.
-    sub_packet_list_t received;     // Packets received but need additional packets. Desc
+    sub_packet_list_t received;     // Packets received but need additional packets. 
     sub_packet_list_t ready;        // Packets ready to be dispatched.
-    uint8_t address[RMC_SUB_MAX_ADDR_LEN]; // s_addr for multicast source IP that publisher uses.
-    uint32_t address_len;            // Number of bytes in address. Will be compared with source addr.
+    void* user_data;
 } sub_publisher_t; 
 
 
@@ -49,7 +46,6 @@ typedef sub_publisher_node sub_publisher_node_t;
 typedef struct sub_context {
     sub_publisher_list_t publishers; // of sub_publisher_t for all publishers we are subscribing to.
     void (*payload_free)(void*, payload_len_t);
-
 } sub_context_t; 
 
 
@@ -74,10 +70,9 @@ void sub_process_received_packets(sub_publisher_t* pub);
 extern sub_packet_t* sub_next_ready_packet(sub_publisher_t* ctx);
 extern void sub_packet_dispatched(sub_packet_t* pack);
 extern void sub_get_missing_packets(sub_publisher_t* sub, intv_list_t* res);
-extern sub_publisher_t* sub_add_publisher(sub_context_t* ctx, void* address, uint32_t address_len);
+extern void sub_init_publisher(sub_publisher_t* pub, sub_context_t* ctx, void* user_data);
 extern sub_publisher_t* sub_find_publisher(sub_context_t* ctx, void* address, int address_len);
-extern void sub_delete_publisher(sub_publisher_t* pub);
-extern void sub_delete_publisher_by_address(sub_context_t* ctx, void* address, int address_len);
+extern void sub_remove_publisher(sub_publisher_t* pub);
 extern sub_packet_t* sub_get_next_ready_packet(sub_context_t* ctx);
 extern int sub_get_ready_packet_count(sub_context_t* ctx);
 

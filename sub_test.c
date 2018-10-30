@@ -180,29 +180,26 @@ static void test_interval_list(char* test,
     }
 }
 
-sub_publisher_t* reset_publisher(sub_context_t* ctx, sub_publisher_t* pub)
+void reset_publisher(sub_context_t* ctx, sub_publisher_t* pub)
 {
     sub_packet_t* pack = 0;
-    uint8_t address[RMC_SUB_MAX_ADDR_LEN];
-    int address_len;
 
-    address_len = pub->address_len;
-    memcpy(address, pub->address, address_len);
 
     sub_process_received_packets(pub);
     while((pack = sub_next_ready_packet(pub)))
         sub_packet_dispatched(pack);
 
-    sub_delete_publisher(pub);
-    return sub_add_publisher(ctx, address, address_len);
+    sub_remove_publisher(pub);
+    sub_init_publisher(pub, ctx, 0);
+    return;
 }
 
 void test_sub(void)
 {
     sub_context_t ctx;
-    sub_publisher_t* pub1 = 0;
-    sub_publisher_t* pub2 = 0;
-    sub_publisher_t* pub3 = 0;
+    sub_publisher_t pub1;
+    sub_publisher_t pub2;
+    sub_publisher_t pub3;
     sub_packet_t* pack = 0;
     packet_id_t pid = 0;
     intv_list_t holes;
@@ -212,75 +209,76 @@ void test_sub(void)
     sub_init_context(&ctx, _test_sub_free);
     intv_list_init(&holes, 0, 0, 0);
 
-    pub1 = sub_add_publisher(&ctx, "p1", 2);
-    pub2 = sub_add_publisher(&ctx, "p2", 2);
-    pub3 = sub_add_publisher(&ctx, "p3", 3);
+    sub_init_publisher(&pub1, &ctx, 0);
+    sub_init_publisher(&pub2, &ctx, 0);
+    sub_init_publisher(&pub3, &ctx, 0);
+
 
 
     //--------
     // Basic processing of packages
     //--------
 
-    add_received_packets(pub1,
+    add_received_packets(&pub1,
                          1, 5,
                          0, 0);
 
 
 
     // Check sequence
-    test_sequence("1.1", &pub1->received, 1, 5);
+    test_sequence("1.1", &pub1.received, 1, 5);
 
 
-    sub_process_received_packets(pub1);
+    sub_process_received_packets(&pub1);
 
     // Received queue should be empty.
-    if (sub_packet_list_size(&pub1->received)) {
+    if (sub_packet_list_size(&pub1.received)) {
         printf("Failed test 1.2. Wanted size 0, got %d\n",
-               sub_packet_list_size(&pub1->ready));
+               sub_packet_list_size(&pub1.ready));
         exit(255);
     }
         
-    test_sequence("1.3", &pub1->ready, 1, 5);
+    test_sequence("1.3", &pub1.ready, 1, 5);
 
     // Dispatch all packets and check that they disappear.
     // Packet 1.
-    pack = sub_next_ready_packet(pub1);
+    pack = sub_next_ready_packet(&pub1);
     sub_packet_dispatched(pack);
-    test_sequence("1.4", &pub1->ready, 2, 5);
+    test_sequence("1.4", &pub1.ready, 2, 5);
 
     // Packet 2.
-    pack = sub_next_ready_packet(pub1);
+    pack = sub_next_ready_packet(&pub1);
     sub_packet_dispatched(pack);
-    test_sequence("1.5", &pub1->ready, 3, 5);
+    test_sequence("1.5", &pub1.ready, 3, 5);
 
     // Packet 3.
-    pack = sub_next_ready_packet(pub1);
+    pack = sub_next_ready_packet(&pub1);
     sub_packet_dispatched(pack);
-    test_sequence("1.6", &pub1->ready, 4, 5);
+    test_sequence("1.6", &pub1.ready, 4, 5);
 
     // Packet 4.
-    pack = sub_next_ready_packet(pub1);
+    pack = sub_next_ready_packet(&pub1);
     sub_packet_dispatched(pack);
-    test_sequence("1.7", &pub1->ready, 5, 5);
+    test_sequence("1.7", &pub1.ready, 5, 5);
 
     // Packet 1.
-    pack = sub_next_ready_packet(pub1);
+    pack = sub_next_ready_packet(&pub1);
     sub_packet_dispatched(pack);
-    if (sub_packet_list_size(&pub1->ready)) {
+    if (sub_packet_list_size(&pub1.ready)) {
         printf("Failed test 1.8. Wanted size 0, got %d\n",
-               sub_packet_list_size(&pub1->ready));
+               sub_packet_list_size(&pub1.ready));
         exit(255);
     }
 
     // Reset pub1
-    pub1 = reset_publisher(&ctx, pub1);
+    reset_publisher(&ctx, &pub1);
     
     //--------
     // Out of order packages.
     //--------
 
     // Middle stream out of order
-    add_received_packets(pub1,
+    add_received_packets(&pub1,
                          1, 1,
                          3, 3,
                          2, 2,
@@ -288,15 +286,15 @@ void test_sub(void)
                          0, 0);
 
     // Check sequence
-    test_sequence("2.1", &pub1->received, 1, 4);
+    test_sequence("2.1", &pub1.received, 1, 4);
 
-    sub_process_received_packets(pub1);
-    test_sequence("2.2", &pub1->ready, 1, 4);
+    sub_process_received_packets(&pub1);
+    test_sequence("2.2", &pub1.ready, 1, 4);
     
-    pub1 = reset_publisher(&ctx, pub1);
+    reset_publisher(&ctx, &pub1);
 
     // Start out-of-order packages
-    add_received_packets(pub1,
+    add_received_packets(&pub1,
                          2, 2,
                          1, 1,
                          3, 3,
@@ -304,15 +302,15 @@ void test_sub(void)
                          0, 0);
 
     // Check sequence
-    test_sequence("2.3", &pub1->received, 1, 4);
+    test_sequence("2.3", &pub1.received, 1, 4);
 
-    sub_process_received_packets(pub1);
-    test_sequence("2.4", &pub1->ready, 1, 4);
+    sub_process_received_packets(&pub1);
+    test_sequence("2.4", &pub1.ready, 1, 4);
     
-    pub1 = reset_publisher(&ctx, pub1);
+    reset_publisher(&ctx, &pub1);
 
     // End out-of-order packages
-    add_received_packets(pub1,
+    add_received_packets(&pub1,
                          1, 1,
                          2, 2,
                          4, 4,
@@ -320,26 +318,26 @@ void test_sub(void)
                          0, 0);
 
     // Check sequence
-    test_sequence("2.5", &pub1->received, 1, 4);
+    test_sequence("2.5", &pub1.received, 1, 4);
 
-    sub_process_received_packets(pub1);
-    test_sequence("2.6", &pub1->ready, 1, 4);
+    sub_process_received_packets(&pub1);
+    test_sequence("2.6", &pub1.ready, 1, 4);
 
-    pub1 = reset_publisher(&ctx, pub1);
+    reset_publisher(&ctx, &pub1);
 
 
     //--------
     // Test single missing packages.
     //--------
 
-    add_received_packets(pub1,
+    add_received_packets(&pub1,
                          1, 2,
                          // 3-3
                          4, 5,
                          0, 0);
 
     // Check if we get a "3" as a missing packet
-    sub_get_missing_packets(pub1, &holes);
+    sub_get_missing_packets(&pub1, &holes);
 
     test_interval_list("3.1", &holes,
                        3,3,
@@ -348,9 +346,9 @@ void test_sub(void)
     //
     // Test multiple missing packages.
     // 
-    pub1 = reset_publisher(&ctx, pub1);
+    reset_publisher(&ctx, &pub1);
 
-    add_received_packets(pub1,
+    add_received_packets(&pub1,
                          1, 2,
                          // 3-5
                          6, 7,
@@ -359,7 +357,7 @@ void test_sub(void)
     while(intv_list_pop_head(&holes, &intv));
 
     // Check if we get a "3-5" as a missing packet
-    sub_get_missing_packets(pub1, &holes);
+    sub_get_missing_packets(&pub1, &holes);
 
     test_interval_list("3.2", &holes,
                        3,5,
@@ -370,9 +368,9 @@ void test_sub(void)
     // Test multiple missing packages in multiple holes
     //--------
 
-    pub1 = reset_publisher(&ctx, pub1);
+    reset_publisher(&ctx, &pub1);
 
-    add_received_packets(pub1,
+    add_received_packets(&pub1,
                          1, 2,
                          // 3-5
                          6, 7,
@@ -388,7 +386,7 @@ void test_sub(void)
 
     // Check if we get a 3-5, 7-9, 11-13, 16-19 as a missing packets
 
-    sub_get_missing_packets(pub1, &holes);
+    sub_get_missing_packets(&pub1, &holes);
 
 
     test_interval_list("3.3", &holes,
@@ -405,9 +403,9 @@ void test_sub(void)
     // that starts later than pid 1
     //--------
     //
-    pub1 = reset_publisher(&ctx, pub1);
+    reset_publisher(&ctx, &pub1);
 
-    add_received_packets(pub1,
+    add_received_packets(&pub1,
                          100, 101,
                          // 102-102
                          103, 104,
@@ -416,7 +414,7 @@ void test_sub(void)
     while(intv_list_pop_head(&holes, &intv));
 
 
-    sub_get_missing_packets(pub1, &holes);
+    sub_get_missing_packets(&pub1, &holes);
 
     
     test_interval_list("4.1", &holes,
@@ -429,9 +427,9 @@ void test_sub(void)
     // successfully procesed packages
     //--------
     // 
-    pub1 = reset_publisher(&ctx, pub1);
+    reset_publisher(&ctx, &pub1);
 
-    add_received_packets(pub1,
+    add_received_packets(&pub1,
                          1, 2,
                          // 3-5
                          6, 7,
@@ -445,14 +443,14 @@ void test_sub(void)
 
     // sub_process_received_packets() should
     // move 1 and 2 to ready queue.
-    sub_process_received_packets(pub1);
+    sub_process_received_packets(&pub1);
     
-    test_sequence("5.1", &pub1->ready, 1, 2);
+    test_sequence("5.1", &pub1.ready, 1, 2);
 
     while(intv_list_pop_head(&holes, &intv));
 
     // We should still have the same holes
-    sub_get_missing_packets(pub1, &holes);
+    sub_get_missing_packets(&pub1, &holes);
 
     test_interval_list("5.2", &holes,
                        3,5,
@@ -462,18 +460,18 @@ void test_sub(void)
                        0,0);
 
     // Insert one missing packet. Still leaving a hole at 3 and 5
-    add_received_packets(pub1,
+    add_received_packets(&pub1,
                          4,4,
                          0,0);
 
     // Will move no packets from received to ready since we still
     // need pid 3 and 5 to get a complete sequence from 1-7
-    sub_process_received_packets(pub1);
+    sub_process_received_packets(&pub1);
 
     while(intv_list_pop_head(&holes, &intv));
 
     // We should still have the same holes
-    sub_get_missing_packets(pub1, &holes);
+    sub_get_missing_packets(&pub1, &holes);
 
     test_interval_list("5.3", &holes,
                        3,3,
@@ -484,21 +482,21 @@ void test_sub(void)
                        0,0);
     
     // Insert packet #3, which should be moved immedately over to the ready queue
-    add_received_packets(pub1,
+    add_received_packets(&pub1,
                          3,3,
                          0,0);
 
     // need pid 5 to get a complete sequence from 1-7
-    sub_process_received_packets(pub1);
+    sub_process_received_packets(&pub1);
 
     while(intv_list_pop_head(&holes, &intv));
 
 
     // We should still have the same holes
-    sub_get_missing_packets(pub1, &holes);
+    sub_get_missing_packets(&pub1, &holes);
 
     // Ready packets should be 1-3
-    test_sequence("5.4", &pub1->ready, 1, 3);
+    test_sequence("5.4", &pub1.ready, 1, 3);
 
     test_interval_list("5.5", &holes,
                        5,5,
@@ -509,14 +507,14 @@ void test_sub(void)
 
     // Dispatch the ready packets
     // pid 1
-    pack = sub_next_ready_packet(pub1);
+    pack = sub_next_ready_packet(&pub1);
     sub_packet_dispatched(pack);
 
     // pid 2
-    pack = sub_next_ready_packet(pub1);
+    pack = sub_next_ready_packet(&pub1);
     sub_packet_dispatched(pack);
     // pid 3
-    pack = sub_next_ready_packet(pub1);
+    pack = sub_next_ready_packet(&pub1);
     sub_packet_dispatched(pack);
 
     // Ready queue is empty.
@@ -526,7 +524,7 @@ void test_sub(void)
 
 
     // We should still have the same holes
-    sub_get_missing_packets(pub1, &holes);
+    sub_get_missing_packets(&pub1, &holes);
 
     test_interval_list("5.7", &holes,
                        5,5,
@@ -539,20 +537,20 @@ void test_sub(void)
 
     // Insert packet 4, which should
     // enable 4-7 to be moved to ready queue
-    add_received_packets(pub1,
+    add_received_packets(&pub1,
                          5,5,
                          0,0);
 
-    sub_process_received_packets(pub1);
+    sub_process_received_packets(&pub1);
 
     while(intv_list_pop_head(&holes, &intv));
 
 
     // We should still have the same holes
-    sub_get_missing_packets(pub1, &holes);
+    sub_get_missing_packets(&pub1, &holes);
 
     // Ready packets should be 4-7
-    test_sequence("5.8", &pub1->ready, 4, 7);
+    test_sequence("5.8", &pub1.ready, 4, 7);
 
     test_interval_list("5.9", &holes,
                        8,9,
@@ -561,24 +559,24 @@ void test_sub(void)
                        0,0);
 
     // Plug the 11-13 and 15-10 hole
-    add_received_packets(pub1,
+    add_received_packets(&pub1,
                          11,13,
                          16,19,
                          0,0);
     
     // process packages should not change since we still need pid 
     // 8-9 
-    sub_process_received_packets(pub1);
+    sub_process_received_packets(&pub1);
 
     while(intv_list_pop_head(&holes, &intv));
 
 
     // We should still have the same holes
-    sub_get_missing_packets(pub1, &holes);
+    sub_get_missing_packets(&pub1, &holes);
 
 
     // Ready packets should be 4-7
-    test_sequence("5.10", &pub1->ready, 4, 7);
+    test_sequence("5.10", &pub1.ready, 4, 7);
 
     test_interval_list("5.11", &holes,
                        8,9,
@@ -587,21 +585,21 @@ void test_sub(void)
     // Plug the 8-9 hole, which should
     // enable all pid, 8-21, to be moved
     // to ready
-    add_received_packets(pub1,
+    add_received_packets(&pub1,
                          8,9,
                          0,0);
     
     // process packages to move all remaining
     // received packages to ready
-    sub_process_received_packets(pub1);
+    sub_process_received_packets(&pub1);
 
     while(intv_list_pop_head(&holes, &intv));
 
     // We should still have the same holes
-    sub_get_missing_packets(pub1, &holes);
+    sub_get_missing_packets(&pub1, &holes);
 
     // Ready packets should be 4-21
-    test_sequence("5.12", &pub1->ready, 4, 21);
+    test_sequence("5.12", &pub1.ready, 4, 21);
 
     if (intv_list_size(&holes)) {
         printf("Failed test 5.12 Wanted size 0, got %d\n",
@@ -614,9 +612,9 @@ void test_sub(void)
     // Test that we correctly drop dup packets
     //--------
 
-    pub1 = reset_publisher(&ctx, pub1);
+    reset_publisher(&ctx, &pub1);
 
-    add_received_packets(pub1,
+    add_received_packets(&pub1,
                          1, 2,
                          // 3-5
                          6, 7,
@@ -630,70 +628,70 @@ void test_sub(void)
     
     // Check that we drop dups in the received queue
 
-    if (!sub_packet_is_duplicate(pub1, 1)) {
+    if (!sub_packet_is_duplicate(&pub1, 1)) {
         printf("Failed test 6.1 Failed dup packet detection.\n");
         exit(255);
     }
 
     // Process packet 1 and 2.
-    sub_process_received_packets(pub1);
+    sub_process_received_packets(&pub1);
 
     // Check that we drop dups in the ready queue
-    if (!sub_packet_is_duplicate(pub1, 1)) {
+    if (!sub_packet_is_duplicate(&pub1, 1)) {
         printf("Failed test 6.2 Failed dup packet detection.\n");
         exit(255);
     }
     
     // Plug the 3-5 hole
-    add_received_packets(pub1,
+    add_received_packets(&pub1,
                          3, 5,
                          0, 0);
 
     // Process packet 3-5.
-    sub_process_received_packets(pub1);
+    sub_process_received_packets(&pub1);
 
     // Check that we drop dups in the ready queue
-    if (!sub_packet_is_duplicate(pub1, 1)) {
+    if (!sub_packet_is_duplicate(&pub1, 1)) {
         printf("Failed test 6.3 Failed dup packet detection.\n");
         exit(255);
     }
 
     // Check that we drop dups in the ready queue
-    if (!sub_packet_is_duplicate(pub1, 10)) {
+    if (!sub_packet_is_duplicate(&pub1, 10)) {
         printf("Failed test 6.4 Failed dup packet detection.\n");
         exit(255);
     }
 
     // Dispatch packet 1-4
     // 1
-    pack = sub_next_ready_packet(pub1);
+    pack = sub_next_ready_packet(&pub1);
     sub_packet_dispatched(pack);
 
     // 2
-    pack = sub_next_ready_packet(pub1);
+    pack = sub_next_ready_packet(&pub1);
     sub_packet_dispatched(pack);
 
     // 3
-    pack = sub_next_ready_packet(pub1);
+    pack = sub_next_ready_packet(&pub1);
     sub_packet_dispatched(pack);
 
     // 4
-    pack = sub_next_ready_packet(pub1);
+    pack = sub_next_ready_packet(&pub1);
     sub_packet_dispatched(pack);
     
 
     // Check that we cannot dup dispatched packets
-    if (!sub_packet_is_duplicate(pub1, 1)) {
+    if (!sub_packet_is_duplicate(&pub1, 1)) {
         printf("Failed test 6.5 Failed dup packet detection.\n");
         exit(255);
     }
 
-    if (!sub_packet_is_duplicate(pub1, 5)) {
+    if (!sub_packet_is_duplicate(&pub1, 5)) {
         printf("Failed test 6.6 Failed dup packet detection.\n");
         exit(255);
     }
 
-    if (!sub_packet_is_duplicate(pub1, 10)) {
+    if (!sub_packet_is_duplicate(&pub1, 10)) {
         printf("Failed test 6.7 Failed dup packet detection.\n");
         exit(255);
     }

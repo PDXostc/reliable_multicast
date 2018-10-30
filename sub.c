@@ -32,22 +32,6 @@ static void _free_pending_packet(sub_packet_t* ppack)
     free((void*) ppack);
 }
 
-
-static sub_publisher_t* _alloc_publisher()
-{
-    sub_publisher_t* res = (sub_publisher_t*) malloc(sizeof(sub_publisher_t));
-
-    assert(res);
-    return res;
-}
-
-static void _free_publisher(sub_publisher_t* pub)
-{
-    assert(pub);
-    free((void*) pub);
-}
-
-
 int sub_packet_is_duplicate(sub_publisher_t* pub, packet_id_t pid)
 {
     sub_packet_t cmp_pack = { .pid = pid };
@@ -253,55 +237,23 @@ void sub_get_missing_packets(sub_publisher_t* pub, intv_list_t* res)
 }
 
 
-// FIXME: Replace linear search with hash table.
-static sub_publisher_node_t* _sub_find_publisher_node(sub_context_t* ctx, void* address, uint32_t address_len)
+
+
+void sub_init_publisher(sub_publisher_t* pub, sub_context_t* ctx, void* user_data)
 {
-    sub_publisher_t tmp;
-
-    assert(address_len <= RMC_SUB_MAX_ADDR_LEN);
-
-    assert (ctx);
-    memcpy(tmp.address, address, address_len);
-    tmp.address_len = address_len;
-
-    return sub_publisher_list_find_node(&ctx->publishers,
-                                        &tmp,
-                                        lambda(int, (sub_publisher_t* dt1,
-                                                     sub_publisher_t* dt2) {
-                                                   return !memcmp(dt1->address, dt2->address, address_len);
-                                               }));
-}
-
-sub_publisher_t* sub_find_publisher(sub_context_t* ctx, void* address, int address_len)
-{
-    sub_publisher_node_t* node = _sub_find_publisher_node(ctx, address, address_len);
-
-    return node?node->data:0;
-}
-
-sub_publisher_t* sub_add_publisher(sub_context_t* ctx, void* address, uint32_t address_len) 
-{
-    sub_publisher_t* pub = 0;
-
-    assert(address_len <= RMC_SUB_MAX_ADDR_LEN);
-
-    pub = _alloc_publisher();
-
     pub->owner = ctx;
     pub->max_pid_received = 0;
     pub->max_pid_ready = 0;
-    memcpy(pub->address, address, address_len);
-    pub->address_len = address_len;
-
     sub_packet_list_init(&pub->received, 0, 0, 0);
     sub_packet_list_init(&pub->ready, 0, 0, 0);
     sub_publisher_list_push_head(&ctx->publishers, pub);
+    pub->user_data = user_data;
 
-    return pub;
+    return;
 }
 
 
-void sub_delete_publisher(sub_publisher_t* pub)
+void sub_remove_publisher(sub_publisher_t* pub)
 {
     sub_context_t* ctx = 0;
     sub_publisher_node_t* pub_node = 0;
@@ -334,21 +286,9 @@ void sub_delete_publisher(sub_publisher_t* pub)
         _free_pending_packet(pack);
     }
 
-
-    _free_publisher(pub);
     return;
 }
 
-void sub_delete_publisher_by_address(sub_context_t* ctx, void* address, int address_len)
-{
-    sub_publisher_node_t* pub_node = _sub_find_publisher_node(ctx, address, address_len);
-
-    if (!pub_node)
-        return;
-
-    sub_delete_publisher(pub_node->data);
-    return;
-}
 
 
 void sub_init_context(sub_context_t* ctx,
