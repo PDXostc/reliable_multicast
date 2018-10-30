@@ -26,9 +26,6 @@
 #include <netdb.h>
 #include <assert.h>
 
-#define RMC_MAX(x,y) ((x)>(y)?(x):(y))
-#define RMC_MIN(x,y) ((x)<(y)?(x):(y))
-
 
 int rmc_queue_packet(rmc_context_t* ctx,
                      void* payload,
@@ -39,38 +36,6 @@ int rmc_queue_packet(rmc_context_t* ctx,
     return 0;
 }
 
-
-int rmc_get_poll_size(rmc_context_t* ctx, int *result)
-{
-    if (!ctx || !result)
-        return EINVAL;
-
-    *result = ctx->socket_count;
-
-    return 0;
-}
-
-
-int rmc_get_poll_vector(rmc_context_t* ctx, rmc_poll_t* result, int* len)
-{
-    int ind = 0;
-    int res_ind;
-    int max_len = 0;
-
-    if (!ctx || !result || !len)
-        return EINVAL;
-
-    max_len = *len;
-
-    while(ind < ctx->max_socket_ind && res_ind < max_len) {
-        if (ctx->sockets[ind].descriptor != -1)
-            result[res_ind++] = ctx->sockets[ind].poll_info;
-
-        ind++;
-    }
-
-    *len = res_ind;
-}
 
 int rmc_get_ready_packet_count(rmc_context_t* ctx)
 {
@@ -84,5 +49,6 @@ sub_packet_t* rmc_get_next_ready_packet(rmc_context_t* ctx)
 
 void rmc_free_packet(sub_packet_t* packet)
 {
+//    rmc_proto_ack_packet(packet);
     sub_packet_dispatched(packet);
 }

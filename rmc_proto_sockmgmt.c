@@ -26,10 +26,6 @@
 #include <netdb.h>
 #include <assert.h>
 
-#define RMC_MAX(x,y) ((x)>(y)?(x):(y))
-#define RMC_MIN(x,y) ((x)<(y)?(x):(y))
-
-
 // =============
 // SOCKET SLOT MANAGEMENT
 // =============
@@ -214,3 +210,35 @@ int rmc_close_tcp(rmc_context_t* ctx, rmc_poll_index_t p_ind)
     
 }
 
+
+int rmc_get_poll_size(rmc_context_t* ctx, int *result)
+{
+    if (!ctx || !result)
+        return EINVAL;
+
+    *result = ctx->socket_count;
+
+    return 0;
+}
+
+
+int rmc_get_poll_vector(rmc_context_t* ctx, rmc_poll_t* result, int* len)
+{
+    int ind = 0;
+    int res_ind;
+    int max_len = 0;
+
+    if (!ctx || !result || !len)
+        return EINVAL;
+
+    max_len = *len;
+
+    while(ind < ctx->max_socket_ind && res_ind < max_len) {
+        if (ctx->sockets[ind].descriptor != -1)
+            result[res_ind++] = ctx->sockets[ind].poll_info;
+
+        ind++;
+    }
+
+    *len = res_ind;
+}

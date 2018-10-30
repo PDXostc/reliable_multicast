@@ -9,7 +9,7 @@ OBJ= interval.o \
 	time.o \
 	sub.o \
 	circular_buffer.o \
-	rmc_proto.o \
+	rmc_proto_packmgmt.o \
 	rmc_proto_sockmgmt.o \
 	rmc_proto_read.o \
 	rmc_proto_write.o \
