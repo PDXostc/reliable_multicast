@@ -35,15 +35,18 @@ extern int circ_buf_alloc(circ_buf_t* circ_buf,
                           uint8_t **segment2,
                           uint32_t* segment2_len);
 
-
 extern  int circ_buf_free(circ_buf_t* circ_buf, uint32_t size, uint32_t* in_use);
-
-
 
 extern int circ_buf_read(circ_buf_t* circ_buf,
                          uint8_t* target,
                          uint32_t size,
                          uint32_t* bytes_read);
 
+extern int circ_buf_read_segment(circ_buf_t* circ_buf,
+                                 uint32_t size,
+                                 uint8_t **segment1,
+                                 uint32_t* segment1_len,
+                                 uint8_t **segment2,
+                                 uint32_t* segment2_len);
 
 #endif // __CIRCULAR_BUFFER_H__
