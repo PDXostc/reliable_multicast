@@ -7,6 +7,7 @@
 
 
 
+#define _GNU_SOURCE
 #include "rmc_proto.h"
 #include <string.h>
 #include <errno.h>
@@ -33,14 +34,31 @@ static int _get_free_slot(rmc_context_t* ctx)
     int i = 2; // First two slots are pre-allocated for multicast and listen
 
     while(i < RMC_MAX_SOCKETS) {
-        if (ctx->sockets[i].descriptor == -1)
+        if (ctx->sockets[i].descriptor == -1) {
+            if (ctx->max_socket_ind > i)
+                ctx->max_socket_ind = i;
+
             return i;
+        }            
         ++i;
     }
-
     return -1;
 }
 
+static inline rmc_socket_t* _find_publisher_by_address(rmc_context_t* ctx,
+                                                struct sockaddr_in* addr)
+{
+    rmc_poll_index_t ind = 0;
+    
+    // FIXME: Replace with hash table search to speed up.
+    while(ind <= ctx->max_socket_ind) {
+        if (ctx->sockets[ind].descriptor != -1 &&
+            !memcmp(&ctx->sockets[ind].remote_address, addr, sizeof(*addr)))
+            return &ctx->sockets[ind];
+
+        ++ind;
+    }
+}
 
 static int _process_multicast_write(rmc_context_t* ctx)
 {
@@ -72,7 +90,7 @@ static int _process_multicast_write(rmc_context_t* ctx)
         // FIXME: Replace with sendmsg() to get scattered iovector
         //        write.  Saves one memcpy.
         memcpy(packet_ptr, pack->payload, pack->payload_len);
-       packet_ptr += pack->payload_len;
+        packet_ptr += pack->payload_len;
 
         *hdr_len += sizeof(packet_id_t) + sizeof(payload_len_t) + pack->payload_len;
 
@@ -165,9 +183,9 @@ static int _decode_multicast(rmc_context_t* ctx,
 
 
 
-static int _rmc_connect_tcp_by_address(rmc_context_t* ctx,
-                                       struct sockaddr_in* sock_addr,
-                                       rmc_poll_index_t* result_index)
+static int _connect_tcp_by_address(rmc_context_t* ctx,
+                                   struct sockaddr_in* sock_addr,
+                                   rmc_poll_index_t* result_index)
 {
     rmc_poll_index_t c_ind = -1;
 
@@ -179,18 +197,29 @@ static int _rmc_connect_tcp_by_address(rmc_context_t* ctx,
     if (c_ind == -1)
         return ENOMEM;
 
-    ctx->sockets[c_ind].descriptor = socket (AF_INET, SOCK_STREAM, 0);
+    ctx->sockets[c_ind].descriptor = socket (AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+
     if (ctx->sockets[c_ind].descriptor == -1)
         return errno;
-
+ 
     ctx->sockets[c_ind].poll_info.action = RMC_POLLREAD;
 
     if (connect(ctx->sockets[c_ind].descriptor,
-                (struct sockaddr*) sock_addr, sizeof(*sock_addr))) {
+                (struct sockaddr*) sock_addr,
+                sizeof(*sock_addr))) {
         perror("rmc_connect():connect()");
         return errno;
     }
 
+    // We are subscribing to data from the publisher, which
+    // will resend failed multicast packets via tcp
+    ctx->sockets[c_ind].mode = RMC_SOCKET_MODE_SUBSCRIBER;
+    
+    sub_init_publisher(&ctx->sockets[c_ind].pubsub.publisher,
+                       &ctx->sub_ctx,
+                       &ctx->sockets[c_ind]);
+
+    memcpy(&ctx->sockets[c_ind].remote_address, sock_addr, sizeof(*sock_addr));
 
     if (ctx->poll_add)
         (*ctx->poll_add)(&ctx->sockets[c_ind].poll_info);
@@ -201,9 +230,10 @@ static int _rmc_connect_tcp_by_address(rmc_context_t* ctx,
     return 0;
 }
 
-static int _rmc_connect_tcp_by_host(rmc_context_t* ctx,
-                                    char* server_addr,
-                                    rmc_poll_index_t* result_index)
+
+static int _connect_tcp_by_host(rmc_context_t* ctx,
+                                char* server_addr,
+                                rmc_poll_index_t* result_index)
 {
     struct hostent* host = 0;
     struct sockaddr_in sock_addr;
@@ -219,10 +249,11 @@ static int _rmc_connect_tcp_by_host(rmc_context_t* ctx,
     sock_addr.sin_port = htons(ctx->port);
     sock_addr.sin_family = AF_INET;
 
-    return _rmc_connect_tcp_by_address(ctx,
-                                       &sock_addr,
-                                       result_index);
+    return _connect_tcp_by_address(ctx,
+                                   &sock_addr,
+                                   result_index);
 }
+
 
 
 static int _process_multicast_read(rmc_context_t* ctx)
@@ -232,7 +263,8 @@ static int _process_multicast_read(rmc_context_t* ctx)
     struct sockaddr_in src_addr;
     socklen_t addr_len = sizeof(src_addr);
     ssize_t res;
-    sub_publisher_t* pub = 0;
+    int sock_ind = 0;
+    rmc_socket_t* sock = 0;
 
     if (!ctx)
         return EINVAL;
@@ -250,30 +282,58 @@ static int _process_multicast_read(rmc_context_t* ctx)
         return errno;
     }
 
-    pub = sub_find_publisher(&ctx->sub_ctx, &src_addr, addr_len);
+    sock = _find_publisher_by_address(ctx, &src_addr);
 
     // No publisher found?
-    if (!pub) {
+    if (!sock) {
         // Add an outbound tcp connection to the publisher.
-        int res = _rmc_connect_tcp_by_address(ctx, &src_addr, 0);
+        int res = _connect_tcp_by_address(ctx, &src_addr, &sock_ind);
         if (res)
             return res;
 
-        pub = sub_add_publisher(&ctx->sub_ctx, &src_addr, addr_len);
+        sock = &ctx->sockets[sock_ind];
     }
-
     payload_len = *(payload_len_t*) buffer;
 
     return _decode_multicast(ctx,
                              buffer + sizeof(payload_len_t),
                              payload_len,
-                             pub);
+                             &sock->pubsub.publisher);
 }
 
 
-static int _process_listen(rmc_context_t* ctx)
+static int _process_accept(rmc_context_t* ctx,
+                           rmc_poll_index_t* result_index)
 {
+    struct sockaddr_in src_addr;
+    socklen_t addr_len = sizeof(src_addr);
+    rmc_poll_index_t c_ind = -1;
 
+    // Find a free slot.
+    c_ind = _get_free_slot(ctx);
+    if (c_ind == -1)
+        return ENOMEM;
+
+    ctx->sockets[c_ind].descriptor = accept4(ctx->sockets[RMC_LISTEN_SOCKET_INDEX].descriptor,
+                                             (struct sockaddr*) &src_addr,
+                                             &addr_len, SOCK_NONBLOCK);
+
+    if (ctx->sockets[c_ind].descriptor == -1)
+        return errno;
+
+
+    // The remote end is the subscriber of packets that we pulish
+    pub_init_subscriber(&ctx->sockets[c_ind].pubsub.subscriber, &ctx->pub_ctx, &ctx->sockets[c_ind]);
+    ctx->sockets[c_ind].mode = RMC_SOCKET_MODE_PUBLISHER;
+    memcpy(&ctx->sockets[c_ind].remote_address, &src_addr, sizeof(src_addr));
+
+    if (ctx->poll_add)
+        (*ctx->poll_add)(&ctx->sockets[c_ind].poll_info);
+
+    if (result_index)
+        *result_index = c_ind;
+
+    return 0;
 }
 
 static int _process_cmd_init(rmc_context_t* ctx, rmc_socket_t* sock, payload_len_t len)
@@ -325,7 +385,7 @@ static int _process_tcp_command(rmc_context_t* ctx, rmc_socket_t* sock,
 static int _process_tcp_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
 {
     rmc_socket_t* sock = &ctx->sockets[p_ind];
-    uint32_t in_use = circ_buf_available(&sock->circ_buf);;
+    uint32_t in_use = circ_buf_available(&sock->read_buf);;
     cmd_t cmd;
 
 
@@ -334,7 +394,7 @@ static int _process_tcp_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
         uint32_t len = 0;
         int res = 0;
 
-        res = circ_buf_read(&sock->circ_buf, (uint8_t*) &cmd, sizeof(cmd), &len);
+        res = circ_buf_read(&sock->read_buf, (uint8_t*) &cmd, sizeof(cmd), &len);
 
         if (res)
             return res;
@@ -347,7 +407,7 @@ static int _process_tcp_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
 
         // Process the TCP command.
         // If the return value is EAGAIN, then we don't have enough
-        // data in sock->circ_buf to process the entire command.
+        // data in sock->read_buf to process the entire command.
         // Return and try again later when we have more data.
         res = _process_tcp_command(ctx, sock, cmd.command, cmd.length);
 
@@ -357,15 +417,62 @@ static int _process_tcp_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
         // Free the number of the bytes that cmd occupies.
         // _process_tcp_command() will have freed the number of bytes
         // taken up by whatever the command payload itself takes up,
-        // Leaving the first byte of the remaining data in use to be
+        // leaving the first byte of the remaining data in use to be
         // the start of the next command.
-        circ_buf_free(&sock->circ_buf, sizeof(cmd), &in_use);
+        circ_buf_free(&sock->read_buf, sizeof(cmd), &in_use);
     }
     return 0;
 }
 
-static int _process_tcp_write(rmc_context_t* ctx, rmc_poll_index_t p_ind)
+
+static int _process_tcp_write(rmc_context_t* ctx, rmc_socket_t* sock, uint32_t* bytes_left)
 {
+    uint8_t *seg1 = 0;
+    uint32_t seg1_len = 0;
+    uint8_t *seg2 = 0;
+    uint32_t seg2_len = 0;
+    struct iovec iov[2];
+    ssize_t res = 0;
+
+    // Grab as much data as we can.
+    // The call will only return available
+    // data.
+    circ_buf_read_segment(&sock->write_buf,
+                          sizeof(sock->write_buf_data),
+                          &seg1, &seg1_len,
+                          &seg2, &seg2_len);
+
+    if (!seg1_len) {
+        *bytes_left = 0;
+        return ENODATA;
+    }
+    
+    // Setup a zero-copy scattered socket write
+    iov[1].iov_base = seg1;
+    iov[1].iov_len = seg1_len;
+    iov[2].iov_base = seg2;
+    iov[2].iov_len = seg2_len;
+
+    errno = 0;
+    res = writev(sock->descriptor, iov, seg2_len?2:1);
+
+    // How did that write go?
+    if (res == -1) { 
+        *bytes_left = circ_buf_in_use(&sock->write_buf);
+        return errno;
+    }
+
+    if (res == 0) { 
+        *bytes_left = circ_buf_in_use(&sock->write_buf);
+        return 0;
+    }
+
+    // We wrote a specific number of bytes, free those
+    // bytes from the circular buffer.
+    // At the same time grab number of bytes left to
+    // send from the buffer.,
+    circ_buf_free(&sock->write_buf, res, bytes_left);
+
     return 0;
 }
 
@@ -373,7 +480,6 @@ static int _process_tcp_write(rmc_context_t* ctx, rmc_poll_index_t p_ind)
 static void _reset_max_socket_ind(rmc_context_t* ctx)
 {
     int ind = RMC_MAX_SOCKETS;
-
 
     while(ind) {
         if (ctx->sockets[ind].descriptor != -1) {
@@ -390,7 +496,35 @@ static void _reset_socket(rmc_socket_t* sock, int index)
     sock->poll_info.action = 0;
     sock->poll_info.rmc_index = index;
     sock->descriptor = -1;
-    circ_buf_init(&sock->circ_buf, sock->circ_buf_data, sizeof(sock->circ_buf_data));
+    sock->mode = RMC_SOCKET_MODE_UNUSED;
+    circ_buf_init(&sock->read_buf, sock->read_buf_data, sizeof(sock->read_buf_data));
+    circ_buf_init(&sock->write_buf, sock->write_buf_data, sizeof(sock->write_buf_data));
+    memset(&sock->remote_address, 0, sizeof(sock->remote_address));
+}
+
+
+static void _process_packet_timeout(rmc_context_t* ctx, pub_subscriber_t* sub, pub_packet_t* pack, usec_timestamp_t timeout_ts)
+{
+    // Send the packet via TCP.
+    rmc_socket_t* sock = (rmc_socket_t*) pub_subscriber_user_data(sub);
+}
+
+
+static void _process_subscriber_timeout(rmc_context_t* ctx, pub_subscriber_t* sub, usec_timestamp_t timeout_ts)
+{
+    pub_packet_list_t packets;
+
+    pub_packet_list_init(&packets, 0, 0, 0);
+
+    pub_get_timed_out_packets(sub, timeout_ts, &packets);
+
+    pub_packet_list_for_each_rev(&packets,
+                                 lambda(uint8_t, (pub_packet_node_t* pnode, void* udata) {
+                                         _process_packet_timeout(ctx, sub, pnode->data, timeout_ts);
+                                  return 1;
+                              }), 0);
+
+                              
 }
 
 int rmc_init_context(rmc_context_t* ctx,
@@ -401,12 +535,14 @@ int rmc_init_context(rmc_context_t* ctx,
                      void (*payload_free)(void*, payload_len_t),
                      void (*poll_add)(rmc_poll_t* poll),
                      void (*poll_remove)(rmc_poll_t* poll)) {
+
     int i = sizeof(ctx->sockets) / sizeof(ctx->sockets[0]);
 
     assert(ctx);
 
-    while(i--)
+    while(i--) 
         _reset_socket(&ctx->sockets[i], i);
+    
 
     strncpy(ctx->multicast_addr, multicast_addr, sizeof(ctx->multicast_addr));
     ctx->multicast_addr[sizeof(ctx->multicast_addr)-1] = 0;
@@ -425,7 +561,6 @@ int rmc_init_context(rmc_context_t* ctx,
     ctx->socket_count = 0;
     ctx->max_socket_ind = -1;
     ctx->resend_timeout = RMC_RESEND_TIMEOUT_DEFAULT;
-    ctx->resend_retries = RMC_RESEND_RETRIES;
 
     // outgoing_payload_free() will be called when
     // pub_acket_ack() is called, which happens when a
@@ -538,7 +673,11 @@ int rmc_activate_context(rmc_context_t* ctx)
         ctx->max_socket_ind = RMC_MULTICAST_SOCKET_INDEX;
 
     ctx->sockets[RMC_LISTEN_SOCKET_INDEX].poll_info.action = RMC_POLLREAD;
+    ctx->sockets[RMC_LISTEN_SOCKET_INDEX].mode = RMC_SOCKET_MODE_OTHER;
+
     ctx->sockets[RMC_MULTICAST_SOCKET_INDEX].poll_info.action = RMC_POLLREAD;
+    ctx->sockets[RMC_LISTEN_SOCKET_INDEX].mode = RMC_SOCKET_MODE_OTHER;
+    
 
     if (ctx->poll_add) {
         (*ctx->poll_add)(&ctx->sockets[RMC_LISTEN_SOCKET_INDEX].poll_info);
@@ -566,17 +705,54 @@ int rmc_deactivate_context(rmc_context_t* ctx)
     return 0;
 }
 
+
 int rmc_get_next_timeout(rmc_context_t* ctx, usec_timestamp_t* result)
 {
-    usec_timestamp_t ts = 0;
+    usec_timestamp_t ts = rmc_usec_monotonic_timestamp();
+    pub_subscriber_t* sub = 0;
+    pub_packet_t* pack = 0;
 
     if (!ctx || !result)
         return EINVAL;
+    
+    // Query the publisher for all 
+    pub_get_oldest_subscriber(&ctx->pub_ctx, &sub, &pack);
 
-    // Iterate over all publishers and take the first (oldest) elemen and check its timestamp
+    // If no subscriber has inflight packets, then set result to 0.
+    if (!sub) {
+        *result = 0;
+        return ENODATA;
+    }
+
+    // Has our oldest packet already expired?
+    if (pack->send_ts <= ts - ctx->resend_timeout) {
+        *result = 0;
+        return 0;
+    }
+
+    *result =  (ts - ctx->resend_timeout) - (ts - pack->send_ts);
+    return 0;
 }
 
-int rmc_process_timeout(rmc_context_t* context);
+int rmc_process_timeout(rmc_context_t* ctx)
+{
+    usec_timestamp_t ts = rmc_usec_monotonic_timestamp();
+    pub_sub_list_t subs;
+
+    if (!ctx)
+        return EINVAL;
+    
+    pub_sub_list_init(&subs, 0, 0, 0);
+    pub_get_timed_out_subscribers(&ctx->pub_ctx, ts - ctx->resend_timeout, &subs);
+    pub_sub_list_for_each(&subs,
+                          // For each subscriber, check if their oldest inflight packet has a sent_ts
+                          // timestamp older than max_age. If so, add it to result.
+                          lambda(uint8_t, (pub_sub_node_t* sub_node, void* udata) {
+                                  _process_subscriber_timeout(ctx, sub_node->data, ts - ctx->resend_timeout);
+                                  return 1;
+                              }), 0);
+}
+
 
 int rmc_read(rmc_context_t* ctx, rmc_poll_index_t p_ind, uint16_t* new_poll_action)
 {
@@ -590,7 +766,7 @@ int rmc_read(rmc_context_t* ctx, rmc_poll_index_t p_ind, uint16_t* new_poll_acti
     }
 
     if (p_ind == RMC_LISTEN_SOCKET_INDEX) {
-        res = _process_listen(ctx);
+        res = _process_accept(ctx, &p_ind);
         *new_poll_action = ctx->sockets[p_ind].poll_info.action;
         return res;
     }
@@ -612,6 +788,9 @@ int rmc_write(rmc_context_t* ctx, rmc_poll_index_t p_ind, uint16_t* new_poll_act
 {
     int res = 0;
     int rearm_write = 0;
+    uint32_t bytes_left_before = 0;
+    uint32_t bytes_left_after = 0;
+
     assert(ctx);
 
     if (p_ind == RMC_MULTICAST_SOCKET_INDEX) {
@@ -627,11 +806,19 @@ int rmc_write(rmc_context_t* ctx, rmc_poll_index_t p_ind, uint16_t* new_poll_act
     if (ctx->sockets[p_ind].descriptor == -1)
         return ENOTCONN;
 
-    // We have incoming data on a tcp tcp socket.
-    res = _process_tcp_write(ctx, p_ind);
+    // We have incoming data on a tcp socket.
+    if (circ_buf_in_use(&ctx->sockets[p_ind].write_buf) == 0)
+        return ENODATA;
 
-    // Return whatever action is set after _process_tcp_write returns.
-    *new_poll_action = ctx->sockets[p_ind].poll_info.action;
+    res = _process_tcp_write(ctx, &ctx->sockets[p_ind], &bytes_left_after);
+    
+    if (bytes_left_after == 0) 
+        *new_poll_action = ctx->sockets[p_ind].poll_info.action &= ~RMC_POLLWRITE;
+    else
+        *new_poll_action = ctx->sockets[p_ind].poll_info.action |= RMC_POLLWRITE;
+
+    if (ctx->poll_modify)
+        (*ctx->poll_modify)(&ctx->sockets[p_ind].poll_info);
 
     return res;
 }
@@ -653,11 +840,14 @@ int rmc_close_tcp(rmc_context_t* ctx, rmc_poll_index_t p_ind)
     if (close(ctx->sockets[p_ind].descriptor) != 0)
         return errno;
 
-    if (ctx->sockets[p_ind].descriptor == ctx->max_socket_ind)
-        _reset_max_socket_ind(ctx);
-
     _reset_socket(&ctx->sockets[p_ind], p_ind);
 
+    if (ctx->poll_remove)
+        (*ctx->poll_remove)(&ctx->sockets[p_ind].poll_info);
+
+    if (p_ind == ctx->max_socket_ind)
+        _reset_max_socket_ind(ctx);
+    
 }
 
 

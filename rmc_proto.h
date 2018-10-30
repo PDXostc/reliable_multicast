@@ -86,6 +86,11 @@ typedef struct cmd_ack_block_bitmap {
 // header data.
 #define RMC_MAX_PACKET 0xFFE3
 #define RMC_MAX_PAYLOAD 0xFFC3
+
+// Probably needs to be a lot bigger in high
+// throughput situations.
+#define RMC_MAX_TCP_PENDIONG_WRITE 0xFFFF 
+
 #define RMC_MAX_SOCKETS 256
 
 #define RMC_MULTICAST_SOCKET_INDEX 0
@@ -96,18 +101,70 @@ typedef uint32_t rmc_poll_index_t;
 
 typedef struct rmc_poll {
     uint16_t action;
+
+    // Index of owner rmc_socket_t struct in the master
+    // rmc_context_t::sockets[] array.
+    // rmc_context_t::sockets[rmc_index].poll_info is this struct.
     rmc_poll_index_t rmc_index;
 } rmc_poll_t;
 
+#define RMC_SOCKET_MODE_UNUSED 0
+#define RMC_SOCKET_MODE_SUBSCRIBER 1
+#define RMC_SOCKET_MODE_PUBLISHER 2
+#define RMC_SOCKET_MODE_OTHER 3
 typedef struct rmc_socket {
+    // See above.
     rmc_poll_t poll_info;
+
+    // Socket TCP descriptor
     int descriptor;
-    circ_buf_t circ_buf;
-    uint8_t circ_buf_data[RMC_MAX_PAYLOAD + 1]; // One byte extra needed by circ buf.
+
+    // Circular buffer of pending data read.
+    circ_buf_t read_buf;
+
+    // backing buffer for circ_buf above.  circ_buf_data and circ_buf
+    // are tied toegther through the circ_buf_init() call.
+    // One byte extra needed by circ buf for housekeeping reasons.
+    uint8_t read_buf_data[RMC_MAX_PAYLOAD + 1]; 
+
+    // Circular buffer of pending data read.
+    circ_buf_t write_buf;
+    uint8_t write_buf_data[RMC_MAX_TCP_PENDIONG_WRITE]; 
+
+    // RMC_SOCKET_MODE_PUBLISHER   The socket is used to publish acks and resend packets 
+    // RMC_SOCKET_MODE_SUBSCRIBER  The socket is used to subscribe to acks and resends
+    // RMC_SOCKET_MODE_OTHER       The socket is used for multicast or TCP listen.
+    uint8_t mode;
+
+    struct sockaddr_in remote_address;
+
+    // Subscriber and publishers to to manage inflight packets for this socket.
+    // The union member to use is specified by the 'mode' member.
+    // 
+    //
+    // 'subscriber' is used when the socket was accepted by _process_accept()
+    // and we take on the role as a publisher of packets.
+    // Added to rmc_context_t::pub_ctx in rmc_init_context() through a
+    // pub_init_subscriber() call.
+    // pub_subscriber_t::user_data of the subscriber points back to this
+    // struct.
+    //
+    // 'publisher' is used when we connected to a publisher in _process_multicast_read()
+    // as we receive a packet from a previously unknown sender (publisher) that
+    // we need to connect a TCP socket to in order to do ack and resend management.
+    // Added to rmc_context_t::sub_ctx in rmc_init_context() through a
+    // sub_init_publisher() call.
+    // sub_publisher_t::user_data of the subscriber points back to this
+    // struct.
+    //
+    union {
+        pub_subscriber_t subscriber;
+        sub_publisher_t publisher;
+    } pubsub;
+
 } rmc_socket_t;
 
 #define RMC_RESEND_TIMEOUT_DEFAULT 500000
-#define RMC_RESEND_RETRIES 2
 
 typedef struct rmc_context {
     pub_context_t pub_ctx;
@@ -122,9 +179,6 @@ typedef struct rmc_context {
     // Once we have sent a packet how long do we wait for an ack, in usec, until
     // we resend it?
     uint32_t resend_timeout;
-
-    // How many resends to we attempt before sending it via TCP?
-    uint32_t resend_retries;
 
     void (*poll_add)(rmc_poll_t* poll); // When we want to know if a socket can be written to or read from
     void (*poll_modify)(rmc_poll_t* poll); // We have changed the action bitmap.
@@ -194,7 +248,6 @@ extern int rmc_queue_packet(rmc_context_t* context, void* payload, payload_len_t
 extern int rmc_get_poll_size(rmc_context_t* context, int *result);
 extern int rmc_get_poll_vector(rmc_context_t* context, rmc_poll_t* result, int* len);
 extern int rmc_get_poll(rmc_context_t* context, int rmc_index, rmc_poll_t* result);
-extern int rmc_read_tcp(rmc_context_t* context);
 extern int rmc_get_ready_packet_count(rmc_context_t* context);
 extern sub_packet_t* rmc_get_next_ready_packet(rmc_context_t* context);
 extern void rmc_free_packet(sub_packet_t* packet);
