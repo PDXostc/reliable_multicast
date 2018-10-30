@@ -23,9 +23,6 @@
 // distinguish between empty and full buffer, which in both cases
 // have start_ind and stop_ind point at the same index.
 //
-//
-
-
 extern void circ_buf_init(circ_buf_t* circ_buf, uint8_t* buffer, uint32_t buffer_size)
 {
     circ_buf->start_ind = 0;
