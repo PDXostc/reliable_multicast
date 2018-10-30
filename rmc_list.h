@@ -71,6 +71,10 @@
                                     uint8_t (*func)(NODETYPE*node, void* user_data), \
                                     void*user_data);                    \
                                                                         \
+    extern void LISTTYPE##_for_each_rev(LISTTYPE* list,                     \
+                                        uint8_t (*func)(NODETYPE*node, void* user_data), \
+                                        void*user_data);                \
+                                                                        \
     extern NODETYPE* LISTTYPE##_find_node(LISTTYPE* list,               \
                                           DATATYPE data,                \
                                           int (*compare_func)(DATATYPE new_elem, \

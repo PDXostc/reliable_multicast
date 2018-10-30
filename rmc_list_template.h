@@ -288,6 +288,19 @@
     }                                                                   \
                                                                         \
                                                                         \
+    void LISTTYPE##_for_each_rev(LISTTYPE* list,                        \
+                                 uint8_t (*func)(NODETYPE* node, void* user_data), \
+                                 void* user_data)                       \
+    {                                                                   \
+        NODETYPE* node = 0;                                             \
+        assert(list);                                                   \
+                                                                        \
+        node = list->tail;                                              \
+        while(node && (*func)(node, user_data))                         \
+            node = node->prev;                                          \
+    }                                                                   \
+                                                                        \
+                                                                        \
     NODETYPE* LISTTYPE##_find_node(LISTTYPE* list,                      \
                                    DATATYPE data,                       \
                                    int (*compare_func)(DATATYPE new_elem, \
