@@ -11,7 +11,8 @@ OBJ= interval.o \
 	circular_buffer.o \
 	rmc_proto.o \
 	rmc_proto_sockmgmt.o \
-	rmc_proto_rw.o \
+	rmc_proto_read.o \
+	rmc_proto_write.o \
 	rmc_proto_timeout.o \
 	rmc_proto_ctx.o
 
