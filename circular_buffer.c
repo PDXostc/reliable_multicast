@@ -23,7 +23,7 @@
 // distinguish between empty and full buffer, which in both cases
 // have start_ind and stop_ind point at the same index.
 //
-extern void circ_buf_init(circ_buf_t* circ_buf, uint8_t* buffer, uint32_t buffer_size)
+void circ_buf_init(circ_buf_t* circ_buf, uint8_t* buffer, uint32_t buffer_size)
 {
     circ_buf->start_ind = 0;
     circ_buf->stop_ind = 0;
@@ -31,7 +31,7 @@ extern void circ_buf_init(circ_buf_t* circ_buf, uint8_t* buffer, uint32_t buffer
     circ_buf->size = buffer_size;
 }
 
-uint32_t circ_buf_in_use(circ_buf_t* circ_buf)
+inline uint32_t circ_buf_in_use(circ_buf_t* circ_buf)
 {
     int buf_size = circ_buf->size;
 
@@ -41,7 +41,7 @@ uint32_t circ_buf_in_use(circ_buf_t* circ_buf)
     return buf_size - circ_buf->start_ind + circ_buf->stop_ind;
 }
 
-uint32_t circ_buf_available(circ_buf_t* circ_buf)
+inline uint32_t circ_buf_available(circ_buf_t* circ_buf)
 {
     // Keep one byte reserved to distinguish between full and empty buffer.
     return circ_buf->size - circ_buf_in_use(circ_buf) - 1;
@@ -94,10 +94,57 @@ int circ_buf_alloc(circ_buf_t* circ_buf,
     return 0;
 }
 
+// Trim the end of the in use part of the buffer
+// so that the new total length is target_len.
+// All trimmed byte will be available for future
+// circ_buf_alloc() calls.
+//
+void circ_buf_trim(circ_buf_t* circ_buf, uint32_t target_len)
+{
+    uint32_t in_use = circ_buf_in_use(circ_buf);
+
+    if (in_use <= target_len)
+        return;
+
+    // target_len: 1
+    // Before
+    // Index:     [0][1][2][3][4]
+    // Data:       A  B  C  D  -
+    // Start/Stop  S           s
+    //
+    // After
+    // Index:     [0][1][2][3][4]
+    // Data:       A  B  -  -  -
+    // Start/Stop  S  s         
+    //
+    if (circ_buf->stop_ind > target_len) {
+        circ_buf->stop_ind -= in_use - target_len;
+        return;
+    }
+
+    
+    // target_len: 1
+    // Before
+    // Index:     [0][1][2][3][4]
+    // Data:       C  D  -  A  B
+    // Start/Stop        s  S  
+    //
+    // After
+    // Index:     [0][1][2][3][4]
+    // Data:       -  -  -  A  -
+    // Start/Stop           S  s         
+    //
+
+    target_len -= circ_buf->stop_ind;
+
+    circ_buf->stop_ind = circ_buf->size - target_len;
+    
+    return;
+}
 
 
 // Return number of bytes left in use after discarding data.
-inline int circ_buf_free(circ_buf_t* circ_buf, uint32_t size, uint32_t* in_use)
+int circ_buf_free(circ_buf_t* circ_buf, uint32_t size, uint32_t* in_use)
 {
     uint32_t len = 0;
 
@@ -137,10 +184,10 @@ inline int circ_buf_free(circ_buf_t* circ_buf, uint32_t size, uint32_t* in_use)
 }
 
 
-inline int circ_buf_read(circ_buf_t* circ_buf,
-                         uint8_t* target,
-                         uint32_t size,
-                         uint32_t* bytes_read)
+int circ_buf_read(circ_buf_t* circ_buf,
+                  uint8_t* target,
+                  uint32_t size,
+                  uint32_t* bytes_read)
 {
     uint32_t len = circ_buf_in_use(circ_buf);
     uint32_t segment_len = 0;
@@ -198,12 +245,12 @@ inline int circ_buf_read(circ_buf_t* circ_buf,
 }
 
 // FIXME: Add test in circular_buffer_test.c
-inline int circ_buf_read_segment(circ_buf_t* circ_buf,
-                                 uint32_t size,
-                                 uint8_t **segment1,
-                                 uint32_t* segment1_len,
-                                 uint8_t **segment2,
-                                 uint32_t* segment2_len)
+int circ_buf_read_segment(circ_buf_t* circ_buf,
+                          uint32_t size,
+                          uint8_t **segment1,
+                          uint32_t* segment1_len,
+                          uint8_t **segment2,
+                          uint32_t* segment2_len)
 {
     uint32_t len = circ_buf_in_use(circ_buf);
     uint32_t segment_len = 0;

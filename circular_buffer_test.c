@@ -305,8 +305,8 @@ void test_circular_buffer(void)
     // Index:     [0][1][2][3][4]
     // Data:       B  C  -  D  A
     // Start/Stop        s  S  
-    write_data(&cb, 24, "ABC", 1, 2);
-    check_integrity(&cb, 26, 0, 4);
+    write_data(&cb, 27, "ABC", 1, 2);
+    check_integrity(&cb, 28, 0, 4);
 
     // Read out all four bytes in a wrapped
     // read that encompasses the last byte of the second-to-last
@@ -316,33 +316,28 @@ void test_circular_buffer(void)
     // Index:     [0][1][2][3][4]
     // Data:       -  -  -  -  -
     // Start/Stop        X  
-    read_data(&cb, 23, "DABC");
-    check_integrity(&cb, 26, 4, 0);
+    read_data(&cb, 29, "DABC");
+    check_integrity(&cb, 30, 4, 0);
     
     //
     // Check alloc beyond our capacity.
     //
     res = circ_buf_alloc(&cb, 5, &seg1, &seg1_len, &seg2, &seg2_len);
     if (res != ENOMEM) {
-        printf("circular buffer test .1: Expected ENOMEM. Got %s\n",
+        printf("circular buffer test 31.1: Expected ENOMEM. Got %s\n",
                strerror(res));
         exit(255);
     }
-
-    //
-    // Check read beyond bytes available
-    //
-
     // Reset by freeing more bytes than the size of the buffre.
     res = circ_buf_free(&cb, 6, &len);
     if (res != 0) {
-        printf("circular buffer test 1.1: Expected OK. Got %s\n",
+        printf("circular buffer test 31.2: Expected OK. Got %s\n",
                strerror(res));
         exit(255);
     }
 
     if (len != 0) {
-        printf("circular buffer test 1.1: Expected 0. Got %d\n", len);
+        printf("circular buffer test 31.3: Expected 0. Got %d\n", len);
         exit(255);
     }
 
@@ -350,13 +345,27 @@ void test_circular_buffer(void)
     
     res = circ_buf_read(&cb, data, 100, &len);
     if (res != 0) {
-        printf("circular buffer test 1.1: Expected OK. Got %s\n",
+        printf("circular buffer test 31.4 Expected OK. Got %s\n",
                strerror(res));
         exit(255);
     }
 
     if (len != 3) {
-        printf("circular buffer test 1.1: Expected 3. Got %d\n", len);
+        printf("circular buffer test 31.5: Expected 3. Got %d\n", len);
         exit(255);
     }
+
+
+    //
+    // Test circ_buf_trim()
+    //
+    circ_buf_free(&cb, sizeof(buf1), 0);
+    write_data(&cb, 32, "ABCD", 4, 0);
+    circ_buf_trim(&cb, 2);
+    check_integrity(&cb, 33, 2, 2);
+    read_data(&cb, 34, "AB");
+    check_integrity(&cb, 35, 4, 0);
+    write_data(&cb, 36, "CD", 2, 1);
+    read_data(&cb, 37, "CD");
+    check_integrity(&cb, 38, 4, 0);
 }
