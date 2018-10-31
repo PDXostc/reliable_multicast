@@ -214,8 +214,7 @@ extern int rmc_get_poll_vector(rmc_context_t* context, rmc_poll_t* result, int* 
 extern int rmc_get_poll(rmc_context_t* context, int rmc_index, rmc_poll_t* result);
 extern int rmc_get_ready_packet_count(rmc_context_t* context);
 extern sub_packet_t* rmc_get_next_ready_packet(rmc_context_t* context);
-extern void rmc_free_packet(sub_packet_t* packet);
-
+extern int rmc_free_packet(rmc_context_t* context, sub_packet_t* packet);
 
 // FIXME: MOVE TO INTERNAL HEADER FILE
 extern void rmc_reset_socket(rmc_socket_t* sock, int index);
@@ -232,5 +231,8 @@ extern int rmc_process_accept(rmc_context_t* ctx,
                               rmc_poll_index_t* result_index);
 
 extern int rmc_close_tcp(rmc_context_t* ctx, rmc_poll_index_t p_ind);
+extern int rmc_proto_ack(rmc_context_t* ctx,
+                         rmc_socket_t* sock,
+                         sub_packet_t* pack);
 
 #endif // __RMC_PROTO_H__

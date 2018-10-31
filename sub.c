@@ -326,3 +326,14 @@ sub_packet_t* sub_get_next_ready_packet(sub_context_t* ctx)
 
     return 0;
 }
+
+inline void* sub_packet_user_data(sub_packet_t* pack)
+{
+    return pack?(pack->publisher->user_data):0;
+}
+
+inline void* sub_publisher_user_data(sub_publisher_t* pub)
+{
+    return pub?(pub->user_data):0;
+}
+

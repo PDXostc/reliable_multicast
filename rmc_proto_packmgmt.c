@@ -47,8 +47,14 @@ sub_packet_t* rmc_get_next_ready_packet(rmc_context_t* ctx)
     return sub_get_next_ready_packet(&ctx->sub_ctx);
 }
 
-void rmc_free_packet(sub_packet_t* packet)
+int rmc_free_packet(rmc_context_t* ctx, sub_packet_t* pack)
 {
-//    rmc_proto_ack_packet(packet);
-    sub_packet_dispatched(packet);
+    rmc_socket_t* sock = sub_packet_user_data(pack);
+
+    if (!sock)
+        return EINVAL;
+
+    rmc_proto_ack(ctx, sock, pack);
+    
+    sub_packet_dispatched(pack);
 }

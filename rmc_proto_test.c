@@ -47,6 +47,7 @@ void test_rmc_proto(void)
     int send_ind = 0;
     int rec_sock = 0;
     int rec_ind = 0;
+
     sub_packet_t* pack;
     int epollfd;
     struct epoll_event ev, events[MAX_EVENTS];

@@ -195,3 +195,7 @@ int rmc_write(rmc_context_t* ctx, rmc_poll_index_t p_ind)
 }
 
 
+int rmc_proto_ack(rmc_context_t* ctx, rmc_socket_t* sock, sub_packet_t* pack)
+{
+    
+}

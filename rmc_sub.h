@@ -65,8 +65,9 @@ extern int sub_packet_received(sub_publisher_t* pub,
 // Go through all received packets and move those that are ready to
 // be dispathed to the ready queue
 // Should be called after one or more calls to sub_receive_packet()
-void sub_process_received_packets(sub_publisher_t* pub);
+extern void sub_process_received_packets(sub_publisher_t* pub);
 
+extern void* sub_packet_user_data(sub_packet_t* pack);
 extern sub_packet_t* sub_next_ready_packet(sub_publisher_t* ctx);
 extern void sub_packet_dispatched(sub_packet_t* pack);
 extern void sub_get_missing_packets(sub_publisher_t* sub, intv_list_t* res);
@@ -75,5 +76,6 @@ extern sub_publisher_t* sub_find_publisher(sub_context_t* ctx, void* address, in
 extern void sub_remove_publisher(sub_publisher_t* pub);
 extern sub_packet_t* sub_get_next_ready_packet(sub_context_t* ctx);
 extern int sub_get_ready_packet_count(sub_context_t* ctx);
+extern  void* sub_publisher_user_data(sub_publisher_t* pub);
 
 #endif // __REL_MCAST_SUB__
