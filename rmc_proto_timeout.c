@@ -38,10 +38,10 @@ static int _process_packet_timeout(rmc_context_t* ctx, pub_subscriber_t* sub, pu
     uint8_t *seg2 = 0;
     uint32_t seg2_len = 0;
     int res = 0;
+    uint8_t cmd = RMC_CMD_PACKET;
     cmd_packet_t pack_cmd = {
-        .command = RMC_CMD_PACKET,
         .pid = pack->pid,
-        .payload_len = pack->payload_len,
+        .payload_len = pack->payload_len
     };
     
     if (!ctx || !sub || !pack)
@@ -52,11 +52,19 @@ static int _process_packet_timeout(rmc_context_t* ctx, pub_subscriber_t* sub, pu
         return EINVAL;
         
     // Do we have enough circular buffer meomory available?
-    if (circ_buf_available(&sock->write_buf) < sizeof(pack) + pack->payload_len)
+    if (circ_buf_available(&sock->write_buf) < 1 + sizeof(pack) + pack->payload_len)
         return ENOMEM;
     
+    // Allocate memory for command
+    circ_buf_alloc(&sock->write_buf, 1,
+                   &seg1, &seg1_len,
+                   &seg2, &seg2_len);
+
+
+    *seg1 = cmd;
+
     // Allocate memory for packet header
-    circ_buf_alloc(&sock->write_buf, sizeof(pack_cmd),
+    circ_buf_alloc(&sock->write_buf, sizeof(pack_cmd) ,
                    &seg1, &seg1_len,
                    &seg2, &seg2_len);
 

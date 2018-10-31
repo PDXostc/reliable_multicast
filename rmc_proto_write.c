@@ -127,10 +127,10 @@ static int _process_tcp_write(rmc_context_t* ctx, rmc_socket_t* sock, uint32_t* 
     }
     
     // Setup a zero-copy scattered socket write
-    iov[1].iov_base = seg1;
-    iov[1].iov_len = seg1_len;
-    iov[2].iov_base = seg2;
-    iov[2].iov_len = seg2_len;
+    iov[0].iov_base = seg1;
+    iov[0].iov_len = seg1_len;
+    iov[1].iov_base = seg2;
+    iov[1].iov_len = seg2_len;
 
     errno = 0;
     res = writev(sock->descriptor, iov, seg2_len?2:1);
@@ -197,5 +197,48 @@ int rmc_write(rmc_context_t* ctx, rmc_poll_index_t p_ind)
 
 int rmc_proto_ack(rmc_context_t* ctx, rmc_socket_t* sock, sub_packet_t* pack)
 {
+    uint32_t available = circ_buf_available(&sock->write_buf);
+    uint32_t old_in_use = circ_buf_in_use(&sock->write_buf);
+    rmc_poll_t old_poll_info = sock->poll_info;
+    ssize_t res = 0;
+    uint8_t *seg1 = 0;
+    uint32_t seg1_len = 0;
+    uint8_t *seg2 = 0;
+    uint32_t seg2_len = 0;
+    cmd_ack_single_t ack = {
+        .packet_id = pack->pid
+    };
+
+    if (!ctx || !sock || !pack || sock->mode != RMC_SOCKET_MODE_SUBSCRIBER) 
+        return EINVAL;
+
+    // Allocate memory for command
+    circ_buf_alloc(&sock->write_buf, 1,
+                   &seg1, &seg1_len,
+                   &seg2, &seg2_len);
+
+
+    *seg1 = RMC_CMD_ACK_SINGLE;
+
+    // Allocate memory for packet header
+    circ_buf_alloc(&sock->write_buf, sizeof(ack) ,
+                   &seg1, &seg1_len,
+                   &seg2, &seg2_len);
+
+
+    // Copy in packet header
+    memcpy(seg1, (uint8_t*) &ack, seg1_len);
+    if (seg2_len) 
+        memcpy(seg2, ((uint8_t*) &ack) + seg1_len, seg2_len);
+
+    // Do we need to arm the write poll descriptor.
+    if (!old_in_use) {
+            // Read poll is always active. Callback to re-arm.
+        sock->poll_info.action |= RMC_POLLWRITE;
+        if (ctx->poll_modify)
+            (*ctx->poll_modify)(&old_poll_info,
+                                &sock->poll_info);
+    }
     
 }
+

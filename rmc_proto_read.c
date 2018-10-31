@@ -141,6 +141,19 @@ static int _process_cmd_packet(rmc_context_t* ctx, rmc_socket_t* sock, payload_l
 
 static int _process_cmd_ack_single(rmc_context_t* ctx, rmc_socket_t* sock, payload_len_t len)
 {
+    cmd_ack_single_t ack;
+    if (len < sizeof(ack))
+        return EAGAIN;
+
+    // If len is different than sizeof ack, drop it
+    // and return a protocol error.
+    if (len > sizeof(ack)) {
+        circ_buf_free(&sock->read_buf, len, 0);
+        return EPROTO;
+    }
+    
+    circ_buf_read(&sock->read_buf, (uint8_t*) &ack, sizeof(ack), 0);
+    pub_packet_ack(&sock->pubsub.subscriber, ack.packet_id);
     return 0;
 }
 
@@ -159,45 +172,40 @@ static int _process_tcp_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
     rmc_socket_t* sock = &ctx->sockets[p_ind];
     uint32_t in_use = circ_buf_in_use(&sock->read_buf);
     uint8_t command = 0;
-    uint32_t len = 0;
-    int res;
+    int res = 0;
 
-    // Do we have any data to process
-    if (!in_use)
-        return 0;
-            
-    res = circ_buf_read(&sock->read_buf, &command, sizeof(command), &len);
+    // Do we have a command byte?
+    if (in_use < 1)
+        return EAGAIN;
+
+    // We have at least one byte available.
+    res = circ_buf_read(&sock->read_buf, &command, 1, 0);
 
     if (res)
         return res;
-
-    // Did we get our precious byte?
-    if (len == 0)
-        return EAGAIN;
-
     
-    in_use -= sizeof(command);
+    in_use -= 1;
 
     while(1) {
         switch(command) {
         case RMC_CMD_PACKET:
-            if ((res = _process_cmd_packet(ctx, sock, len)) != 0)
+            if ((res = _process_cmd_packet(ctx, sock, in_use)) != 0)
                 return res; // Most likely EAGAIN
             break;
 
         case RMC_CMD_ACK_SINGLE:
-            if ((res = _process_cmd_ack_single(ctx, sock, len)) != 0)
+            if ((res = _process_cmd_ack_single(ctx, sock, in_use)) != 0)
                 return res; // Most likely EAGAIN
             break;
 
         case RMC_CMD_ACK_INTERVAL:
-            if ((res = _process_cmd_ack_interval(ctx, sock, len)) != 0)
+            if ((res = _process_cmd_ack_interval(ctx, sock, in_use)) != 0)
                 return res; // Most likely EAGAIN
 
 
         default:
             // FIXME: Disconnect subscriber and report issue.
-            abort();
+            return EPROTO;
         }
 
         // Free the number of the bytes that cmd occupies.
@@ -205,24 +213,65 @@ static int _process_tcp_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
         // taken up by whatever the command payload itself takes up,
         // leaving the first byte of the remaining data in use to be
         // the start of the next command.
-        circ_buf_free(&sock->read_buf, sizeof(command), &in_use);
+        circ_buf_free(&sock->read_buf, 1, &in_use);
 
-        res = circ_buf_read(&sock->read_buf, &command, 1, &len);
+        in_use = circ_buf_in_use(&sock->read_buf);
+
+        if (!in_use)
+            return 0;
+
+        // We are at the start of the next command.
+        // Read the command byte.
+        res = circ_buf_read(&sock->read_buf, &command, 1, 0);
 
         if (res)
             return res;
-
-        // If we didn't get our precious byte, it means that we
-        // executed all commands, and there is no partial command
-        // left to run.
-        
-        if (len == 0)
-            return 0;
     }
 
     return 0;
 }
 
+
+int _tcp_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
+{
+    rmc_socket_t* sock = &ctx->sockets[p_ind];
+    ssize_t res = 0;
+    uint8_t *seg1 = 0;
+    uint32_t seg1_len = 0;
+    uint8_t *seg2 = 0;
+    uint32_t seg2_len = 0;
+    struct iovec iov[2];
+    uint32_t available = circ_buf_available(&sock->read_buf);
+
+    // Grab as much data as we can.
+    // The call will only return available
+    // data.
+    circ_buf_alloc(&sock->read_buf,
+                   available,
+                   &seg1, &seg1_len,
+                   &seg2, &seg2_len);
+
+    if (!seg1_len) 
+        return ENOMEM;
+
+    // Setup a zero-copy scattered socket write
+    iov[0].iov_base = seg1;
+    iov[0].iov_len = seg1_len;
+    iov[1].iov_base = seg2;
+    iov[1].iov_len = seg2_len;
+    
+    res = readv(sock->descriptor, iov, 2);
+
+    if (res == -1)
+        return errno;
+    
+    // Trim the tail end of the allocated data to match the number of
+    // bytes read.
+    circ_buf_trim(&sock->read_buf, res);
+
+    return _process_tcp_read(ctx, p_ind);
+    
+}
 
 int rmc_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
 {
@@ -246,7 +295,7 @@ int rmc_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
     if (ctx->sockets[p_ind].descriptor == -1)
         return ENOTCONN;
 
-    res = _process_tcp_read(ctx, p_ind);
+    res = _tcp_read(ctx, p_ind);
     // Read poll is always active. Callback to re-arm.
     if (ctx->poll_modify)
         (*ctx->poll_modify)(&ctx->sockets[p_ind].poll_info,

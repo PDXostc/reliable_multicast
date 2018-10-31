@@ -18,19 +18,16 @@
 #define RMC_CMD_ACK_INTERVAL 3
 
 typedef struct cmd_ack_single {
-    uint8_t command;
     packet_id_t packet_id; // Packet ID to ac
 } cmd_ack_single_t;
 
 typedef struct cmd_ack_interval {
-    uint8_t command;
     packet_id_t first;    // ID of first packet ID
     packet_id_t last;     // ID of last packet ID
 } cmd_ack_interval_t;
 
 
 typedef struct cmd_packet {
-    uint8_t command;
     packet_id_t pid;    // ID of first packet ID
     payload_len_t payload_len;
     uint8_t payload[];
