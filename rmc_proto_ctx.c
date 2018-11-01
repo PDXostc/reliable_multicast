@@ -49,12 +49,14 @@ int rmc_init_context(rmc_context_t* ctx,
                      char* multicast_addr,
                      char* listen_ip,
                      int port,
-                     void* (*payload_alloc)(payload_len_t),
-                     void (*payload_free)(void*, payload_len_t),
-                     void (*poll_add)(rmc_poll_t* poll),
-                     void (*poll_modify)(rmc_poll_t* old_poll, rmc_poll_t* new_poll), 
-                     void (*poll_remove)(rmc_poll_t* poll)) {
+                     user_data_t user_data,
+                     void (*poll_add)(rmc_poll_t* poll, user_data_t user_data),
+                     void (*poll_modify)(rmc_poll_t* old_poll, rmc_poll_t* new_poll, user_data_t user_data), 
+                     void (*poll_remove)(rmc_poll_t* poll, user_data_t user_data),
+                     void* (*payload_alloc)(payload_len_t, user_data_t user_data),
+                     void (*payload_free)(void*, payload_len_t, user_data_t user_data)) {
 
+    
     int i = sizeof(ctx->sockets) / sizeof(ctx->sockets[0]);
 
     assert(ctx);
@@ -73,6 +75,7 @@ int rmc_init_context(rmc_context_t* ctx,
         ctx->listen_ip[0] = 0;
 
     ctx->port = port;
+    ctx->user_data = user_data;
     ctx->poll_add = poll_add;
     ctx->poll_remove = poll_remove;
     ctx->payload_alloc = payload_alloc;
@@ -86,7 +89,7 @@ int rmc_init_context(rmc_context_t* ctx,
     // subscriber sends an ack back for the given pid.
     // When all subscribers have acknowledged,
     // outgoing_payload_free() is called to free the payload.
-    pub_init_context(&ctx->pub_ctx, payload_free);
+    pub_init_context(&ctx->pub_ctx, ctx->user_data, payload_free);
     sub_init_context(&ctx->sub_ctx, 0);
 
     return 0;
@@ -199,8 +202,8 @@ int rmc_activate_context(rmc_context_t* ctx)
     
 
     if (ctx->poll_add) {
-        (*ctx->poll_add)(&ctx->sockets[RMC_LISTEN_SOCKET_INDEX].poll_info);
-        (*ctx->poll_add)(&ctx->sockets[RMC_MULTICAST_SOCKET_INDEX].poll_info);
+        (*ctx->poll_add)(&ctx->sockets[RMC_LISTEN_SOCKET_INDEX].poll_info, ctx->user_data);
+        (*ctx->poll_add)(&ctx->sockets[RMC_MULTICAST_SOCKET_INDEX].poll_info, ctx->user_data);
     }
 
     return 0;
@@ -225,4 +228,11 @@ int rmc_deactivate_context(rmc_context_t* ctx)
 }
 
 
+int user_data(rmc_context_t* ctx, user_data_t *result)
+{
+    if (!ctx || !result)
+        return EINVAL;
 
+    *result = ctx->user_data;
+    return 0;
+}

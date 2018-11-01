@@ -37,7 +37,19 @@ static void _test(char* tst, int error)
     exit(255);
 }
 
-#define MAX_EVENTS 10
+void poll_add(rmc_poll_t* poll, user_data_t udata)
+{
+}
+
+void poll_modify(rmc_poll_t* old_poll, rmc_poll_t* new_poll, user_data_t udata)
+{
+}
+
+void poll_remove(rmc_poll_t* poll, user_data_t udata)
+{
+}
+
+
 
 void test_rmc_proto(void)
 {
@@ -50,14 +62,15 @@ void test_rmc_proto(void)
 
     sub_packet_t* pack;
     int epollfd;
-    struct epoll_event ev, events[MAX_EVENTS];
-
+    struct epoll_event ev, events[RMC_MAX_SOCKETS];
+    user_data_t ud = { .ptr = &ctx };
     epollfd = epoll_create1(0);
 
     if (epollfd == -1) {
         perror("epoll_create1");
         exit(255);
     }
+    rmc_init_context(&ctx, "239.0.0.1", 0, 4723, ud, poll_add, poll_modify, poll_remove, 0, 0);
 
 //    ev.events = EPOLLIN;
 //    ev.data.u32 = listen_sock;
@@ -95,7 +108,6 @@ void test_rmc_proto(void)
 //               }
 //           }
 
-    rmc_init_context(&ctx, "239.0.0.1", 0, 4723, 0, 0, 0, 0, 0);
 
     _test("1.1", rmc_activate_context(&ctx));
 

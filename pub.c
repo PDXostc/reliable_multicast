@@ -42,7 +42,8 @@ static packet_id_t _next_pid(pub_context_t* ctx)
 
 
 void pub_init_context(pub_context_t* ctx,
-                      void (*payload_free)(void*, payload_len_t))
+                      user_data_t user_data, 
+                      void (*payload_free)(void*, payload_len_t, user_data_t user_data))
 {
     assert(ctx);
 
@@ -50,6 +51,7 @@ void pub_init_context(pub_context_t* ctx,
     pub_packet_list_init(&ctx->queued, 0, 0, 0);
     pub_packet_list_init(&ctx->inflight, 0, 0, 0);
     ctx->payload_free = payload_free;
+    ctx->user_data = user_data;
     ctx->next_pid = 1;
 
 }
@@ -227,7 +229,7 @@ void pub_packet_ack(pub_subscriber_t* sub, packet_id_t pid)
         pub_packet_list_delete(ppack->parent_node);
 
         // Free data using function provided to pub_init_context
-        (*sub->context->payload_free)(ppack->payload, ppack->payload_len);
+        (*sub->context->payload_free)(ppack->payload, ppack->payload_len, sub->context->user_data);
 
         // Delete the ppack.
         _free_pending_packet(ppack);

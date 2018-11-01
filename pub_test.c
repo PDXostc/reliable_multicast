@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static void _test_pub_free(void* payload, payload_len_t plen)
+static void _test_pub_free(void* payload, payload_len_t plen, user_data_t user_data)
 {
     // We are not allocating payload from heap.
     return;
@@ -85,9 +85,9 @@ void test_pub(void)
     packet_id_t pid = 0;
     pub_sub_list_t sub_lst;
     pub_packet_node_t* pnode = 0;
+    user_data_t ud = { .ptr = 0};
 
-
-    pub_init_context(&ctx, _test_pub_free);
+    pub_init_context(&ctx, ud, _test_pub_free);
     pub_init_subscriber(&sub1, &ctx, 0);
     pub_init_subscriber(&sub2, &ctx, 0);
     pub_init_subscriber(&sub3, &ctx, 0);

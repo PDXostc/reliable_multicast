@@ -69,7 +69,7 @@ static int _decode_multicast(rmc_context_t* ctx,
         // incoming payload.
         // Use malloc() if nothing is specified.
         if (ctx->payload_alloc)
-            payload = (*ctx->payload_alloc)(payload_len);
+            payload = (*ctx->payload_alloc)(payload_len, ctx->user_data);
         else
             payload = malloc(payload_len);
 
@@ -299,7 +299,8 @@ int rmc_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
     // Read poll is always active. Callback to re-arm.
     if (ctx->poll_modify)
         (*ctx->poll_modify)(&ctx->sockets[p_ind].poll_info,
-                            &ctx->sockets[p_ind].poll_info);
+                            &ctx->sockets[p_ind].poll_info,
+                            ctx->user_data);
 
     return res;
 }

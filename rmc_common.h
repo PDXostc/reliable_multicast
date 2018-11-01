@@ -21,6 +21,14 @@ typedef uint64_t packet_id_t;
 typedef uint16_t payload_len_t;
 typedef uint64_t usec_timestamp_t;
 
+typedef union {
+    void* ptr;
+    uint32_t u32;
+    int32_t i32;
+    uint64_t u64;
+    int64_t i64;
+} user_data_t;
+
 
 // Used for iterators etc.
 #define lambda(return_type, function_body) \

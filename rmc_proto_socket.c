@@ -110,7 +110,7 @@ int rmc_connect_tcp_by_address(rmc_context_t* ctx,
     memcpy(&ctx->sockets[c_ind].remote_address, sock_addr, sizeof(*sock_addr));
 
     if (ctx->poll_add)
-        (*ctx->poll_add)(&ctx->sockets[c_ind].poll_info);
+        (*ctx->poll_add)(&ctx->sockets[c_ind].poll_info, ctx->user_data);
 
     if (result_index)
         *result_index = c_ind;
@@ -173,7 +173,7 @@ int rmc_process_accept(rmc_context_t* ctx,
 
     ctx->sockets[c_ind].poll_info.action = RMC_POLLREAD;
     if (ctx->poll_add)
-        (*ctx->poll_add)(&ctx->sockets[c_ind].poll_info);
+        (*ctx->poll_add)(&ctx->sockets[c_ind].poll_info, ctx->user_data);
 
     if (result_index)
         *result_index = c_ind;
@@ -203,7 +203,7 @@ int rmc_close_tcp(rmc_context_t* ctx, rmc_poll_index_t p_ind)
     rmc_reset_socket(&ctx->sockets[p_ind], p_ind);
 
     if (ctx->poll_remove)
-        (*ctx->poll_remove)(&ctx->sockets[p_ind].poll_info);
+        (*ctx->poll_remove)(&ctx->sockets[p_ind].poll_info, ctx->user_data);
 
     if (p_ind == ctx->max_socket_ind)
         _reset_max_socket_ind(ctx);

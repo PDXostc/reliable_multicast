@@ -118,6 +118,7 @@ typedef struct rmc_socket {
 
 #define RMC_RESEND_TIMEOUT_DEFAULT 500000
 
+
 typedef struct rmc_context {
     pub_context_t pub_ctx;
     sub_context_t sub_ctx;
@@ -128,39 +129,38 @@ typedef struct rmc_context {
     struct sockaddr_in mcast_dest_addr;
     char listen_ip[80];
     int port;
+    user_data_t user_data;
     // Once we have sent a packet how long do we wait for an ack, in usec, until
     // we resend it?
     uint32_t resend_timeout;
 
-    void (*poll_add)(rmc_poll_t* poll); // When we want to know if a socket can be written to or read from
-    void (*poll_modify)(rmc_poll_t* old_poll, rmc_poll_t* new_poll); // We have changed the action bitmap.
-    void (*poll_remove)(rmc_poll_t* poll);  // Callback when we don't need socket ready notifications.
-    void* (*payload_alloc)(payload_len_t payload_len);  // Called to alloc memory for incoming data.
-    void (*payload_free)(void* payload, payload_len_t payload_len);  // Free payload provided by rmc_queue_packet()
+
+    // When we want to know if a socket can be written to or read from
+    void (*poll_add)(rmc_poll_t* poll, user_data_t user_data); 
+
+    // We have changed the action bitmap.
+    void (*poll_modify)(rmc_poll_t* old_poll, rmc_poll_t* new_poll, user_data_t user_data); 
+
+    // Callback when we don't need socket ready notifications.
+    void (*poll_remove)(rmc_poll_t* poll, user_data_t user_data);  
+
+    // Called to alloc memory for incoming data.
+    void* (*payload_alloc)(payload_len_t payload_len, user_data_t user_data);  
+
+    // Free payload provided by rmc_queue_packet()
+    void (*payload_free)(void* payload, payload_len_t payload_len, user_data_t user_data); 
 } rmc_context_t;
 
 #define RMC_POLLREAD 0x01
 #define RMC_POLLWRITE 0x02
 
-
 // All functions return error codes from error
 extern int rmc_init_context(rmc_context_t* context,
                             char* multicast_addr,  // Domain name or IP
                             char* listen_ip, // For subscription management. TCP
-                            int port, // Used for local listen IP and multicast port
+                            int port, // Used for local listen TCP and multicast port
 
-                            // Function to call to allocated payload memory specified
-                            // by queue_packet()
-                            // Also called to allocate memory for incoming
-                            // packets read, which will be pointed to
-                            // by rmc_get_next_ready_packet(.., void* payload)
-                            void* (*payload_alloc)(payload_len_t payload_len),
-
-                            // Function called to free payload pointed to by
-                            // rmc_queue_packet(). Will be invoked by rmc_write()
-                            // when payload has been successfully sent.
-                            void (*payload_free)(void* payload, payload_len_t payload_len),
-
+                            user_data_t user_data,
                             // Called when a new socket is created by rmc.
                             //
                             // poll->action & RMC_POLLREAD
@@ -175,7 +175,7 @@ extern int rmc_init_context(rmc_context_t* context,
                             // argument) when the socket can be
                             // written to (asynchronously).
                             //
-                            void (*poll_add)(rmc_poll_t* poll),
+                            void (*poll_add)(rmc_poll_t* poll, user_data_t user_data),
 
                             // The poll action either needs to be re-armed 
                             // in cases where polling is oneshot (epoll(2) with EPOLLONESHOT),
@@ -184,10 +184,24 @@ extern int rmc_init_context(rmc_context_t* context,
                             // Rearming can be detected by checking if
                             // old->action == new_poll->action.
                             //
-                            void (*poll_modify)(rmc_poll_t* old_poll, rmc_poll_t* new_poll), 
+                            void (*poll_modify)(rmc_poll_t* old_poll,
+                                                rmc_poll_t* new_poll,
+                                                user_data_t user_data), 
 
                             // Callback to remove a socket previously added with poll_add().
-                            void (*poll_remove)(rmc_poll_t* poll));
+                            void (*poll_remove)(rmc_poll_t* poll, user_data_t user_data),
+
+                            // Function to call to allocated payload memory specified
+                            // by queue_packet()
+                            // Also called to allocate memory for incoming
+                            // packets read, which will be pointed to
+                            // by rmc_get_next_ready_packet(.., void* payload)
+                            void* (*payload_alloc)(payload_len_t payload_len, user_data_t user_data),
+
+                            // Function called to free payload pointed to by
+                            // rmc_queue_packet(). Will be invoked by rmc_write()
+                            // when payload has been successfully sent.
+                            void (*payload_free)(void* payload, payload_len_t payload_len, user_data_t user_data));
 
 
 extern int rmc_activate_context(rmc_context_t* context);
@@ -199,6 +213,8 @@ extern int rmc_connect_subscription(rmc_context_t* context,
                                     int server_port,
                                     int* result_socket,
                                     int* result_connection_index);
+
+extern int user_data(rmc_context_t* ctx, user_data_t *result);
 
 extern int rmc_get_next_timeout(rmc_context_t* context, usec_timestamp_t* result);
 extern int rmc_process_timeout(rmc_context_t* context);

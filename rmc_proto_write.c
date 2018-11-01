@@ -189,12 +189,13 @@ int rmc_write(rmc_context_t* ctx, rmc_poll_index_t p_ind)
         ctx->sockets[p_ind].poll_info.action |= RMC_POLLWRITE;
 
     if (ctx->poll_modify)
-        (*ctx->poll_modify)(&old_info, &ctx->sockets[p_ind].poll_info);
+        (*ctx->poll_modify)(&old_info, &ctx->sockets[p_ind].poll_info, ctx->user_data);
 
     return res;
 }
 
-
+// Send an ack for a packet that has been processed.
+// Called by rmc_free_packet().
 int rmc_proto_ack(rmc_context_t* ctx, rmc_socket_t* sock, sub_packet_t* pack)
 {
     uint32_t available = circ_buf_available(&sock->write_buf);
@@ -237,7 +238,8 @@ int rmc_proto_ack(rmc_context_t* ctx, rmc_socket_t* sock, sub_packet_t* pack)
         sock->poll_info.action |= RMC_POLLWRITE;
         if (ctx->poll_modify)
             (*ctx->poll_modify)(&old_poll_info,
-                                &sock->poll_info);
+                                &sock->poll_info,
+                                ctx->user_data);
     }
     
 }

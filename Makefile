@@ -9,19 +9,19 @@ OBJ= interval.o \
 	time.o \
 	sub.o \
 	circular_buffer.o \
-	rmc_proto_packmgmt.o \
-	rmc_proto_sockmgmt.o \
+	rmc_proto_packet.o \
+	rmc_proto_socket.o \
 	rmc_proto_read.o \
 	rmc_proto_write.o \
 	rmc_proto_timeout.o \
 	rmc_proto_ctx.o
 
 TEST_OBJ = interval_test.o \
+	rmc_proto_test.o \
 	pub_test.o \
 	list_test.o \
 	rmc_test.o \
 	sub_test.o \
-	rmc_proto_test.o \
 	circular_buffer_test.o
 
 HDR= rmc_common.h \

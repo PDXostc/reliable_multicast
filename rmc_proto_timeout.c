@@ -91,7 +91,7 @@ static int _process_packet_timeout(rmc_context_t* ctx, pub_subscriber_t* sub, pu
 
         sock->poll_info.action |= RMC_POLLWRITE;
         if (ctx->poll_modify)
-            (*ctx->poll_modify)(&old_info, &sock->poll_info);
+            (*ctx->poll_modify)(&old_info, &sock->poll_info, ctx->user_data);
     }    
     
     return 0;

@@ -18,11 +18,18 @@ extern void test_circular_buffer(void);
 
 int main(int argc, char* argv[])
 {
+    int tst = 1;
+    
     run_list_tests();
     test_packet_interval();
     test_packet_intervals();
+    test_circular_buffer();
     test_pub();
     test_sub();
+
 //    test_rmc_proto();
-    test_circular_buffer();
+    
 }
+
+
+

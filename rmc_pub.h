@@ -10,7 +10,6 @@
 #define __REL_MCAST_PUB_H__
 
 #include "rmc_common.h"
-
 #include "rmc_list.h"
 
 struct pub_subscriber;
@@ -95,7 +94,8 @@ typedef struct pub_context {
     // are referredd to by subscriber_t::inflight.
     pub_packet_list_t inflight; 
     packet_id_t next_pid;
-    void (*payload_free)(void*, payload_len_t);
+    user_data_t user_data;
+    void (*payload_free)(void*, payload_len_t, user_data_t user_data);
 } pub_context_t;
 
 
@@ -105,7 +105,9 @@ typedef struct pub_context {
 // in pub_queue_packet() once the packet has been ack:ed by all subscribers.
 //
 extern void pub_init_context(pub_context_t* ctx,
-                             void (*payload_free)(void*, payload_len_t));
+                             user_data_t user_data,
+                             void (*payload_free)(void*, payload_len_t, user_data_t));
+
 
 extern void pub_init_subscriber(pub_subscriber_t* sub, pub_context_t* ctx, void* user_data);
 extern void* pub_subscriber_user_data(pub_subscriber_t* sub);
