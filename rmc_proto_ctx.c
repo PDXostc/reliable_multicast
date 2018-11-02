@@ -39,9 +39,6 @@ static void _reset_socket(rmc_socket_t* sock, int index)
 }
 
 
-
-
-
 // =============
 // CONTEXT MANAGEMENT
 // =============
@@ -64,15 +61,22 @@ int rmc_init_context(rmc_context_t* ctx,
     while(i--) 
         _reset_socket(&ctx->sockets[i], i);
     
-
     strncpy(ctx->multicast_addr, multicast_addr, sizeof(ctx->multicast_addr));
     ctx->multicast_addr[sizeof(ctx->multicast_addr)-1] = 0;
+    
 
     if (listen_ip) {
         strncpy(ctx->listen_ip, listen_ip, sizeof(ctx->listen_ip));
         ctx->listen_ip[sizeof(ctx->listen_ip)-1] = 0;
     } else
         ctx->listen_ip[0] = 0;
+
+    ctx->mcast_descriptor = -1;
+    ctx->listen_descriptor = -1;
+    ctx->mcast_pinfo.rmc_index = RMC_MULTICAST_INDEX;
+    ctx->mcast_pinfo.action = 0;
+    ctx->listen_pinfo.rmc_index = RMC_LISTEN_INDEX;
+    ctx->listen_pinfo.action = 0;
 
     ctx->port = port;
     ctx->user_data = user_data;
@@ -81,7 +85,7 @@ int rmc_init_context(rmc_context_t* ctx,
     ctx->payload_alloc = payload_alloc;
     ctx->payload_free = payload_free;
     ctx->socket_count = 0;
-    ctx->max_socket_ind = -1;
+    ctx->max_socket_ind = -1; // No sockets in use
     ctx->resend_timeout = RMC_RESEND_TIMEOUT_DEFAULT;
 
     // outgoing_payload_free() will be called when
@@ -105,26 +109,25 @@ int rmc_activate_context(rmc_context_t* ctx)
     if (!ctx)
         return EINVAL;
 
-
-    if (ctx->sockets[RMC_MULTICAST_SOCKET_INDEX].descriptor != -1)
+    if (ctx->mcast_descriptor != -1)
         return EEXIST;
 
-    ctx->sockets[RMC_MULTICAST_SOCKET_INDEX].descriptor = socket (AF_INET, SOCK_DGRAM, 0);
+    ctx->mcast_descriptor = socket (AF_INET, SOCK_DGRAM, 0);
 
-    if (ctx->sockets[RMC_MULTICAST_SOCKET_INDEX].descriptor == -1) {
-        perror("rmc_listen(): socket(multicast)");
+    if (ctx->mcast_descriptor == -1) {
+        perror("rmc_activate_context(): socket(multicast)");
         goto error;
     }
 
-    if (setsockopt(ctx->sockets[RMC_MULTICAST_SOCKET_INDEX].descriptor, SOL_SOCKET,
+    if (setsockopt(ctx->mcast_descriptor, SOL_SOCKET,
                    SO_REUSEADDR, &flag, sizeof(flag)) < 0) {
-        perror("rmc_listen(): setsockopt(REUSEADDR)");
+        perror("rmc_activate_context(): setsockopt(REUSEADDR)");
         goto error;
     }
 
-    if (setsockopt(ctx->sockets[RMC_MULTICAST_SOCKET_INDEX].descriptor, SOL_SOCKET,
+    if (setsockopt(ctx->mcast_descriptor, IPPROTO_IP,
                    SO_REUSEPORT, &flag, sizeof(flag)) < 0) {
-        perror("rmc_listen(): setsockopt(SO_REUSEPORT)");
+        perror("rmc_activate_context(): setsockopt(SO_REUSEPORT)");
         goto error;
     }
 
@@ -135,22 +138,21 @@ int rmc_activate_context(rmc_context_t* ctx)
 
     mreq.imr_interface.s_addr = htonl(INADDR_ANY);
 
-    if (setsockopt(ctx->sockets[RMC_MULTICAST_SOCKET_INDEX].descriptor,
+    if (setsockopt(ctx->mcast_descriptor,
                    IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
-        perror("rmc_listen(): setsockopt(IP_ADD_MEMBERSHIP)");
+        perror("rmc_activate_context(): setsockopt(IP_ADD_MEMBERSHIP)");
         goto error;
     }
 
-    // Bind to local endpoint.
-//    sock_addr.sin_family = AF_INET;
-//    sock_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-//    sock_addr.sin_port = htons(INPORT_ANY);
+    sock_addr.sin_family = AF_INET;
+    sock_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    sock_addr.sin_port = htons(ctx->port);
+    if (bind(ctx->mcast_descriptor,
+             (struct sockaddr *) &sock_addr, sizeof(sock_addr)) < 0) {
+        perror("rmc_listen(): bind()");
+        return errno;
+    }
 
-//    if (bind(ctx->sockets[RMC_MULTICAST_SOCKET_INDEX],
-//             (struct sockaddr *) &sock_addr, sizeof(sock_addr)) < 0) {
-//        perror("rmc_listen(): bind()");
-//        return errno;
-//    }
 
     // setup remote endpoint
     memset((void*) &ctx->mcast_dest_addr, 0, sizeof(ctx->mcast_dest_addr));
@@ -158,13 +160,30 @@ int rmc_activate_context(rmc_context_t* ctx)
     ctx->mcast_dest_addr.sin_addr = mreq.imr_multiaddr;
     ctx->mcast_dest_addr.sin_port = htons(ctx->port);
 
+    // 
     // Setup TCP listen
     // Did we specify a local interface address to bind to?
-    ctx->sockets[RMC_LISTEN_SOCKET_INDEX].descriptor = socket (AF_INET, SOCK_STREAM, 0);
-    if (ctx->sockets[RMC_LISTEN_SOCKET_INDEX].descriptor == -1) {
-        perror("rmc_listen(): socket(listen)");
+    ctx->listen_descriptor = socket (AF_INET, SOCK_STREAM, 0);
+    if (ctx->listen_descriptor == -1) {
+        perror("rmc_activate_context(): socket(listen)");
         goto error;
     }
+
+    if (setsockopt(ctx->listen_descriptor, SOL_SOCKET,
+                   SO_REUSEADDR, &flag, sizeof(flag)) < 0) {
+        perror("rmc_activate_context(): setsockopt(REUSEADDR)");
+        goto error;
+    }
+
+    if (setsockopt(ctx->listen_descriptor, SOL_SOCKET,
+                   SO_REUSEPORT, &flag, sizeof(flag)) < 0) {
+        perror("rmc_activate_context(): setsockopt(SO_REUSEPORT)");
+        goto error;
+    }
+
+
+    // Bind to local endpoint.
+    sock_addr.sin_family = AF_INET;
 
     if (ctx->listen_ip[0] &&
         inet_aton(ctx->listen_ip, &sock_addr.sin_addr) != 1) {
@@ -175,48 +194,39 @@ int rmc_activate_context(rmc_context_t* ctx)
         sock_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     sock_addr.sin_port = htons(ctx->port);
-    if (bind(ctx->sockets[RMC_LISTEN_SOCKET_INDEX].descriptor,
+    if (bind(ctx->listen_descriptor,
              (struct sockaddr *) &sock_addr, sizeof(sock_addr)) < 0) {
-        perror("rmc_listen(): bind()");
+        perror("rmc_activate_context(): bind()");
         goto error;
     }
 
-    if (listen(ctx->sockets[RMC_LISTEN_SOCKET_INDEX].descriptor, RMC_LISTEN_SOCKET_BACKLOG) != 0) {
-        perror("rmc_listen(): listen()");
+    if (listen(ctx->listen_descriptor, RMC_LISTEN_SOCKET_BACKLOG) != 0) {
+        perror("rmc_activate_context(): listen()");
         goto error;
     }
 
     ctx->socket_count += 2;
 
-    if (ctx->max_socket_ind < RMC_LISTEN_SOCKET_INDEX)
-        ctx->max_socket_ind = RMC_LISTEN_SOCKET_INDEX;
-
-    if (ctx->max_socket_ind < RMC_MULTICAST_SOCKET_INDEX)
-        ctx->max_socket_ind = RMC_MULTICAST_SOCKET_INDEX;
-
-    ctx->sockets[RMC_LISTEN_SOCKET_INDEX].poll_info.action = RMC_POLLREAD;
-    ctx->sockets[RMC_LISTEN_SOCKET_INDEX].mode = RMC_SOCKET_MODE_OTHER;
-
-    ctx->sockets[RMC_MULTICAST_SOCKET_INDEX].poll_info.action = RMC_POLLREAD;
-    ctx->sockets[RMC_LISTEN_SOCKET_INDEX].mode = RMC_SOCKET_MODE_OTHER;
-    
+    ctx->mcast_pinfo.action = RMC_POLLREAD;
+    ctx->listen_pinfo.action = RMC_POLLREAD;
 
     if (ctx->poll_add) {
-        (*ctx->poll_add)(&ctx->sockets[RMC_LISTEN_SOCKET_INDEX].poll_info, ctx->user_data);
-        (*ctx->poll_add)(&ctx->sockets[RMC_MULTICAST_SOCKET_INDEX].poll_info, ctx->user_data);
+        (*ctx->poll_add)(&ctx->mcast_pinfo, ctx->user_data);
+        (*ctx->poll_add)(&ctx->listen_pinfo, ctx->user_data);
     }
 
     return 0;
 
 error:
-    if (ctx->sockets[RMC_MULTICAST_SOCKET_INDEX].descriptor != -1) {
-        close(ctx->sockets[RMC_MULTICAST_SOCKET_INDEX].descriptor);
-        _reset_socket(&ctx->sockets[RMC_MULTICAST_SOCKET_INDEX], RMC_MULTICAST_SOCKET_INDEX);
+    if (ctx->mcast_descriptor != -1) {
+        close(ctx->mcast_descriptor);
+        ctx->mcast_descriptor = -1;
     }
+    
 
-    if (ctx->sockets[RMC_MULTICAST_SOCKET_INDEX].descriptor != -1) {
-        close(ctx->sockets[RMC_LISTEN_SOCKET_INDEX].descriptor);
-        _reset_socket(&ctx->sockets[RMC_LISTEN_SOCKET_INDEX], RMC_MULTICAST_SOCKET_INDEX);
+    if (ctx->mcast_descriptor != -1) {
+        close(ctx->listen_descriptor);
+        ctx->listen_descriptor = -1;
     }
 
     return errno;

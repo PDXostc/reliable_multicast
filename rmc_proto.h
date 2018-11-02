@@ -42,28 +42,37 @@ typedef struct cmd_packet {
 // Probably needs to be a lot bigger in high
 // throughput situations.
 #define RMC_MAX_TCP_PENDIONG_WRITE 0xFFFF 
-
-#define RMC_MAX_SOCKETS 256
-
-#define RMC_MULTICAST_SOCKET_INDEX 0
-#define RMC_LISTEN_SOCKET_INDEX 1
+#define RMC_MAX_SOCKETS 16
 #define RMC_LISTEN_SOCKET_BACKLOG 5
 
 typedef uint32_t rmc_poll_index_t;
 
-typedef struct rmc_poll {
-    uint16_t action;
+#define RMC_POLLREAD 0x01
+#define RMC_POLLWRITE 0x02
+#define RMC_MULTICAST_INDEX 0xFFFFFFFE
+#define RMC_LISTEN_INDEX 0xFFFFFFFF
 
+
+typedef struct rmc_poll {
     // Index of owner rmc_socket_t struct in the master
     // rmc_context_t::sockets[] array.
     // rmc_context_t::sockets[rmc_index].poll_info is this struct.
+    // Special cases on RMC_MULTICAST_INDEX and RMC_LISTEN_INDEX
+    // to identify the multicast and listen descriptors used
+    // by rmc_context_t;x
     rmc_poll_index_t rmc_index;
+
+    // Action is a bitmask of RMC_POLLREAD and RMC_POLLWRITE
+    uint16_t action;
 } rmc_poll_t;
+
 
 #define RMC_SOCKET_MODE_UNUSED 0
 #define RMC_SOCKET_MODE_SUBSCRIBER 1
 #define RMC_SOCKET_MODE_PUBLISHER 2
-#define RMC_SOCKET_MODE_OTHER 3
+// Socket is being connected.
+#define RMC_SOCKET_MODE_CONNECTING 3
+
 typedef struct rmc_socket {
     // See above.
     rmc_poll_t poll_info;
@@ -123,17 +132,26 @@ typedef struct rmc_context {
     pub_context_t pub_ctx;
     sub_context_t sub_ctx;
     int socket_count;
-    int max_socket_ind;  // Max socket index currently in use.
+
+    // Top socket index currently in use.
+    rmc_poll_index_t max_socket_ind;  
     rmc_socket_t sockets[RMC_MAX_SOCKETS]; //
+
+    int port; // Used both for TCP listen and mcast.
     char multicast_addr[256];
     struct sockaddr_in mcast_dest_addr;
+
+    int mcast_descriptor;
+    rmc_poll_t mcast_pinfo;
+
     char listen_ip[80];
-    int port;
+    int listen_descriptor;
+    rmc_poll_t listen_pinfo;
+
     user_data_t user_data;
     // Once we have sent a packet how long do we wait for an ack, in usec, until
     // we resend it?
     uint32_t resend_timeout;
-
 
     // When we want to know if a socket can be written to or read from
     void (*poll_add)(rmc_poll_t* poll, user_data_t user_data); 
@@ -151,13 +169,11 @@ typedef struct rmc_context {
     void (*payload_free)(void* payload, payload_len_t payload_len, user_data_t user_data); 
 } rmc_context_t;
 
-#define RMC_POLLREAD 0x01
-#define RMC_POLLWRITE 0x02
 
 // All functions return error codes from error
 extern int rmc_init_context(rmc_context_t* context,
                             char* multicast_addr,  // Domain name or IP
-                            char* listen_ip, // For subscription management. TCP
+                            char* listen_ip, // For subscription management over TCP. 0 = IPADDR_ANY
                             int port, // Used for local listen TCP and multicast port
 
                             user_data_t user_data,
@@ -248,4 +264,5 @@ extern int rmc_proto_ack(rmc_context_t* ctx,
                          rmc_socket_t* sock,
                          sub_packet_t* pack);
 
+extern int rmc_complete_connect(rmc_context_t* ctx, rmc_socket_t* sock);
 #endif // __RMC_PROTO_H__

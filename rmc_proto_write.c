@@ -35,21 +35,24 @@ static int _process_multicast_write(rmc_context_t* ctx)
 {
     pub_context_t* pctx = &ctx->pub_ctx;
     pub_packet_t* pack = pub_next_queued_packet(pctx);
-    uint8_t packet[RMC_MAX_SOCKETS];
+    uint8_t packet[RMC_MAX_PAYLOAD];
     uint8_t *packet_ptr = packet;
     payload_len_t *hdr_len = (payload_len_t*) packet_ptr;
     packet_id_t pid = 0;
     usec_timestamp_t ts = 0;
     pub_packet_list_t snd_list;
     ssize_t res = 0;
+    rmc_poll_t old_info;
 
-    // Initialize first two bytes (total multticast payload length) to 0.
+    if (ctx->mcast_descriptor == -1)
+        return ENOTCONN;
+
     *hdr_len = 0;
     packet_ptr += sizeof(payload_len_t);
 
     pub_packet_list_init(&snd_list, 0, 0, 0);
 
-    while(pack && *hdr_len <= RMC_MAX_SOCKETS) {
+    while(pack && *hdr_len <= RMC_MAX_PAYLOAD) {
         pub_packet_node_t* pnode = 0;
 
         *((packet_id_t*) packet_ptr) = pack->pid;
@@ -69,8 +72,9 @@ static int _process_multicast_write(rmc_context_t* ctx)
         pnode = pub_packet_list_next(pack->parent_node);
         pack = pnode?pnode->data:0;
     }
+    old_info = ctx->mcast_pinfo;
 
-    res = sendto(ctx->sockets[RMC_MULTICAST_SOCKET_INDEX].descriptor,
+    res = sendto(ctx->mcast_descriptor,
                  packet,
                  sizeof(payload_len_t) + *hdr_len,
                  MSG_DONTWAIT,
@@ -82,10 +86,13 @@ static int _process_multicast_write(rmc_context_t* ctx)
             return errno;
 
         // Would block. Re-arm and return success.
-        ctx->sockets[RMC_MULTICAST_SOCKET_INDEX].poll_info.action = RMC_POLLREAD | RMC_POLLWRITE;
+        ctx->mcast_pinfo.action = RMC_POLLREAD | RMC_POLLWRITE;
+        if (ctx->poll_modify)
+            (*ctx->poll_modify)(&old_info,
+                                &ctx->mcast_pinfo,
+                                ctx->user_data);
         return 0;
     }
-
 
     ts = rmc_usec_monotonic_timestamp();
 
@@ -97,8 +104,11 @@ static int _process_multicast_write(rmc_context_t* ctx)
 
     // Do we have more packets to send? If so, rearm new action
     // with both read and write.
-    ctx->sockets[RMC_MULTICAST_SOCKET_INDEX].poll_info.action =
+    ctx->mcast_pinfo.action =
         RMC_POLLREAD | (pub_next_queued_packet(pctx)?RMC_POLLWRITE:0);
+
+    if (ctx->poll_modify)
+        (*ctx->poll_modify)(&old_info, &ctx->mcast_pinfo, ctx->user_data);
 
     return 0;
 }
@@ -112,6 +122,10 @@ static int _process_tcp_write(rmc_context_t* ctx, rmc_socket_t* sock, uint32_t* 
     uint32_t seg2_len = 0;
     struct iovec iov[2];
     ssize_t res = 0;
+
+    // Is this socket being connected
+    if (sock->mode == RMC_SOCKET_MODE_CONNECTING) 
+        return rmc_complete_connect(ctx, sock);
 
     // Grab as much data as we can.
     // The call will only return available
@@ -155,6 +169,7 @@ static int _process_tcp_write(rmc_context_t* ctx, rmc_socket_t* sock, uint32_t* 
     return 0;
 }
 
+
 int rmc_write(rmc_context_t* ctx, rmc_poll_index_t p_ind)
 {
     int res = 0;
@@ -164,25 +179,26 @@ int rmc_write(rmc_context_t* ctx, rmc_poll_index_t p_ind)
     rmc_poll_t old_info;
     assert(ctx);
 
-    if (p_ind == RMC_MULTICAST_SOCKET_INDEX) {
-        res = _process_multicast_write(ctx);
-        return res;
+
+    if (p_ind == RMC_MULTICAST_INDEX) {
+        return _process_multicast_write(ctx);
     }
 
     // Is p_ind within our socket vector?
-    if (p_ind < 2 || p_ind >= RMC_MAX_SOCKETS)
+    if (p_ind >= RMC_MAX_SOCKETS)
         return EINVAL;
 
     if (ctx->sockets[p_ind].descriptor == -1)
         return ENOTCONN;
 
-    // We have incoming data on a tcp socket.
+    old_info = ctx->sockets[p_ind].poll_info;
+
+    // We are ready to write data.
     if (circ_buf_in_use(&ctx->sockets[p_ind].write_buf) == 0) 
         return ENODATA;
 
     res = _process_tcp_write(ctx, &ctx->sockets[p_ind], &bytes_left_after);
     
-    old_info = ctx->sockets[p_ind].poll_info;
     if (bytes_left_after == 0) 
         ctx->sockets[p_ind].poll_info.action &= ~RMC_POLLWRITE;
     else

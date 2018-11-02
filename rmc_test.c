@@ -27,9 +27,6 @@ int main(int argc, char* argv[])
     test_pub();
     test_sub();
 
-//    test_rmc_proto();
-    
+#warning "FIGURE OUT CONNECT COMPLETE"
+    test_rmc_proto();
 }
-
-
-

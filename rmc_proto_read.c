@@ -30,15 +30,20 @@ static inline rmc_socket_t* _find_publisher_by_address(rmc_context_t* ctx,
                                                        struct sockaddr_in* addr)
 {
     rmc_poll_index_t ind = 0;
+
+    // Do we have any sockets in use at all?
+    if (ctx->max_socket_ind == -1)
+        return 0;
     
     // FIXME: Replace with hash table search to speed up.
-    while(ind <= ctx->max_socket_ind) {
+    while(ind < ctx->max_socket_ind) {
         if (ctx->sockets[ind].descriptor != -1 &&
             !memcmp(&ctx->sockets[ind].remote_address, addr, sizeof(*addr)))
             return &ctx->sockets[ind];
 
         ++ind;
     }
+    return 0;
 }
 
 static int _decode_multicast(rmc_context_t* ctx,
@@ -102,12 +107,12 @@ static int _process_multicast_read(rmc_context_t* ctx)
     if (!ctx)
         return EINVAL;
 
-    if (ctx->sockets[RMC_MULTICAST_SOCKET_INDEX].descriptor == -1)
+    if (ctx->mcast_descriptor == -1)
         return ENOTCONN;
 
-    res = recvfrom(ctx->sockets[RMC_MULTICAST_SOCKET_INDEX].descriptor,
+    res = recvfrom(ctx->mcast_descriptor,
                    buffer, sizeof(buffer),
-                   MSG_DONTWAIT,
+                   0,
                    (struct sockaddr*) &src_addr, &addr_len);
 
     if (res == -1) {
@@ -131,7 +136,7 @@ static int _process_multicast_read(rmc_context_t* ctx)
     return _decode_multicast(ctx,
                              buffer + sizeof(payload_len_t),
                              payload_len,
-                             &sock->pubsub.publisher);
+                             &(sock->pubsub.publisher));
 }
 
 static int _process_cmd_packet(rmc_context_t* ctx, rmc_socket_t* sock, payload_len_t len)
@@ -279,17 +284,17 @@ int rmc_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
     if (!ctx)
         return EINVAL;
 
-    if (p_ind == RMC_MULTICAST_SOCKET_INDEX) {
+    if (p_ind == RMC_MULTICAST_INDEX) {
         res = _process_multicast_read(ctx);
     }
 
-    if (p_ind == RMC_LISTEN_SOCKET_INDEX) {
+    if (p_ind == RMC_LISTEN_INDEX) {
         res = rmc_process_accept(ctx, &p_ind);
         return res;
     }
 
     // Is c_ind within our socket vector?
-    if (p_ind < 2 || p_ind >= RMC_MAX_SOCKETS)
+    if (p_ind >= RMC_MAX_SOCKETS)
         return EINVAL;
 
     if (ctx->sockets[p_ind].descriptor == -1)

@@ -12,7 +12,9 @@
 #include <stdarg.h>
 #include <assert.h>
 #include <sys/epoll.h>
-
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 static void* _test_proto_alloc(payload_len_t plen)
 {
     void* res = malloc(plen);
@@ -53,24 +55,28 @@ void poll_remove(rmc_poll_t* poll, user_data_t udata)
 
 void test_rmc_proto(void)
 {
-    rmc_context_t ctx;
-    int res;
+    rmc_context_t* ctx1 = malloc(sizeof(rmc_context_t));
+    rmc_context_t* ctx2 = malloc(sizeof(rmc_context_t));
+    int res = 0;
     int send_sock = 0;
     int send_ind = 0;
     int rec_sock = 0;
     int rec_ind = 0;
-
-    sub_packet_t* pack;
+    sub_packet_t* pack = 0;
     int epollfd;
     struct epoll_event ev, events[RMC_MAX_SOCKETS];
-    user_data_t ud = { .ptr = &ctx };
+    user_data_t ud = { .ptr = ctx1 };
     epollfd = epoll_create1(0);
 
     if (epollfd == -1) {
         perror("epoll_create1");
         exit(255);
     }
-    rmc_init_context(&ctx, "239.0.0.1", 0, 4723, ud, poll_add, poll_modify, poll_remove, 0, 0);
+
+    rmc_init_context(ctx1, "239.0.0.1", 0, 4723, ud, poll_add, poll_modify, poll_remove, 0, 0);
+    rmc_init_context(ctx2, "239.0.0.1", 0, 4723, ud, poll_add, poll_modify, poll_remove, 0, 0);
+
+
 
 //    ev.events = EPOLLIN;
 //    ev.data.u32 = listen_sock;
@@ -109,13 +115,14 @@ void test_rmc_proto(void)
 //           }
 
 
-    _test("1.1", rmc_activate_context(&ctx));
+    _test("1.1", rmc_activate_context(ctx1));
+    _test("1.1", rmc_activate_context(ctx2));
+    
+    rmc_queue_packet(ctx1, "p1", 2);
+    rmc_write(ctx1, RMC_MULTICAST_INDEX);
+    rmc_read(ctx2, RMC_MULTICAST_INDEX);
 
-    rmc_queue_packet(&ctx, "p1", 2);
-    rmc_write(&ctx, RMC_MULTICAST_SOCKET_INDEX);
-    rmc_read(&ctx, RMC_MULTICAST_SOCKET_INDEX);
-
-    pack = rmc_get_next_ready_packet(&ctx);
+    pack = rmc_get_next_ready_packet(ctx2);
     if (!pack) {
         printf("RMC protocol test 3.1: No packet received\n");
         exit(255);
@@ -125,4 +132,6 @@ void test_rmc_proto(void)
         printf("RMC protocol test 3.2: Payload differ\n");
         exit(255);
     }
+
+    wait(0);
 }

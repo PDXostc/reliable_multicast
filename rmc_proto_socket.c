@@ -30,34 +30,37 @@
 // SOCKET SLOT MANAGEMENT
 // =============
 
-static int _get_free_slot(rmc_context_t* ctx)
+static rmc_poll_index_t _get_free_slot(rmc_context_t* ctx)
 {
-    int i = 2; // First two slots are pre-allocated for multicast and listen
+    rmc_poll_index_t ind = 0;
 
-    while(i < RMC_MAX_SOCKETS) {
-        if (ctx->sockets[i].descriptor == -1) {
-            if (ctx->max_socket_ind > i)
-                ctx->max_socket_ind = i;
+    while(ind < RMC_MAX_SOCKETS) {
+        if (ctx->sockets[ind].descriptor == -1) {
+            if (ctx->max_socket_ind > ind)
+                ctx->max_socket_ind = ind;
 
-            return i;
+            return ind;
         }            
-        ++i;
+        ++ind;
     }
+
     return -1;
 }
 
 static void _reset_max_socket_ind(rmc_context_t* ctx)
 {
-    int ind = RMC_MAX_SOCKETS;
+    rmc_poll_index_t ind = RMC_MAX_SOCKETS;
 
-    while(ind) {
+    while(ind--) {
         if (ctx->sockets[ind].descriptor != -1) {
             ctx->max_socket_ind = ind;
             return;
         }
     }
-    ctx->max_socket_ind = -1;
+    ctx->max_socket_ind = ind;
+    return;
 }
+
 
 
 void rmc_reset_socket(rmc_socket_t* sock, int index)
@@ -71,11 +74,49 @@ void rmc_reset_socket(rmc_socket_t* sock, int index)
     memset(&sock->remote_address, 0, sizeof(sock->remote_address));
 }
 
+// Complete async connect.
+int rmc_complete_connect(rmc_context_t* ctx, rmc_socket_t* sock)
+{
+    rmc_poll_t old_info;
+    int sock_err = 0;
+    socklen_t len = sizeof(sock_err);
+    if (!ctx || !sock)
+        return EINVAL;
+    
+    if (getsockopt(sock->descriptor,
+                   SOL_SOCKET,
+                   SO_ERROR,
+                   &sock_err,
+                   &len) == -1) 
+        // FIXME: Close
+        return errno;
+
+    if (sock_err != 0)
+        // FIXME: Close
+        return sock_err;
+    
+    old_info = sock->poll_info;
+
+    // We are subscribing to data from the publisher, which
+    // will resend failed multicast packets via tcp
+    sock->mode = RMC_SOCKET_MODE_SUBSCRIBER;
+
+    // We start off in reading mode
+    sock->poll_info.action = RMC_POLLREAD;
+
+    if (ctx->poll_modify)
+        (*ctx->poll_modify)(&old_info, &sock->poll_info, ctx->user_data);
+
+    return 0;
+}
+                               
 int rmc_connect_tcp_by_address(rmc_context_t* ctx,
                                struct sockaddr_in* sock_addr,
                                rmc_poll_index_t* result_index)
 {
     rmc_poll_index_t c_ind = -1;
+    int res = 0;
+    int err = 0;
 
     assert(ctx);
     assert(sock_addr);
@@ -90,24 +131,34 @@ int rmc_connect_tcp_by_address(rmc_context_t* ctx,
     if (ctx->sockets[c_ind].descriptor == -1)
         return errno;
  
-    ctx->sockets[c_ind].poll_info.action = RMC_POLLREAD;
 
-    if (connect(ctx->sockets[c_ind].descriptor,
-                (struct sockaddr*) sock_addr,
-                sizeof(*sock_addr))) {
-        perror("rmc_connect():connect()");
-        return errno;
+    res = connect(ctx->sockets[c_ind].descriptor,
+              (struct sockaddr*) sock_addr,
+              sizeof(*sock_addr));
+
+    if (res == -1 && errno != EINPROGRESS) {
+        err = errno; // Errno may be reset by close().
+        perror("rmc_connect(): connect()");
+        close(ctx->sockets[c_ind].descriptor);
+        ctx->sockets[c_ind].descriptor = -1;
+        _reset_max_socket_ind(ctx);
+        return err;
     }
 
-    // We are subscribing to data from the publisher, which
-    // will resend failed multicast packets via tcp
-    ctx->sockets[c_ind].mode = RMC_SOCKET_MODE_SUBSCRIBER;
     
+
+    memcpy(&ctx->sockets[c_ind].remote_address, sock_addr, sizeof(*sock_addr));
+
     sub_init_publisher(&ctx->sockets[c_ind].pubsub.publisher,
                        &ctx->sub_ctx,
                        &ctx->sockets[c_ind]);
 
-    memcpy(&ctx->sockets[c_ind].remote_address, sock_addr, sizeof(*sock_addr));
+    // We are subscribing to data from the publisher, which
+    // will resend failed multicast packets via tcp
+    ctx->sockets[c_ind].mode = RMC_SOCKET_MODE_CONNECTING;
+
+    // We will get write-ready when socket has been connected.
+    ctx->sockets[c_ind].poll_info.action = RMC_POLLWRITE;
 
     if (ctx->poll_add)
         (*ctx->poll_add)(&ctx->sockets[c_ind].poll_info, ctx->user_data);
@@ -157,7 +208,7 @@ int rmc_process_accept(rmc_context_t* ctx,
     if (c_ind == -1)
         return ENOMEM;
 
-    ctx->sockets[c_ind].descriptor = accept4(ctx->sockets[RMC_LISTEN_SOCKET_INDEX].descriptor,
+    ctx->sockets[c_ind].descriptor = accept4(ctx->listen_descriptor,
                                              (struct sockaddr*) &src_addr,
                                              &addr_len, SOCK_NONBLOCK);
 
@@ -188,7 +239,7 @@ int rmc_close_tcp(rmc_context_t* ctx, rmc_poll_index_t p_ind)
 {
 
     // Is p_ind within our socket vector?
-    if (p_ind < 2 || p_ind >= RMC_MAX_SOCKETS)
+    if (p_ind >= RMC_MAX_SOCKETS)
         return EINVAL;
 
     if (ctx->sockets[p_ind].descriptor == -1)
@@ -233,6 +284,11 @@ int rmc_get_poll_vector(rmc_context_t* ctx, rmc_poll_t* result, int* len)
 
     max_len = *len;
 
+    if (ctx->max_socket_ind == -1) {
+        *len = 0;
+        return 0;
+    }
+
     while(ind < ctx->max_socket_ind && res_ind < max_len) {
         if (ctx->sockets[ind].descriptor != -1)
             result[res_ind++] = ctx->sockets[ind].poll_info;
@@ -241,4 +297,5 @@ int rmc_get_poll_vector(rmc_context_t* ctx, rmc_poll_t* result, int* len)
     }
 
     *len = res_ind;
+    return 0;
 }
