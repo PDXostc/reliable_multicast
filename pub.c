@@ -43,7 +43,7 @@ static packet_id_t _next_pid(pub_context_t* ctx)
 
 void pub_init_context(pub_context_t* ctx,
                       user_data_t user_data, 
-                      void (*payload_free)(void*, payload_len_t, user_data_t user_data))
+                      void (*payload_free)(void*, payload_len_t, user_data_t))
 {
     assert(ctx);
 

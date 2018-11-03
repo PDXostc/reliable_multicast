@@ -27,6 +27,11 @@
 #include <assert.h>
 
 
+// FIXME: If we see timed out (== lost) packets from subscribers, we should
+//        switch them to TCP for a period of time in order
+//        to use TCP's flow control until congestion has eased.
+
+
 
 // =============
 // SOCKET WRITE
@@ -88,9 +93,8 @@ static int _process_multicast_write(rmc_context_t* ctx)
         // Would block. Re-arm and return success.
         ctx->mcast_pinfo.action = RMC_POLLREAD | RMC_POLLWRITE;
         if (ctx->poll_modify)
-            (*ctx->poll_modify)(&old_info,
-                                &ctx->mcast_pinfo,
-                                ctx->user_data);
+            (*ctx->poll_modify)(ctx, &old_info,
+                                &ctx->mcast_pinfo);
         return 0;
     }
 
@@ -108,7 +112,7 @@ static int _process_multicast_write(rmc_context_t* ctx)
         RMC_POLLREAD | (pub_next_queued_packet(pctx)?RMC_POLLWRITE:0);
 
     if (ctx->poll_modify)
-        (*ctx->poll_modify)(&old_info, &ctx->mcast_pinfo, ctx->user_data);
+        (*ctx->poll_modify)(ctx, &old_info, &ctx->mcast_pinfo);
 
     return 0;
 }
@@ -147,7 +151,7 @@ static int _process_tcp_write(rmc_context_t* ctx, rmc_socket_t* sock, uint32_t* 
     iov[1].iov_len = seg2_len;
 
     errno = 0;
-    res = writev(sock->descriptor, iov, seg2_len?2:1);
+    res = writev(sock->poll_info.descriptor, iov, seg2_len?2:1);
 
     // How did that write go?
     if (res == -1) { 
@@ -169,7 +173,6 @@ static int _process_tcp_write(rmc_context_t* ctx, rmc_socket_t* sock, uint32_t* 
     return 0;
 }
 
-
 int rmc_write(rmc_context_t* ctx, rmc_poll_index_t p_ind)
 {
     int res = 0;
@@ -188,7 +191,7 @@ int rmc_write(rmc_context_t* ctx, rmc_poll_index_t p_ind)
     if (p_ind >= RMC_MAX_SOCKETS)
         return EINVAL;
 
-    if (ctx->sockets[p_ind].descriptor == -1)
+    if (ctx->sockets[p_ind].poll_info.descriptor == -1)
         return ENOTCONN;
 
     old_info = ctx->sockets[p_ind].poll_info;
@@ -205,7 +208,7 @@ int rmc_write(rmc_context_t* ctx, rmc_poll_index_t p_ind)
         ctx->sockets[p_ind].poll_info.action |= RMC_POLLWRITE;
 
     if (ctx->poll_modify)
-        (*ctx->poll_modify)(&old_info, &ctx->sockets[p_ind].poll_info, ctx->user_data);
+        (*ctx->poll_modify)(ctx, &old_info, &ctx->sockets[p_ind].poll_info);
 
     return res;
 }
@@ -253,9 +256,7 @@ int rmc_proto_ack(rmc_context_t* ctx, rmc_socket_t* sock, sub_packet_t* pack)
             // Read poll is always active. Callback to re-arm.
         sock->poll_info.action |= RMC_POLLWRITE;
         if (ctx->poll_modify)
-            (*ctx->poll_modify)(&old_poll_info,
-                                &sock->poll_info,
-                                ctx->user_data);
+            (*ctx->poll_modify)(ctx, &old_poll_info, &sock->poll_info);
     }
     
 }

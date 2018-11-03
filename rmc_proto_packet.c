@@ -31,7 +31,21 @@ int rmc_queue_packet(rmc_context_t* ctx,
                      void* payload,
                      payload_len_t payload_len)
 {
+    rmc_poll_t old_info;
+
+    if (!ctx || !payload || !payload_len)
+        return EINVAL;
+    
+    // FIXME: Upper limit to how many packets we can queue before
+    //        returning ENOMEM
     pub_queue_packet(&ctx->pub_ctx, payload, payload_len);
+
+    old_info = ctx->mcast_pinfo;
+
+    ctx->mcast_pinfo.action |= RMC_POLLWRITE;
+
+    if (ctx->poll_modify) 
+        (*ctx->poll_modify)(ctx, &old_info, &ctx->mcast_pinfo);
 
     return 0;
 }

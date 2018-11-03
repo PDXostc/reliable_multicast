@@ -37,7 +37,7 @@ static inline rmc_socket_t* _find_publisher_by_address(rmc_context_t* ctx,
     
     // FIXME: Replace with hash table search to speed up.
     while(ind < ctx->max_socket_ind) {
-        if (ctx->sockets[ind].descriptor != -1 &&
+        if (ctx->sockets[ind].poll_info.descriptor != -1 &&
             !memcmp(&ctx->sockets[ind].remote_address, addr, sizeof(*addr)))
             return &ctx->sockets[ind];
 
@@ -74,7 +74,7 @@ static int _decode_multicast(rmc_context_t* ctx,
         // incoming payload.
         // Use malloc() if nothing is specified.
         if (ctx->payload_alloc)
-            payload = (*ctx->payload_alloc)(payload_len, ctx->user_data);
+            payload = (*ctx->payload_alloc)(ctx, payload_len);
         else
             payload = malloc(payload_len);
 
@@ -118,6 +118,21 @@ static int _process_multicast_read(rmc_context_t* ctx)
     if (res == -1) {
         perror("rmc_proto::rmc_read_multicast(): recvfrom()");
         return errno;
+    }
+
+
+    printf("_process_multicast_read(): %s:%d\n", inet_ntoa(src_addr.sin_addr), ntohs(src_addr.sin_port));
+    
+    // FIXME: REMOVE WHEN WE HAVE DELETED IP_MULTICAST_LOOP
+#warning FIXME: Bind multicast to specific interface so that we can detect loopback.
+    if (src_addr.sin_addr.s_addr == htons(INADDR_ANY) &&
+        src_addr.sin_port == ctx->mcast_local_addr.sin_port ) {
+        printf("_process_multicast_read(): Skipping loopback message\n");
+        if (ctx->poll_modify)
+            (*ctx->poll_modify)(ctx,
+                                &ctx->mcast_pinfo,
+                                &ctx->mcast_pinfo);
+        
     }
 
     sock = _find_publisher_by_address(ctx, &src_addr);
@@ -265,7 +280,7 @@ int _tcp_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
     iov[1].iov_base = seg2;
     iov[1].iov_len = seg2_len;
     
-    res = readv(sock->descriptor, iov, 2);
+    res = readv(sock->poll_info.descriptor, iov, 2);
 
     if (res == -1)
         return errno;
@@ -297,15 +312,16 @@ int rmc_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
     if (p_ind >= RMC_MAX_SOCKETS)
         return EINVAL;
 
-    if (ctx->sockets[p_ind].descriptor == -1)
+    if (ctx->sockets[p_ind].poll_info.descriptor == -1)
         return ENOTCONN;
 
     res = _tcp_read(ctx, p_ind);
     // Read poll is always active. Callback to re-arm.
     if (ctx->poll_modify)
-        (*ctx->poll_modify)(&ctx->sockets[p_ind].poll_info,
+        (*ctx->poll_modify)(ctx,
                             &ctx->sockets[p_ind].poll_info,
-                            ctx->user_data);
+                            &ctx->sockets[p_ind].poll_info);
+
 
     return res;
 }

@@ -35,7 +35,7 @@ static rmc_poll_index_t _get_free_slot(rmc_context_t* ctx)
     rmc_poll_index_t ind = 0;
 
     while(ind < RMC_MAX_SOCKETS) {
-        if (ctx->sockets[ind].descriptor == -1) {
+        if (ctx->sockets[ind].poll_info.descriptor == -1) {
             if (ctx->max_socket_ind > ind)
                 ctx->max_socket_ind = ind;
 
@@ -52,7 +52,7 @@ static void _reset_max_socket_ind(rmc_context_t* ctx)
     rmc_poll_index_t ind = RMC_MAX_SOCKETS;
 
     while(ind--) {
-        if (ctx->sockets[ind].descriptor != -1) {
+        if (ctx->sockets[ind].poll_info.descriptor != -1) {
             ctx->max_socket_ind = ind;
             return;
         }
@@ -67,14 +67,14 @@ void rmc_reset_socket(rmc_socket_t* sock, int index)
 {
     sock->poll_info.action = 0;
     sock->poll_info.rmc_index = index;
-    sock->descriptor = -1;
+    sock->poll_info.descriptor = -1;
     sock->mode = RMC_SOCKET_MODE_UNUSED;
     circ_buf_init(&sock->read_buf, sock->read_buf_data, sizeof(sock->read_buf_data));
     circ_buf_init(&sock->write_buf, sock->write_buf_data, sizeof(sock->write_buf_data));
     memset(&sock->remote_address, 0, sizeof(sock->remote_address));
 }
 
-// Complete async connect.
+// Complete async connect. Called from rmc_write().
 int rmc_complete_connect(rmc_context_t* ctx, rmc_socket_t* sock)
 {
     rmc_poll_t old_info;
@@ -83,7 +83,7 @@ int rmc_complete_connect(rmc_context_t* ctx, rmc_socket_t* sock)
     if (!ctx || !sock)
         return EINVAL;
     
-    if (getsockopt(sock->descriptor,
+    if (getsockopt(sock->poll_info.descriptor,
                    SOL_SOCKET,
                    SO_ERROR,
                    &sock_err,
@@ -105,7 +105,7 @@ int rmc_complete_connect(rmc_context_t* ctx, rmc_socket_t* sock)
     sock->poll_info.action = RMC_POLLREAD;
 
     if (ctx->poll_modify)
-        (*ctx->poll_modify)(&old_info, &sock->poll_info, ctx->user_data);
+        (*ctx->poll_modify)(ctx, &old_info, &sock->poll_info);
 
     return 0;
 }
@@ -126,29 +126,26 @@ int rmc_connect_tcp_by_address(rmc_context_t* ctx,
     if (c_ind == -1)
         return ENOMEM;
 
-    ctx->sockets[c_ind].descriptor = socket (AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    ctx->sockets[c_ind].poll_info.descriptor = socket (AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
 
-    if (ctx->sockets[c_ind].descriptor == -1)
+    if (ctx->sockets[c_ind].poll_info.descriptor == -1)
         return errno;
  
 
-    res = connect(ctx->sockets[c_ind].descriptor,
+    res = connect(ctx->sockets[c_ind].poll_info.descriptor,
               (struct sockaddr*) sock_addr,
               sizeof(*sock_addr));
 
     if (res == -1 && errno != EINPROGRESS) {
         err = errno; // Errno may be reset by close().
         perror("rmc_connect(): connect()");
-        close(ctx->sockets[c_ind].descriptor);
-        ctx->sockets[c_ind].descriptor = -1;
+        close(ctx->sockets[c_ind].poll_info.descriptor);
+        ctx->sockets[c_ind].poll_info.descriptor = -1;
         _reset_max_socket_ind(ctx);
         return err;
     }
 
-    
-
     memcpy(&ctx->sockets[c_ind].remote_address, sock_addr, sizeof(*sock_addr));
-
     sub_init_publisher(&ctx->sockets[c_ind].pubsub.publisher,
                        &ctx->sub_ctx,
                        &ctx->sockets[c_ind]);
@@ -161,7 +158,7 @@ int rmc_connect_tcp_by_address(rmc_context_t* ctx,
     ctx->sockets[c_ind].poll_info.action = RMC_POLLWRITE;
 
     if (ctx->poll_add)
-        (*ctx->poll_add)(&ctx->sockets[c_ind].poll_info, ctx->user_data);
+        (*ctx->poll_add)(ctx, &ctx->sockets[c_ind].poll_info);
 
     if (result_index)
         *result_index = c_ind;
@@ -208,11 +205,11 @@ int rmc_process_accept(rmc_context_t* ctx,
     if (c_ind == -1)
         return ENOMEM;
 
-    ctx->sockets[c_ind].descriptor = accept4(ctx->listen_descriptor,
+    ctx->sockets[c_ind].poll_info.descriptor = accept4(ctx->listen_descriptor,
                                              (struct sockaddr*) &src_addr,
                                              &addr_len, SOCK_NONBLOCK);
 
-    if (ctx->sockets[c_ind].descriptor == -1)
+    if (ctx->sockets[c_ind].poll_info.descriptor == -1)
         return errno;
 
 
@@ -224,7 +221,7 @@ int rmc_process_accept(rmc_context_t* ctx,
 
     ctx->sockets[c_ind].poll_info.action = RMC_POLLREAD;
     if (ctx->poll_add)
-        (*ctx->poll_add)(&ctx->sockets[c_ind].poll_info, ctx->user_data);
+        (*ctx->poll_add)(ctx, &ctx->sockets[c_ind].poll_info);
 
     if (result_index)
         *result_index = c_ind;
@@ -242,19 +239,19 @@ int rmc_close_tcp(rmc_context_t* ctx, rmc_poll_index_t p_ind)
     if (p_ind >= RMC_MAX_SOCKETS)
         return EINVAL;
 
-    if (ctx->sockets[p_ind].descriptor == -1)
+    if (ctx->sockets[p_ind].poll_info.descriptor == -1)
         return ENOTCONN;
 
-    if (shutdown(ctx->sockets[p_ind].descriptor, SHUT_RDWR) != 0)
+    if (shutdown(ctx->sockets[p_ind].poll_info.descriptor, SHUT_RDWR) != 0)
         return errno;
 
-    if (close(ctx->sockets[p_ind].descriptor) != 0)
+    if (close(ctx->sockets[p_ind].poll_info.descriptor) != 0)
         return errno;
 
     rmc_reset_socket(&ctx->sockets[p_ind], p_ind);
 
     if (ctx->poll_remove)
-        (*ctx->poll_remove)(&ctx->sockets[p_ind].poll_info, ctx->user_data);
+        (*ctx->poll_remove)(ctx, &ctx->sockets[p_ind].poll_info);
 
     if (p_ind == ctx->max_socket_ind)
         _reset_max_socket_ind(ctx);
@@ -290,7 +287,7 @@ int rmc_get_poll_vector(rmc_context_t* ctx, rmc_poll_t* result, int* len)
     }
 
     while(ind < ctx->max_socket_ind && res_ind < max_len) {
-        if (ctx->sockets[ind].descriptor != -1)
+        if (ctx->sockets[ind].poll_info.descriptor != -1)
             result[res_ind++] = ctx->sockets[ind].poll_info;
 
         ind++;

@@ -31,13 +31,23 @@ static void _reset_socket(rmc_socket_t* sock, int index)
 {
     sock->poll_info.action = 0;
     sock->poll_info.rmc_index = index;
-    sock->descriptor = -1;
+    sock->poll_info.descriptor = -1;
     sock->mode = RMC_SOCKET_MODE_UNUSED;
     circ_buf_init(&sock->read_buf, sock->read_buf_data, sizeof(sock->read_buf_data));
     circ_buf_init(&sock->write_buf, sock->write_buf_data, sizeof(sock->write_buf_data));
     memset(&sock->remote_address, 0, sizeof(sock->remote_address));
 }
 
+// Intermediate free function invoked by sub.c
+static inline void _payload_free(void* payload, payload_len_t len, user_data_t user_data)
+{
+    rmc_context_t* ctx = (rmc_context_t*) user_data.ptr;
+
+    if (*ctx->payload_free)
+        (*ctx->payload_free)(ctx, payload, len);
+    else
+        free(payload);
+}
 
 // =============
 // CONTEXT MANAGEMENT
@@ -47,11 +57,14 @@ int rmc_init_context(rmc_context_t* ctx,
                      char* listen_ip,
                      int port,
                      user_data_t user_data,
-                     void (*poll_add)(rmc_poll_t* poll, user_data_t user_data),
-                     void (*poll_modify)(rmc_poll_t* old_poll, rmc_poll_t* new_poll, user_data_t user_data), 
-                     void (*poll_remove)(rmc_poll_t* poll, user_data_t user_data),
-                     void* (*payload_alloc)(payload_len_t, user_data_t user_data),
-                     void (*payload_free)(void*, payload_len_t, user_data_t user_data)) {
+                     void (*poll_add)(rmc_context_t* context, rmc_poll_t* poll),
+                     void (*poll_modify)(rmc_context_t* context,
+                                         rmc_poll_t* old_poll,
+                                         rmc_poll_t* new_poll),
+
+                     void (*poll_remove)(rmc_context_t* context, rmc_poll_t* poll),
+                     void* (*payload_alloc)(rmc_context_t* context, payload_len_t payload_len),
+                     void (*payload_free)(rmc_context_t* context, void* payload, payload_len_t payload_len)) {
 
     
     int i = sizeof(ctx->sockets) / sizeof(ctx->sockets[0]);
@@ -75,12 +88,15 @@ int rmc_init_context(rmc_context_t* ctx,
     ctx->listen_descriptor = -1;
     ctx->mcast_pinfo.rmc_index = RMC_MULTICAST_INDEX;
     ctx->mcast_pinfo.action = 0;
+    ctx->mcast_pinfo.descriptor = -1;
     ctx->listen_pinfo.rmc_index = RMC_LISTEN_INDEX;
     ctx->listen_pinfo.action = 0;
+    ctx->mcast_pinfo.descriptor = -1;
 
     ctx->port = port;
     ctx->user_data = user_data;
     ctx->poll_add = poll_add;
+    ctx->poll_modify = poll_modify;
     ctx->poll_remove = poll_remove;
     ctx->payload_alloc = payload_alloc;
     ctx->payload_free = payload_free;
@@ -93,7 +109,9 @@ int rmc_init_context(rmc_context_t* ctx,
     // subscriber sends an ack back for the given pid.
     // When all subscribers have acknowledged,
     // outgoing_payload_free() is called to free the payload.
-    pub_init_context(&ctx->pub_ctx, ctx->user_data, payload_free);
+    pub_init_context(&ctx->pub_ctx,
+                     (user_data_t) { .ptr = ctx },
+                     _payload_free);
     sub_init_context(&ctx->sub_ctx, 0);
 
     return 0;
@@ -104,7 +122,8 @@ int rmc_activate_context(rmc_context_t* ctx)
 {
     struct sockaddr_in sock_addr;
     struct ip_mreq mreq;
-    int flag = 1;
+    int on_flag = 1;
+    int off_flag = 0;
 
     if (!ctx)
         return EINVAL;
@@ -120,17 +139,20 @@ int rmc_activate_context(rmc_context_t* ctx)
     }
 
     if (setsockopt(ctx->mcast_descriptor, SOL_SOCKET,
-                   SO_REUSEADDR, &flag, sizeof(flag)) < 0) {
+                   SO_REUSEADDR, &on_flag, sizeof(on_flag)) < 0) {
         perror("rmc_activate_context(): setsockopt(REUSEADDR)");
         goto error;
     }
 
-    if (setsockopt(ctx->mcast_descriptor, IPPROTO_IP,
-                   SO_REUSEPORT, &flag, sizeof(flag)) < 0) {
+    if (setsockopt(ctx->mcast_descriptor, SOL_SOCKET,
+                   SO_REUSEPORT, &on_flag, sizeof(on_flag)) < 0) {
         perror("rmc_activate_context(): setsockopt(SO_REUSEPORT)");
         goto error;
     }
 
+
+
+    
     // Join multicast group
     if (!inet_aton(ctx->multicast_addr, &mreq.imr_multiaddr))
         goto error;
@@ -144,21 +166,37 @@ int rmc_activate_context(rmc_context_t* ctx)
         goto error;
     }
 
-    sock_addr.sin_family = AF_INET;
-    sock_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    sock_addr.sin_port = htons(ctx->port);
+    memset((void*) &ctx->mcast_local_addr, 0, sizeof(ctx->mcast_local_addr));
+    ctx->mcast_local_addr.sin_family = AF_INET;
+    ctx->mcast_local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    ctx->mcast_local_addr.sin_port = htons(ctx->port);
     if (bind(ctx->mcast_descriptor,
-             (struct sockaddr *) &sock_addr, sizeof(sock_addr)) < 0) {
+             (struct sockaddr *) &ctx->mcast_local_addr,
+             sizeof(ctx->mcast_local_addr)) < 0) {
         perror("rmc_listen(): bind()");
         return errno;
     }
-
 
     // setup remote endpoint
     memset((void*) &ctx->mcast_dest_addr, 0, sizeof(ctx->mcast_dest_addr));
     ctx->mcast_dest_addr.sin_family = AF_INET;
     ctx->mcast_dest_addr.sin_addr = mreq.imr_multiaddr;
     ctx->mcast_dest_addr.sin_port = htons(ctx->port);
+
+    // FIXME: We need IP_MULTICAST_LOOP if other processes on the same
+    //        host are to receive sent packets. We need to figure out
+    //        a wayu to transmit mcast data between two processes on
+    //        the same host without having to use IP_MULTICAST_LOOP
+    //        since its presence will trigger a spurious mcast read
+    //        for every send that a process does.
+    //        See _process_multicast_read() which now checks for and
+    //        discards loopback data.
+    //
+    if (setsockopt(ctx->mcast_descriptor,
+                   IPPROTO_IP, IP_MULTICAST_LOOP, &on_flag, sizeof(on_flag)) < 0) {
+        perror("rmc_activate_context(): setsockopt(IP_MULTICAST_LOOP)");
+        goto error;
+    }
 
     // 
     // Setup TCP listen
@@ -170,13 +208,13 @@ int rmc_activate_context(rmc_context_t* ctx)
     }
 
     if (setsockopt(ctx->listen_descriptor, SOL_SOCKET,
-                   SO_REUSEADDR, &flag, sizeof(flag)) < 0) {
+                   SO_REUSEADDR, &on_flag, sizeof(on_flag)) < 0) {
         perror("rmc_activate_context(): setsockopt(REUSEADDR)");
         goto error;
     }
 
     if (setsockopt(ctx->listen_descriptor, SOL_SOCKET,
-                   SO_REUSEPORT, &flag, sizeof(flag)) < 0) {
+                   SO_REUSEPORT, &on_flag, sizeof(on_flag)) < 0) {
         perror("rmc_activate_context(): setsockopt(SO_REUSEPORT)");
         goto error;
     }
@@ -208,11 +246,13 @@ int rmc_activate_context(rmc_context_t* ctx)
     ctx->socket_count += 2;
 
     ctx->mcast_pinfo.action = RMC_POLLREAD;
+    ctx->mcast_pinfo.descriptor = ctx->mcast_descriptor;
     ctx->listen_pinfo.action = RMC_POLLREAD;
+    ctx->listen_pinfo.descriptor = ctx->listen_descriptor;
 
     if (ctx->poll_add) {
-        (*ctx->poll_add)(&ctx->mcast_pinfo, ctx->user_data);
-        (*ctx->poll_add)(&ctx->listen_pinfo, ctx->user_data);
+        (*ctx->poll_add)(ctx, &ctx->mcast_pinfo);
+        (*ctx->poll_add)(ctx, &ctx->listen_pinfo);
     }
 
     return 0;
@@ -221,12 +261,14 @@ error:
     if (ctx->mcast_descriptor != -1) {
         close(ctx->mcast_descriptor);
         ctx->mcast_descriptor = -1;
+        ctx->mcast_pinfo.descriptor = -1;
     }
     
 
-    if (ctx->mcast_descriptor != -1) {
+    if (ctx->listen_descriptor != -1) {
         close(ctx->listen_descriptor);
         ctx->listen_descriptor = -1;
+        ctx->listen_pinfo.descriptor = -1;
     }
 
     return errno;
@@ -238,11 +280,19 @@ int rmc_deactivate_context(rmc_context_t* ctx)
 }
 
 
-int user_data(rmc_context_t* ctx, user_data_t *result)
+user_data_t rmc_user_data(rmc_context_t* ctx)
 {
-    if (!ctx || !result)
+    if (!ctx)
+        return (user_data_t) { .u64 = 0 };
+
+    return ctx->user_data;
+}
+
+int rmc_set_user_data(rmc_context_t* ctx, user_data_t user_data)
+{
+    if (!ctx)
         return EINVAL;
 
-    *result = ctx->user_data;
+    ctx->user_data = user_data;
     return 0;
 }

@@ -12,7 +12,7 @@ extern void test_packet_intervals();
 extern void run_list_tests();
 extern void test_pub(void);
 extern void test_sub(void);
-extern void test_rmc_proto(void);
+extern void test_rmc_proto(int subs_flag);
 extern void test_circular_buffer(void);
 
 
@@ -27,6 +27,6 @@ int main(int argc, char* argv[])
     test_pub();
     test_sub();
 
-#warning "FIGURE OUT CONNECT COMPLETE"
-    test_rmc_proto();
+    // If we have an argument, we will be the subscriber.
+    test_rmc_proto((argc==2)?1:0);
 }
