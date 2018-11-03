@@ -103,14 +103,19 @@ static int _process_multicast_read(rmc_context_t* ctx)
     ssize_t res;
     int sock_ind = 0;
     rmc_socket_t* sock = 0;
+    rmc_poll_t pinfo = {
+        .action = RMC_POLLREAD,
+        .descriptor = ctx->mcast_recv_descriptor,
+        .rmc_index = RMC_MULTICAST_RECV_INDEX
+    };
 
     if (!ctx)
         return EINVAL;
 
-    if (ctx->mcast_descriptor == -1)
+    if (ctx->mcast_recv_descriptor == -1)
         return ENOTCONN;
 
-    res = recvfrom(ctx->mcast_descriptor,
+    res = recvfrom(ctx->mcast_recv_descriptor,
                    buffer, sizeof(buffer),
                    0,
                    (struct sockaddr*) &src_addr, &addr_len);
@@ -124,15 +129,11 @@ static int _process_multicast_read(rmc_context_t* ctx)
     printf("_process_multicast_read(): %s:%d\n", inet_ntoa(src_addr.sin_addr), ntohs(src_addr.sin_port));
     
     // FIXME: REMOVE WHEN WE HAVE DELETED IP_MULTICAST_LOOP
-#warning FIXME: Bind multicast to specific interface so that we can detect loopback.
-    if (src_addr.sin_addr.s_addr == htons(INADDR_ANY) &&
+    if (src_addr.sin_addr.s_addr == ctx->mcast_local_addr.sin_addr.s_addr &&
         src_addr.sin_port == ctx->mcast_local_addr.sin_port ) {
         printf("_process_multicast_read(): Skipping loopback message\n");
         if (ctx->poll_modify)
-            (*ctx->poll_modify)(ctx,
-                                &ctx->mcast_pinfo,
-                                &ctx->mcast_pinfo);
-        
+            (*ctx->poll_modify)(ctx, &pinfo, &pinfo);
     }
 
     sock = _find_publisher_by_address(ctx, &src_addr);
@@ -296,10 +297,11 @@ int _tcp_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
 int rmc_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
 {
     int res = 0;
+
     if (!ctx)
         return EINVAL;
 
-    if (p_ind == RMC_MULTICAST_INDEX) {
+    if (p_ind == RMC_MULTICAST_RECV_INDEX) {
         res = _process_multicast_read(ctx);
     }
 
@@ -317,11 +319,14 @@ int rmc_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
 
     res = _tcp_read(ctx, p_ind);
     // Read poll is always active. Callback to re-arm.
-    if (ctx->poll_modify)
-        (*ctx->poll_modify)(ctx,
-                            &ctx->sockets[p_ind].poll_info,
-                            &ctx->sockets[p_ind].poll_info);
-
+    if (ctx->poll_modify) {
+        rmc_poll_t pinfo = {
+            .action = RMC_POLLREAD,
+            .descriptor = ctx->sockets[p_ind].poll_info.descriptor,
+            .rmc_index = p_ind
+        };
+        (*ctx->poll_modify)(ctx, &pinfo, &pinfo);
+    }
 
     return res;
 }

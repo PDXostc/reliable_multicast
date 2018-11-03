@@ -54,7 +54,12 @@ static inline void _payload_free(void* payload, payload_len_t len, user_data_t u
 // =============
 int rmc_init_context(rmc_context_t* ctx,
                      char* multicast_addr,
-                     char* listen_ip,
+                     // Interface IP to bind mcast to. Must be set.
+                     char* multicast_if_ip, 
+
+                     // IP address to listen to for incoming subscription
+                     // connection from subscribers receiving multicast packets
+                     char* listen_if_ip, 
                      int port,
                      user_data_t user_data,
                      void (*poll_add)(rmc_context_t* context, rmc_poll_t* poll),
@@ -67,31 +72,31 @@ int rmc_init_context(rmc_context_t* ctx,
                      void (*payload_free)(rmc_context_t* context, void* payload, payload_len_t payload_len)) {
 
     
-    int i = sizeof(ctx->sockets) / sizeof(ctx->sockets[0]);
+    int ind = 0;
 
-    assert(ctx);
+    if (!ctx || !multicast_if_ip || !multicast_addr)
+        return EINVAL;
 
-    while(i--) 
-        _reset_socket(&ctx->sockets[i], i);
+    ind = sizeof(ctx->sockets) / sizeof(ctx->sockets[0]);
+    while(ind--) 
+        _reset_socket(&ctx->sockets[ind], ind);
     
     strncpy(ctx->multicast_addr, multicast_addr, sizeof(ctx->multicast_addr));
     ctx->multicast_addr[sizeof(ctx->multicast_addr)-1] = 0;
+
+    strncpy(ctx->multicast_if_ip, multicast_if_ip, sizeof(ctx->multicast_if_ip));
+    ctx->multicast_if_ip[sizeof(ctx->multicast_if_ip)-1] = 0;
     
 
-    if (listen_ip) {
-        strncpy(ctx->listen_ip, listen_ip, sizeof(ctx->listen_ip));
-        ctx->listen_ip[sizeof(ctx->listen_ip)-1] = 0;
+    if (listen_if_ip) {
+        strncpy(ctx->listen_if_ip, listen_if_ip, sizeof(ctx->listen_if_ip));
+        ctx->listen_if_ip[sizeof(ctx->listen_if_ip)-1] = 0;
     } else
-        ctx->listen_ip[0] = 0;
+        ctx->listen_if_ip[0] = 0;
 
-    ctx->mcast_descriptor = -1;
+    ctx->mcast_send_descriptor = -1;
+    ctx->mcast_recv_descriptor = -1;
     ctx->listen_descriptor = -1;
-    ctx->mcast_pinfo.rmc_index = RMC_MULTICAST_INDEX;
-    ctx->mcast_pinfo.action = 0;
-    ctx->mcast_pinfo.descriptor = -1;
-    ctx->listen_pinfo.rmc_index = RMC_LISTEN_INDEX;
-    ctx->listen_pinfo.action = 0;
-    ctx->mcast_pinfo.descriptor = -1;
 
     ctx->port = port;
     ctx->user_data = user_data;
@@ -112,6 +117,7 @@ int rmc_init_context(rmc_context_t* ctx,
     pub_init_context(&ctx->pub_ctx,
                      (user_data_t) { .ptr = ctx },
                      _payload_free);
+
     sub_init_context(&ctx->sub_ctx, 0);
 
     return 0;
@@ -121,6 +127,7 @@ int rmc_init_context(rmc_context_t* ctx,
 int rmc_activate_context(rmc_context_t* ctx)
 {
     struct sockaddr_in sock_addr;
+    socklen_t sock_len = sizeof(struct sockaddr_in);
     struct ip_mreq mreq;
     int on_flag = 1;
     int off_flag = 0;
@@ -128,56 +135,79 @@ int rmc_activate_context(rmc_context_t* ctx)
     if (!ctx)
         return EINVAL;
 
-    if (ctx->mcast_descriptor != -1)
+    if (ctx->mcast_recv_descriptor != -1)
         return EEXIST;
 
-    ctx->mcast_descriptor = socket (AF_INET, SOCK_DGRAM, 0);
+    //
+    // Setup the multicast receiver socket.
+    //
+    ctx->mcast_recv_descriptor = socket (AF_INET, SOCK_DGRAM, 0);
 
-    if (ctx->mcast_descriptor == -1) {
-        perror("rmc_activate_context(): socket(multicast)");
+    if (ctx->mcast_recv_descriptor == -1) {
+        perror("rmc_activate_context(multicast_recv): socket()");
         goto error;
     }
 
-    if (setsockopt(ctx->mcast_descriptor, SOL_SOCKET,
-                   SO_REUSEADDR, &on_flag, sizeof(on_flag)) < 0) {
-        perror("rmc_activate_context(): setsockopt(REUSEADDR)");
-        goto error;
-    }
-
-    if (setsockopt(ctx->mcast_descriptor, SOL_SOCKET,
+    if (setsockopt(ctx->mcast_recv_descriptor, SOL_SOCKET,
                    SO_REUSEPORT, &on_flag, sizeof(on_flag)) < 0) {
-        perror("rmc_activate_context(): setsockopt(SO_REUSEPORT)");
+        perror("rmc_activate_context(multicast_recv): setsockopt(SO_REUSEPORT)");
         goto error;
     }
 
-
-
-    
     // Join multicast group
     if (!inet_aton(ctx->multicast_addr, &mreq.imr_multiaddr))
         goto error;
 
-
     mreq.imr_interface.s_addr = htonl(INADDR_ANY);
 
-    if (setsockopt(ctx->mcast_descriptor,
+    if (setsockopt(ctx->mcast_recv_descriptor,
                    IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
-        perror("rmc_activate_context(): setsockopt(IP_ADD_MEMBERSHIP)");
+        perror("rmc_activate_context(multicast_recv): setsockopt(IP_ADD_MEMBERSHIP)");
         goto error;
     }
 
-    memset((void*) &ctx->mcast_local_addr, 0, sizeof(ctx->mcast_local_addr));
-    ctx->mcast_local_addr.sin_family = AF_INET;
-    ctx->mcast_local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    ctx->mcast_local_addr.sin_port = htons(ctx->port);
-    if (bind(ctx->mcast_descriptor,
-             (struct sockaddr *) &ctx->mcast_local_addr,
-             sizeof(ctx->mcast_local_addr)) < 0) {
-        perror("rmc_listen(): bind()");
+    memset((void*) &sock_addr, 0, sizeof(sock_addr));
+    sock_addr.sin_family = AF_INET;
+    if (inet_aton(ctx->multicast_if_ip, &sock_addr.sin_addr) != 1) {
+        errno = EFAULT;
+        goto error;
+    }
+    sock_addr.sin_port = htons(ctx->port);
+
+    if (bind(ctx->mcast_recv_descriptor,
+             (struct sockaddr *) &sock_addr,
+             sizeof(sock_addr)) < 0) {
+        perror("rmc_listen(multicast_recv): bind()");
         return errno;
     }
 
-    // setup remote endpoint
+    // FIXME: We need IP_MULTICAST_LOOP if other processes on the same
+    //        host are to receive sent packets. We need to figure out
+    //        a wayu to transmit mcast data between two processes on
+    //        the same host without having to use IP_MULTICAST_LOOP
+    //        since its presence will trigger a spurious mcast read
+    //        for every send that a process does.
+    //        See _process_multicast_read() which now checks for and
+    //        discards loopback data.
+    //
+    if (setsockopt(ctx->mcast_recv_descriptor,
+                   IPPROTO_IP, IP_MULTICAST_LOOP, &on_flag, sizeof(on_flag)) < 0) {
+        perror("rmc_activate_context(): setsockopt(IP_MULTICAST_LOOP)");
+        goto error;
+    }
+
+    //
+    // Setup udp send edscriptor to be received by multicast members.
+    //
+    ctx->mcast_send_descriptor = socket (AF_INET, SOCK_DGRAM, 0);
+
+    if (ctx->mcast_send_descriptor == -1) {
+        perror("rmc_activate_context(): socket(multicast)");
+        goto error;
+    }
+
+
+    // setup destination address to be used by _process_multicast_write
     memset((void*) &ctx->mcast_dest_addr, 0, sizeof(ctx->mcast_dest_addr));
     ctx->mcast_dest_addr.sin_family = AF_INET;
     ctx->mcast_dest_addr.sin_addr = mreq.imr_multiaddr;
@@ -192,11 +222,14 @@ int rmc_activate_context(rmc_context_t* ctx)
     //        See _process_multicast_read() which now checks for and
     //        discards loopback data.
     //
-    if (setsockopt(ctx->mcast_descriptor,
+    if (setsockopt(ctx->mcast_send_descriptor,
                    IPPROTO_IP, IP_MULTICAST_LOOP, &on_flag, sizeof(on_flag)) < 0) {
         perror("rmc_activate_context(): setsockopt(IP_MULTICAST_LOOP)");
         goto error;
     }
+
+    memset((void*) &ctx->mcast_local_addr, 0, sizeof(ctx->mcast_local_addr));
+    getsockname(ctx->mcast_send_descriptor, &ctx->mcast_local_addr, &sock_len);
 
     // 
     // Setup TCP listen
@@ -223,8 +256,8 @@ int rmc_activate_context(rmc_context_t* ctx)
     // Bind to local endpoint.
     sock_addr.sin_family = AF_INET;
 
-    if (ctx->listen_ip[0] &&
-        inet_aton(ctx->listen_ip, &sock_addr.sin_addr) != 1) {
+    if (ctx->listen_if_ip[0] &&
+        inet_aton(ctx->listen_if_ip, &sock_addr.sin_addr) != 1) {
         errno = EFAULT;
         goto error;
     }
@@ -243,32 +276,42 @@ int rmc_activate_context(rmc_context_t* ctx)
         goto error;
     }
 
-    ctx->socket_count += 2;
-
-    ctx->mcast_pinfo.action = RMC_POLLREAD;
-    ctx->mcast_pinfo.descriptor = ctx->mcast_descriptor;
-    ctx->listen_pinfo.action = RMC_POLLREAD;
-    ctx->listen_pinfo.descriptor = ctx->listen_descriptor;
 
     if (ctx->poll_add) {
-        (*ctx->poll_add)(ctx, &ctx->mcast_pinfo);
-        (*ctx->poll_add)(ctx, &ctx->listen_pinfo);
+        rmc_poll_t pinfo;
+
+        pinfo.descriptor = ctx->mcast_send_descriptor;
+        pinfo.action = 0;
+        pinfo.rmc_index = RMC_MULTICAST_SEND_INDEX;
+        (*ctx->poll_add)(ctx, &pinfo);
+
+        pinfo.descriptor = ctx->mcast_recv_descriptor;
+        pinfo.action = RMC_POLLREAD;
+        pinfo.rmc_index = RMC_MULTICAST_RECV_INDEX;
+        (*ctx->poll_add)(ctx, &pinfo);
+
+        pinfo.descriptor = ctx->listen_descriptor;
+        pinfo.action = RMC_POLLREAD;
+        pinfo.rmc_index = RMC_LISTEN_INDEX;
+        (*ctx->poll_add)(ctx, &pinfo);
     }
 
     return 0;
 
 error:
-    if (ctx->mcast_descriptor != -1) {
-        close(ctx->mcast_descriptor);
-        ctx->mcast_descriptor = -1;
-        ctx->mcast_pinfo.descriptor = -1;
+    if (ctx->mcast_recv_descriptor != -1) {
+        close(ctx->mcast_recv_descriptor);
+        ctx->mcast_recv_descriptor = -1;
     }
     
+    if (ctx->mcast_send_descriptor != -1) {
+        close(ctx->mcast_send_descriptor);
+        ctx->mcast_send_descriptor = -1;
+    }
 
     if (ctx->listen_descriptor != -1) {
         close(ctx->listen_descriptor);
         ctx->listen_descriptor = -1;
-        ctx->listen_pinfo.descriptor = -1;
     }
 
     return errno;

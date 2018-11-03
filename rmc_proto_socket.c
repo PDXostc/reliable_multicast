@@ -223,6 +223,16 @@ int rmc_process_accept(rmc_context_t* ctx,
     if (ctx->poll_add)
         (*ctx->poll_add)(ctx, &ctx->sockets[c_ind].poll_info);
 
+    if (ctx->poll_modify)  {
+        rmc_poll_t rd_info = {
+            .action = RMC_POLLREAD,
+            .descriptor = ctx->listen_descriptor,
+            .rmc_index = RMC_LISTEN_INDEX
+        };
+
+        (*ctx->poll_modify)(ctx, &rd_info, &rd_info);
+    }
+    
     if (result_index)
         *result_index = c_ind;
 

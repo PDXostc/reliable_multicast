@@ -19,15 +19,14 @@
 static char* _index(rmc_poll_index_t index, char* res)
 {
     switch(index) {
-    case RMC_MULTICAST_INDEX:
-        return strcpy(res, "mcast");
+    case RMC_MULTICAST_SEND_INDEX:
+        return strcpy(res, "mcast_send");
 
-        break;
+    case RMC_MULTICAST_RECV_INDEX:
+        return strcpy(res, "mcast_recv");
 
     case RMC_LISTEN_INDEX:
         return strcpy(res, "listen");
-
-        break;
 
     default:
         sprintf(res, "%.3d", index);
@@ -159,7 +158,7 @@ void test_rmc_proto(int subs_flag)
 
     ctx = malloc(sizeof(rmc_context_t));
 
-    rmc_init_context(ctx, "239.0.0.1", 0, 4723, (user_data_t) { .i32 = epollfd },
+    rmc_init_context(ctx, "239.0.0.1", "127.0.0.1", 0, 4723, (user_data_t) { .i32 = epollfd },
                      poll_add, poll_modify, poll_remove, 0, 0);
     
 

@@ -31,21 +31,38 @@ int rmc_queue_packet(rmc_context_t* ctx,
                      void* payload,
                      payload_len_t payload_len)
 {
-    rmc_poll_t old_info;
+    pub_packet_t *pack = pub_next_queued_packet(&ctx->pub_ctx);
 
     if (!ctx || !payload || !payload_len)
         return EINVAL;
+    
     
     // FIXME: Upper limit to how many packets we can queue before
     //        returning ENOMEM
     pub_queue_packet(&ctx->pub_ctx, payload, payload_len);
 
-    old_info = ctx->mcast_pinfo;
 
-    ctx->mcast_pinfo.action |= RMC_POLLWRITE;
 
-    if (ctx->poll_modify) 
-        (*ctx->poll_modify)(ctx, &old_info, &ctx->mcast_pinfo);
+    if (ctx->poll_modify)  {
+        rmc_poll_t wr_info = {
+            .action = RMC_POLLWRITE,
+            .descriptor = ctx->mcast_send_descriptor,
+            .rmc_index = RMC_MULTICAST_SEND_INDEX
+        };
+        rmc_poll_t nil_info = {
+            .action = 0,
+            .descriptor = ctx->mcast_send_descriptor,
+            .rmc_index = RMC_MULTICAST_SEND_INDEX
+        };
+
+        // Did we already have a packet pending for send prior
+        // to queueing the lastest packet?
+        if (pack)
+            (*ctx->poll_modify)(ctx, &wr_info, &wr_info);
+ 
+        else
+            (*ctx->poll_modify)(ctx, &nil_info, &wr_info);
+    }
 
     return 0;
 }

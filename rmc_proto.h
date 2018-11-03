@@ -49,7 +49,8 @@ typedef uint32_t rmc_poll_index_t;
 
 #define RMC_POLLREAD 0x01
 #define RMC_POLLWRITE 0x02
-#define RMC_MULTICAST_INDEX 0xFFFFFFFE
+#define RMC_MULTICAST_RECV_INDEX 0xFFFFFFFD
+#define RMC_MULTICAST_SEND_INDEX 0xFFFFFFFE
 #define RMC_LISTEN_INDEX 0xFFFFFFFF
 
 
@@ -142,15 +143,15 @@ typedef struct rmc_context {
 
     int port; // Used both for TCP listen and mcast.
     char multicast_addr[256];
-    struct sockaddr_in mcast_dest_addr;
+    char multicast_if_ip[80];
     struct sockaddr_in mcast_local_addr;
+    struct sockaddr_in mcast_dest_addr;
 
-    int mcast_descriptor;
-    rmc_poll_t mcast_pinfo;
+    int mcast_recv_descriptor;
+    int mcast_send_descriptor;
 
-    char listen_ip[80];
+    char listen_if_ip[80];
     int listen_descriptor;
-    rmc_poll_t listen_pinfo;
 
     // Once we have sent a packet how long do we wait for an ack, in usec, until
     // we resend it?
@@ -179,7 +180,12 @@ typedef struct rmc_context {
 extern int rmc_init_context(rmc_context_t* context,
                             char* multicast_addr,  // Domain name or IP
 
-                            char* listen_ip, // For subscription management over TCP. 0 = IPADDR_ANY
+                            // Interface IP to bind mcast to. Must be set.
+                            char* multicast_if_ip, 
+
+                            // IP address to listen to for incoming subscription
+                            // connection from subscribers receiving multicast packets
+                            char* listen_if_ip, 
 
                             int port, // Used for local listen TCP and multicast port
 

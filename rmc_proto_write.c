@@ -47,9 +47,8 @@ static int _process_multicast_write(rmc_context_t* ctx)
     usec_timestamp_t ts = 0;
     pub_packet_list_t snd_list;
     ssize_t res = 0;
-    rmc_poll_t old_info;
 
-    if (ctx->mcast_descriptor == -1)
+    if (ctx->mcast_send_descriptor == -1)
         return ENOTCONN;
 
     *hdr_len = 0;
@@ -77,9 +76,8 @@ static int _process_multicast_write(rmc_context_t* ctx)
         pnode = pub_packet_list_next(pack->parent_node);
         pack = pnode?pnode->data:0;
     }
-    old_info = ctx->mcast_pinfo;
 
-    res = sendto(ctx->mcast_descriptor,
+    res = sendto(ctx->mcast_send_descriptor,
                  packet,
                  sizeof(payload_len_t) + *hdr_len,
                  MSG_DONTWAIT,
@@ -90,11 +88,15 @@ static int _process_multicast_write(rmc_context_t* ctx)
         if ( errno != EAGAIN && errno != EWOULDBLOCK)
             return errno;
 
-        // Would block. Re-arm and return success.
-        ctx->mcast_pinfo.action = RMC_POLLREAD | RMC_POLLWRITE;
-        if (ctx->poll_modify)
-            (*ctx->poll_modify)(ctx, &old_info,
-                                &ctx->mcast_pinfo);
+        if (ctx->poll_modify) {
+            rmc_poll_t pinfo = {
+                .action = RMC_POLLWRITE,
+                .descriptor = ctx->mcast_send_descriptor,
+                .rmc_index = RMC_MULTICAST_SEND_INDEX
+            };
+
+            (*ctx->poll_modify)(ctx, &pinfo, &pinfo);
+        }
         return 0;
     }
 
@@ -106,14 +108,25 @@ static int _process_multicast_write(rmc_context_t* ctx)
     while(pub_packet_list_pop_head(&snd_list, &pack))
         pub_packet_sent(pctx, pack, ts);
 
-    // Do we have more packets to send? If so, rearm new action
-    // with both read and write.
-    ctx->mcast_pinfo.action =
-        RMC_POLLREAD | (pub_next_queued_packet(pctx)?RMC_POLLWRITE:0);
 
-    if (ctx->poll_modify)
-        (*ctx->poll_modify)(ctx, &old_info, &ctx->mcast_pinfo);
+    if (ctx->poll_modify) {
+        rmc_poll_t wr_info = {
+            .action = RMC_POLLWRITE,
+            .descriptor = ctx->mcast_send_descriptor,
+            .rmc_index = RMC_MULTICAST_SEND_INDEX
+        };
+        rmc_poll_t nil_info = {
+            .action = 0,
+            .descriptor = ctx->mcast_send_descriptor,
+            .rmc_index = RMC_MULTICAST_SEND_INDEX
+        };
 
+        // Do we have more packets to send?
+        if (pub_next_queued_packet(pctx))
+            (*ctx->poll_modify)(ctx, &wr_info, &wr_info);
+        else
+            (*ctx->poll_modify)(ctx, &wr_info, &nil_info);
+    }
     return 0;
 }
 
@@ -183,7 +196,7 @@ int rmc_write(rmc_context_t* ctx, rmc_poll_index_t p_ind)
     assert(ctx);
 
 
-    if (p_ind == RMC_MULTICAST_INDEX) {
+    if (p_ind == RMC_MULTICAST_SEND_INDEX) {
         return _process_multicast_write(ctx);
     }
 
