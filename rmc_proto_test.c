@@ -74,10 +74,12 @@ void poll_add(rmc_context_t* ctx, rmc_poll_t* poll)
     if (poll->action & RMC_POLLWRITE)
         ev.events |= EPOLLOUT;
 
-    printf("poll_add(%s)%s%s\n",
+    printf("poll_add(%s)%s%s%s\n",
            _index(poll->rmc_index, buf),
            ((poll->action & RMC_POLLREAD)?" read":""),
-           ((poll->action & RMC_POLLWRITE)?" write":""));
+           ((poll->action & RMC_POLLWRITE)?" write":""),
+           (!(poll->action & (RMC_POLLREAD | RMC_POLLWRITE)))?" [none]":"");
+
 
     if (epoll_ctl(epollfd, EPOLL_CTL_ADD, poll->descriptor, &ev) == -1) {
         perror("epoll_ctl(add)");
@@ -100,10 +102,11 @@ void poll_modify(rmc_context_t* ctx, rmc_poll_t* old_poll, rmc_poll_t* new_poll)
     if (new_poll->action & RMC_POLLWRITE)
         ev.events |= EPOLLOUT;
 
-    printf("poll_modify(%s)%s%s\n",
+    printf("poll_modify(%s)%s%s%s\n",
            _index(new_poll->rmc_index, buf),
            ((new_poll->action & RMC_POLLREAD)?" read":""),
-           ((new_poll->action & RMC_POLLWRITE)?" write":""));
+           ((new_poll->action & RMC_POLLWRITE)?" write":""),
+           (!(new_poll->action & (RMC_POLLREAD | RMC_POLLWRITE)))?" [none]":"");
 
     if (epoll_ctl(epollfd, EPOLL_CTL_MOD, new_poll->descriptor, &ev) == -1) {
         perror("epoll_ctl(modify)");
@@ -158,7 +161,7 @@ void test_rmc_proto(int subs_flag)
 
     ctx = malloc(sizeof(rmc_context_t));
 
-    rmc_init_context(ctx, "239.0.0.1", "127.0.0.1", 0, 4723, (user_data_t) { .i32 = epollfd },
+    rmc_init_context(ctx, "239.0.0.1", 0, 0, 4723, (user_data_t) { .i32 = epollfd },
                      poll_add, poll_modify, poll_remove, 0, 0);
     
 

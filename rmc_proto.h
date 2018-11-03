@@ -130,6 +130,7 @@ typedef struct rmc_socket {
 
 #define RMC_RESEND_TIMEOUT_DEFAULT 500000
 
+typedef uint32_t rmc_context_id_t;
 
 typedef struct rmc_context {
     pub_context_t pub_ctx;
@@ -143,18 +144,22 @@ typedef struct rmc_context {
 
     int port; // Used both for TCP listen and mcast.
     char multicast_addr[256];
-    char multicast_if_ip[80];
+    char multicast_iface_addr[80];
     struct sockaddr_in mcast_local_addr;
     struct sockaddr_in mcast_dest_addr;
 
     int mcast_recv_descriptor;
     int mcast_send_descriptor;
 
-    char listen_if_ip[80];
+    char listen_iface_addr[80];
     int listen_descriptor;
 
-    // Once we have sent a packet how long do we wait for an ack, in usec, until
-    // we resend it?
+    
+    // Randomly genrated context ID allowing us to recognize and drop
+    // looped back multicast messages.
+    rmc_context_id_t context_id; 
+
+    // When we start sending packets via TCP.
     uint32_t resend_timeout;
 
     // When we want to know if a socket can be written to or read from
@@ -180,17 +185,19 @@ typedef struct rmc_context {
 extern int rmc_init_context(rmc_context_t* context,
                             char* multicast_addr,  // Domain name or IP
 
-                            // Interface IP to bind mcast to. Must be set.
-                            char* multicast_if_ip, 
+                            // IP address to listen to for incoming subscription
+                            // connection from subscribers receiving multicast packets
+                            // Default if 0 ptr: "0.0.0.0" (IFADDR_ANY)
+                            char* multicast_iface_addr, 
 
                             // IP address to listen to for incoming subscription
                             // connection from subscribers receiving multicast packets
-                            char* listen_if_ip, 
+                            // Default if 0 ptr: "0.0.0.0" (IFADDR_ANY)
+                            char* listen_iface_addr, 
 
                             int port, // Used for local listen TCP and multicast port
 
-                            // User data that can be extracted with rmc_user_data(.
-                            
+                            // User data that can be extracted with rmc_user_data(.                            
                             // Typical application is for the poll and memory callbacks below
                             // to tie back to its structure using the provided
                             // pointer to the invoking rmc_context_t structure.

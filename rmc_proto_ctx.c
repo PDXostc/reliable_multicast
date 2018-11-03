@@ -26,7 +26,6 @@
 #include <netdb.h>
 #include <assert.h>
 
-
 static void _reset_socket(rmc_socket_t* sock, int index)
 {
     sock->poll_info.action = 0;
@@ -54,12 +53,13 @@ static inline void _payload_free(void* payload, payload_len_t len, user_data_t u
 // =============
 int rmc_init_context(rmc_context_t* ctx,
                      char* multicast_addr,
-                     // Interface IP to bind mcast to. Must be set.
-                     char* multicast_if_ip, 
+                     // Interface IP to bind mcast to. Default: "0.0.0.0" (IFADDR_ANY)
+                     char* multicast_iface_addr, 
 
                      // IP address to listen to for incoming subscription
                      // connection from subscribers receiving multicast packets
-                     char* listen_if_ip, 
+                     // Default: "0.0.0.0" (IFADDR_ANY)
+                     char* listen_iface_addr, 
                      int port,
                      user_data_t user_data,
                      void (*poll_add)(rmc_context_t* context, rmc_poll_t* poll),
@@ -74,25 +74,28 @@ int rmc_init_context(rmc_context_t* ctx,
     
     int ind = 0;
 
-    if (!ctx || !multicast_if_ip || !multicast_addr)
+    if (!ctx || !multicast_addr)
         return EINVAL;
 
     ind = sizeof(ctx->sockets) / sizeof(ctx->sockets[0]);
     while(ind--) 
         _reset_socket(&ctx->sockets[ind], ind);
     
+    if (!multicast_iface_addr)
+        multicast_iface_addr = "0.0.0.0";
+
+    if (!listen_iface_addr)
+        listen_iface_addr = "0.0.0.0";
+
     strncpy(ctx->multicast_addr, multicast_addr, sizeof(ctx->multicast_addr));
     ctx->multicast_addr[sizeof(ctx->multicast_addr)-1] = 0;
 
-    strncpy(ctx->multicast_if_ip, multicast_if_ip, sizeof(ctx->multicast_if_ip));
-    ctx->multicast_if_ip[sizeof(ctx->multicast_if_ip)-1] = 0;
+    strncpy(ctx->multicast_iface_addr, multicast_iface_addr, sizeof(ctx->multicast_iface_addr));
+    ctx->multicast_iface_addr[sizeof(ctx->multicast_iface_addr)-1] = 0;
     
 
-    if (listen_if_ip) {
-        strncpy(ctx->listen_if_ip, listen_if_ip, sizeof(ctx->listen_if_ip));
-        ctx->listen_if_ip[sizeof(ctx->listen_if_ip)-1] = 0;
-    } else
-        ctx->listen_if_ip[0] = 0;
+    strncpy(ctx->listen_iface_addr, listen_iface_addr, sizeof(ctx->listen_iface_addr));
+    ctx->listen_iface_addr[sizeof(ctx->listen_iface_addr)-1] = 0;
 
     ctx->mcast_send_descriptor = -1;
     ctx->mcast_recv_descriptor = -1;
@@ -108,7 +111,8 @@ int rmc_init_context(rmc_context_t* ctx,
     ctx->socket_count = 0;
     ctx->max_socket_ind = -1; // No sockets in use
     ctx->resend_timeout = RMC_RESEND_TIMEOUT_DEFAULT;
-
+    srand(rmc_usec_monotonic_timestamp() & 0xFFFFFFFF);
+    ctx->context_id = rand();
     // outgoing_payload_free() will be called when
     // pub_acket_ack() is called, which happens when a
     // subscriber sends an ack back for the given pid.
@@ -154,24 +158,16 @@ int rmc_activate_context(rmc_context_t* ctx)
         goto error;
     }
 
-    // Join multicast group
-    if (!inet_aton(ctx->multicast_addr, &mreq.imr_multiaddr))
-        goto error;
-
-    mreq.imr_interface.s_addr = htonl(INADDR_ANY);
-
-    if (setsockopt(ctx->mcast_recv_descriptor,
-                   IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
-        perror("rmc_activate_context(multicast_recv): setsockopt(IP_ADD_MEMBERSHIP)");
-        goto error;
-    }
-
     memset((void*) &sock_addr, 0, sizeof(sock_addr));
+
     sock_addr.sin_family = AF_INET;
-    if (inet_aton(ctx->multicast_if_ip, &sock_addr.sin_addr) != 1) {
-        errno = EFAULT;
+    if (!inet_aton(ctx->multicast_iface_addr, &sock_addr.sin_addr)) {
+        fprintf(stderr, "rmc_activate_context(multicast_interface_addr): Could not resolve %s to IP address\n",
+                ctx->multicast_addr);
         goto error;
     }
+
+
     sock_addr.sin_port = htons(ctx->port);
 
     if (bind(ctx->mcast_recv_descriptor,
@@ -179,6 +175,22 @@ int rmc_activate_context(rmc_context_t* ctx)
              sizeof(sock_addr)) < 0) {
         perror("rmc_listen(multicast_recv): bind()");
         return errno;
+    }
+
+
+    // Join multicast group
+    if (!inet_aton(ctx->multicast_addr, &mreq.imr_multiaddr)) {
+        fprintf(stderr, "rmc_activate_context(multicast_addr): Could not resolve %s to IP address\n",
+                ctx->multicast_addr);
+        goto error;
+    }
+
+    memcpy(&mreq.imr_interface, &sock_addr.sin_addr, sizeof(sock_addr.sin_addr));
+
+    if (setsockopt(ctx->mcast_recv_descriptor,
+                   IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+        perror("rmc_activate_context(multicast_recv): setsockopt(IP_ADD_MEMBERSHIP)");
+        goto error;
     }
 
     // FIXME: We need IP_MULTICAST_LOOP if other processes on the same
@@ -213,21 +225,6 @@ int rmc_activate_context(rmc_context_t* ctx)
     ctx->mcast_dest_addr.sin_addr = mreq.imr_multiaddr;
     ctx->mcast_dest_addr.sin_port = htons(ctx->port);
 
-    // FIXME: We need IP_MULTICAST_LOOP if other processes on the same
-    //        host are to receive sent packets. We need to figure out
-    //        a wayu to transmit mcast data between two processes on
-    //        the same host without having to use IP_MULTICAST_LOOP
-    //        since its presence will trigger a spurious mcast read
-    //        for every send that a process does.
-    //        See _process_multicast_read() which now checks for and
-    //        discards loopback data.
-    //
-    if (setsockopt(ctx->mcast_send_descriptor,
-                   IPPROTO_IP, IP_MULTICAST_LOOP, &on_flag, sizeof(on_flag)) < 0) {
-        perror("rmc_activate_context(): setsockopt(IP_MULTICAST_LOOP)");
-        goto error;
-    }
-
     memset((void*) &ctx->mcast_local_addr, 0, sizeof(ctx->mcast_local_addr));
     getsockname(ctx->mcast_send_descriptor, &ctx->mcast_local_addr, &sock_len);
 
@@ -256,8 +253,7 @@ int rmc_activate_context(rmc_context_t* ctx)
     // Bind to local endpoint.
     sock_addr.sin_family = AF_INET;
 
-    if (ctx->listen_if_ip[0] &&
-        inet_aton(ctx->listen_if_ip, &sock_addr.sin_addr) != 1) {
+    if (inet_aton(ctx->listen_iface_addr, &sock_addr.sin_addr) != 1) {
         errno = EFAULT;
         goto error;
     }

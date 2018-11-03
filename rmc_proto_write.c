@@ -42,7 +42,7 @@ static int _process_multicast_write(rmc_context_t* ctx)
     pub_packet_t* pack = pub_next_queued_packet(pctx);
     uint8_t packet[RMC_MAX_PAYLOAD];
     uint8_t *packet_ptr = packet;
-    payload_len_t *hdr_len = (payload_len_t*) packet_ptr;
+    payload_len_t *hdr_len = 0;
     packet_id_t pid = 0;
     usec_timestamp_t ts = 0;
     pub_packet_list_t snd_list;
@@ -51,8 +51,18 @@ static int _process_multicast_write(rmc_context_t* ctx)
     if (ctx->mcast_send_descriptor == -1)
         return ENOTCONN;
 
-    *hdr_len = 0;
+    
+    // Setup context id. 
+    *((rmc_context_id_t*) packet_ptr) = ctx->context_id;
+    packet_ptr += sizeof(rmc_context_id_t);
+
+    // Setup hdr_len that will be continuously
+    // updated as we fill in the packet.
+    hdr_len = (payload_len_t*) packet_ptr;
+    *hdr_len = 0; 
+
     packet_ptr += sizeof(payload_len_t);
+
 
     pub_packet_list_init(&snd_list, 0, 0, 0);
 
@@ -79,7 +89,7 @@ static int _process_multicast_write(rmc_context_t* ctx)
 
     res = sendto(ctx->mcast_send_descriptor,
                  packet,
-                 sizeof(payload_len_t) + *hdr_len,
+                 sizeof(rmc_context_id_t) + sizeof(payload_len_t) + *hdr_len,
                  MSG_DONTWAIT,
                  (struct sockaddr*) &ctx->mcast_dest_addr,
                  sizeof(ctx->mcast_dest_addr));

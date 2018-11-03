@@ -59,11 +59,12 @@ static int _decode_multicast(rmc_context_t* ctx,
         packet_id_t pid = 0;
         payload_len_t payload_len = 0;
 
+        
         pid = *(packet_id_t*) packet;
-        packet += sizeof(pid);
+        packet += sizeof(packet_id_t);
 
         payload_len = *(payload_len_t*) packet;
-        packet += sizeof(payload_len);
+        packet += sizeof(payload_len_t);
         len -= (payload_len + sizeof(pid) + sizeof(payload_len));
 
         // Check that we do not have a duploic
@@ -97,12 +98,14 @@ static int _decode_multicast(rmc_context_t* ctx,
 static int _process_multicast_read(rmc_context_t* ctx)
 {
     uint8_t buffer[RMC_MAX_PAYLOAD];
+    uint8_t *data = buffer;
     payload_len_t payload_len;
     struct sockaddr_in src_addr;
     socklen_t addr_len = sizeof(src_addr);
     ssize_t res;
     int sock_ind = 0;
     rmc_socket_t* sock = 0;
+    rmc_context_id_t ctx_id = 0;
     rmc_poll_t pinfo = {
         .action = RMC_POLLREAD,
         .descriptor = ctx->mcast_recv_descriptor,
@@ -127,10 +130,15 @@ static int _process_multicast_read(rmc_context_t* ctx)
 
 
     printf("_process_multicast_read(): %s:%d\n", inet_ntoa(src_addr.sin_addr), ntohs(src_addr.sin_port));
+
+    ctx_id = *(rmc_context_id_t*) data;
+    data += sizeof(rmc_context_id_t);
+
+    payload_len = *(payload_len_t*) data;
+    data += sizeof(payload_len_t);
     
     // FIXME: REMOVE WHEN WE HAVE DELETED IP_MULTICAST_LOOP
-    if (src_addr.sin_addr.s_addr == ctx->mcast_local_addr.sin_addr.s_addr &&
-        src_addr.sin_port == ctx->mcast_local_addr.sin_port ) {
+    if (ctx_id == ctx->context_id) {
         printf("_process_multicast_read(): Skipping loopback message\n");
         if (ctx->poll_modify)
             (*ctx->poll_modify)(ctx, &pinfo, &pinfo);
@@ -147,10 +155,9 @@ static int _process_multicast_read(rmc_context_t* ctx)
 
         sock = &ctx->sockets[sock_ind];
     }
-    payload_len = *(payload_len_t*) buffer;
 
     return _decode_multicast(ctx,
-                             buffer + sizeof(payload_len_t),
+                             data,
                              payload_len,
                              &(sock->pubsub.publisher));
 }
