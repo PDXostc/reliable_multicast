@@ -27,7 +27,8 @@
 #include <assert.h>
 
 static inline rmc_socket_t* _find_publisher_by_address(rmc_context_t* ctx,
-                                                       struct sockaddr_in* addr)
+                                                       uint32_t address,
+                                                       uint16_t port)
 {
     rmc_poll_index_t ind = 0;
 
@@ -38,7 +39,8 @@ static inline rmc_socket_t* _find_publisher_by_address(rmc_context_t* ctx,
     // FIXME: Replace with hash table search to speed up.
     while(ind < ctx->max_socket_ind) {
         if (ctx->sockets[ind].poll_info.descriptor != -1 &&
-            !memcmp(&ctx->sockets[ind].remote_address, addr, sizeof(*addr)))
+            address == ctx->sockets[ind].remote_address &&
+            port == ctx->sockets[ind].remote_port)
             return &ctx->sockets[ind];
 
         ++ind;
@@ -52,40 +54,32 @@ static int _decode_multicast(rmc_context_t* ctx,
                              sub_publisher_t* pub)
 {
     payload_len_t len = (payload_len_t) packet_len;
-
+    uint8_t* payload = 0;
     // Traverse the received datagram and extract all packets
     while(len) {
-        void* payload = 0;
-        packet_id_t pid = 0;
-        payload_len_t payload_len = 0;
+        cmd_packet_header_t* cmd_pack = (cmd_packet_header_t*) packet;
 
-        
-        pid = *(packet_id_t*) packet;
-        packet += sizeof(packet_id_t);
-
-        payload_len = *(payload_len_t*) packet;
-        packet += sizeof(payload_len_t);
-        len -= (payload_len + sizeof(pid) + sizeof(payload_len));
-
-        // Check that we do not have a duploic
-        if (sub_packet_is_duplicate(pub, pid))
+        // Check that we do not have a duplicate
+        if (sub_packet_is_duplicate(pub, cmd_pack->pid))
             continue;
 
         // Use the provided memory allocator to reserve memory for
         // incoming payload.
         // Use malloc() if nothing is specified.
         if (ctx->payload_alloc)
-            payload = (*ctx->payload_alloc)(ctx, payload_len);
+            payload = (*ctx->payload_alloc)(ctx, cmd_pack->payload_len);
         else
-            payload = malloc(payload_len);
+            payload = malloc(cmd_pack->payload_len);
 
         if (!payload)
             return ENOMEM;
 
-        memcpy(payload, packet, payload_len);
-        packet += payload_len;
+        packet += sizeof(cmd_packet_header_t);
+        memcpy(payload, packet, cmd_pack->payload_len);
+        packet += cmd_pack->payload_len;
+        len -= sizeof(cmd_packet_header_t) + cmd_pack->payload_len;
 
-        sub_packet_received(pub, pid, payload, payload_len);
+        sub_packet_received(pub, cmd_pack->pid, payload, cmd_pack->payload_len);
     }
 
     // Process received packages, moving consectutive ones
@@ -99,18 +93,17 @@ static int _process_multicast_read(rmc_context_t* ctx)
 {
     uint8_t buffer[RMC_MAX_PAYLOAD];
     uint8_t *data = buffer;
-    payload_len_t payload_len;
     struct sockaddr_in src_addr;
     socklen_t addr_len = sizeof(src_addr);
     ssize_t res;
     int sock_ind = 0;
     rmc_socket_t* sock = 0;
-    rmc_context_id_t ctx_id = 0;
     rmc_poll_t pinfo = {
         .action = RMC_POLLREAD,
         .descriptor = ctx->mcast_recv_descriptor,
         .rmc_index = RMC_MULTICAST_RECV_INDEX
     };
+    multicast_header_t* mcast_hdr = (multicast_header_t*) data;
 
     if (!ctx)
         return EINVAL;
@@ -128,28 +121,49 @@ static int _process_multicast_read(rmc_context_t* ctx)
         return errno;
     }
 
+    if (res < sizeof(multicast_header_t)) {
+        fprintf(stderr, "Corrupt header. Needed [%lu] header bytes. Got %lu\n",
+                sizeof(multicast_header_t), res);
+        return EPROTO;
+    }
+                
+    if (res < sizeof(multicast_header_t) + mcast_hdr->payload_len) {
+        fprintf(stderr, "Corrupt packet. Needed [%lu] header + payload bytes. Got %lu\n",
+                sizeof(multicast_header_t) + mcast_hdr->payload_len, res);
+        return EPROTO;
+    }
+        
+    printf("_process_multicast_read(): ctx_id[0x%.8X] len[%.5d] from[%s:%d] listen[%s:%d]",
+           mcast_hdr->context_id,
+           mcast_hdr->payload_len,
+           inet_ntoa(src_addr.sin_addr), ntohs(src_addr.sin_port),
+           inet_ntoa( (struct in_addr) { .s_addr = htonl(mcast_hdr->listen_ip) }) , mcast_hdr->listen_port),
+           
 
-    printf("_process_multicast_read(): %s:%d\n", inet_ntoa(src_addr.sin_addr), ntohs(src_addr.sin_port));
-
-    ctx_id = *(rmc_context_id_t*) data;
-    data += sizeof(rmc_context_id_t);
-
-    payload_len = *(payload_len_t*) data;
-    data += sizeof(payload_len_t);
+    data += sizeof(multicast_header_t);
     
     // FIXME: REMOVE WHEN WE HAVE DELETED IP_MULTICAST_LOOP
-    if (ctx_id == ctx->context_id) {
-        printf("_process_multicast_read(): Skipping loopback message\n");
+    if (mcast_hdr->context_id == ctx->context_id) {
+        puts(" - loopback (skipped)");
         if (ctx->poll_modify)
             (*ctx->poll_modify)(ctx, &pinfo, &pinfo);
+        return ELOOP; // Loopback message
     }
+    putchar('\n');
 
-    sock = _find_publisher_by_address(ctx, &src_addr);
+    // If we have a complete spec for the networ address in the packet header, use that.
+    // If listen_ip_addr is 0, then use the IP address provided in source address returned
+    // by recvfrom
+    if (!mcast_hdr->listen_ip)
+        mcast_hdr->listen_ip = ntohl(src_addr.sin_addr.s_addr);
+
+    sock = _find_publisher_by_address(ctx, mcast_hdr->listen_ip, mcast_hdr->listen_port);
 
     // No publisher found?
     if (!sock) {
         // Add an outbound tcp connection to the publisher.
-        int res = rmc_connect_tcp_by_address(ctx, &src_addr, &sock_ind);
+        int res = 0;
+        res = rmc_connect_tcp_by_address(ctx, mcast_hdr->listen_ip, mcast_hdr->listen_port, &sock_ind);
         if (res)
             return res;
 
@@ -158,7 +172,7 @@ static int _process_multicast_read(rmc_context_t* ctx)
 
     return _decode_multicast(ctx,
                              data,
-                             payload_len,
+                             mcast_hdr->payload_len,
                              &(sock->pubsub.publisher));
 }
 
@@ -308,14 +322,13 @@ int rmc_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
     if (!ctx)
         return EINVAL;
 
-    if (p_ind == RMC_MULTICAST_RECV_INDEX) {
-        res = _process_multicast_read(ctx);
-    }
+    if (p_ind == RMC_MULTICAST_RECV_INDEX) 
+        return _process_multicast_read(ctx);
 
-    if (p_ind == RMC_LISTEN_INDEX) {
-        res = rmc_process_accept(ctx, &p_ind);
-        return res;
-    }
+
+    if (p_ind == RMC_LISTEN_INDEX) 
+        return rmc_process_accept(ctx, &p_ind);
+
 
     // Is c_ind within our socket vector?
     if (p_ind >= RMC_MAX_SOCKETS)

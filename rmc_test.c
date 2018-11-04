@@ -6,19 +6,88 @@
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
 #include "rmc_common.h"
+#include <getopt.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 
 extern void test_packet_interval();
 extern void test_packet_intervals();
 extern void run_list_tests();
 extern void test_pub(void);
 extern void test_sub(void);
-extern void test_rmc_proto(int subs_flag);
+extern void test_rmc_proto(int publisher,
+                           char* mcast_addr,
+                           char* mcast_if_addr,
+                           char* listen_if_addr,
+                           int mcast_port,
+                           int listen_port);
+
 extern void test_circular_buffer(void);
 
+#define LISTEN_IF_ADDR_DEFAULT "0.0.0.0"
+#define MULTICAST_IF_ADDR_DEFAULT "0.0.0.0"
+#define MULTICAST_ADDR_DEFAULT "239.0.0.1"
+#define PORT_DEFAULT 4723
+
+void usage(char* prog)
+{
+    fprintf(stderr, "Usage: %s [-p] [-s] [-M <ip-addr>] [-m <ip-addr>] [-l <ip-addr>] [-p <port>]\n",
+            prog);
+    fprintf(stderr, "       -S             Run as a packet subscriber instead of default publisher\n");
+    fprintf(stderr, "       -M <ip-addr>   Multicast IP address (default: %s)\n", MULTICAST_ADDR_DEFAULT);
+    fprintf(stderr, "       -m <ip-addr>   Multicast interface IP (default: %s)\n", MULTICAST_IF_ADDR_DEFAULT);
+    fprintf(stderr, "       -l <ip-addr>   Listen interface IP (default: %s)\n", LISTEN_IF_ADDR_DEFAULT);
+    fprintf(stderr, "       -P <port>      Multicast port (default: %d)\n", PORT_DEFAULT);
+    fprintf(stderr, "       -p <port>      Listen  port (default: %d)\n", PORT_DEFAULT);
+}
 
 int main(int argc, char* argv[])
 {
     int tst = 1;
+    int opt = 0;
+    int publisher = 1;
+    char mcast_group_addr[80] = { 0 };
+    char mcast_if_addr[80] = { 0 };
+    char listen_if_addr[80];
+    int listen_port = PORT_DEFAULT;
+    int mcast_port = PORT_DEFAULT;
+
+    strcpy(mcast_if_addr, MULTICAST_IF_ADDR_DEFAULT);
+    strcpy(listen_if_addr, LISTEN_IF_ADDR_DEFAULT);
+    strcpy(mcast_group_addr, MULTICAST_ADDR_DEFAULT);
+    
+    while ((opt = getopt(argc, argv, "PSM:m:l:p:")) != -1) {
+        switch (opt) {
+        case 'S':
+            publisher = 0;
+            break;
+
+        case 'M':
+            strcpy(mcast_group_addr, optarg);
+            break;
+
+        case 'm':
+            strcpy(mcast_if_addr, optarg);
+            break;
+
+        case 'l':
+            strcpy(listen_if_addr, optarg);
+            break;
+
+        case 'P':
+            mcast_port = atoi(optarg);
+            break;
+
+        case 'p':
+            listen_port = atoi(optarg);
+            break;
+
+        default: /* '?' */
+            usage(argv[0]);
+            exit(1);
+        }
+    }
     
     run_list_tests();
     test_packet_interval();
@@ -28,5 +97,5 @@ int main(int argc, char* argv[])
     test_sub();
 
     // If we have an argument, we will be the subscriber.
-    test_rmc_proto((argc==2)?1:0);
+    test_rmc_proto(publisher, mcast_group_addr, mcast_if_addr, listen_if_addr, mcast_port, listen_port);
 }

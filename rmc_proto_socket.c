@@ -111,30 +111,39 @@ int rmc_complete_connect(rmc_context_t* ctx, rmc_socket_t* sock)
 }
                                
 int rmc_connect_tcp_by_address(rmc_context_t* ctx,
-                               struct sockaddr_in* sock_addr,
-                               rmc_poll_index_t* result_index)
+                                      uint32_t address,
+                                      in_port_t port,
+                                      rmc_poll_index_t* result_index)
 {
     rmc_poll_index_t c_ind = -1;
     int res = 0;
     int err = 0;
+    struct sockaddr_in sock_addr;
 
     assert(ctx);
-    assert(sock_addr);
+
+    sock_addr = (struct sockaddr_in) {
+        .sin_family = AF_INET,
+        .sin_port = htons(ctx->listen_port),
+        .sin_addr = (struct in_addr) { .s_addr = htonl(address) }
+    };
 
     // Find a free slot.
     c_ind = _get_free_slot(ctx);
     if (c_ind == -1)
         return ENOMEM;
 
-    ctx->sockets[c_ind].poll_info.descriptor = socket (AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    ctx->sockets[c_ind].poll_info.descriptor = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
 
     if (ctx->sockets[c_ind].poll_info.descriptor == -1)
         return errno;
  
+    printf("rmc_connect_tcp_by_address(): %s:%d\n", inet_ntoa(sock_addr.sin_addr), ntohs(sock_addr.sin_port));
 
+    
     res = connect(ctx->sockets[c_ind].poll_info.descriptor,
-              (struct sockaddr*) sock_addr,
-              sizeof(*sock_addr));
+                  (struct sockaddr*) &sock_addr,
+                  sizeof(sock_addr));
 
     if (res == -1 && errno != EINPROGRESS) {
         err = errno; // Errno may be reset by close().
@@ -145,7 +154,10 @@ int rmc_connect_tcp_by_address(rmc_context_t* ctx,
         return err;
     }
 
-    memcpy(&ctx->sockets[c_ind].remote_address, sock_addr, sizeof(*sock_addr));
+    
+    ctx->sockets[c_ind].remote_address = address;
+    ctx->sockets[c_ind].remote_port = port;
+
     sub_init_publisher(&ctx->sockets[c_ind].pubsub.publisher,
                        &ctx->sub_ctx,
                        &ctx->sockets[c_ind]);
@@ -169,24 +181,18 @@ int rmc_connect_tcp_by_address(rmc_context_t* ctx,
 
 int rmc_connect_tcp_by_host(rmc_context_t* ctx,
                             char* server_addr,
+                            in_port_t port,
                             rmc_poll_index_t* result_index)
 {
     struct hostent* host = 0;
-    struct sockaddr_in sock_addr;
 
     host = gethostbyname(server_addr);
     if (!host)
         return ENOENT;
 
-    memcpy((void *) &sock_addr.sin_addr.s_addr,
-           (void*) host->h_addr_list[0],
-           host->h_length);
-
-    sock_addr.sin_port = htons(ctx->port);
-    sock_addr.sin_family = AF_INET;
-
     return rmc_connect_tcp_by_address(ctx,
-                                      &sock_addr,
+                                      ntohl(*(uint32_t*) host->h_addr_list[0]),
+                                      port,
                                       result_index);
 }
 
@@ -211,6 +217,9 @@ int rmc_process_accept(rmc_context_t* ctx,
 
     if (ctx->sockets[c_ind].poll_info.descriptor == -1)
         return errno;
+ 
+    printf("rmc_process_accept(): %s:%d -> index %d\n",
+           inet_ntoa(src_addr.sin_addr), ntohs(src_addr.sin_port), c_ind);
 
 
     // The remote end is the subscriber of packets that we pulish

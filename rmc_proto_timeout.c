@@ -39,7 +39,7 @@ static int _process_packet_timeout(rmc_context_t* ctx, pub_subscriber_t* sub, pu
     uint32_t seg2_len = 0;
     int res = 0;
     uint8_t cmd = RMC_CMD_PACKET;
-    cmd_packet_t pack_cmd = {
+    cmd_packet_header_t pack_cmd = {
         .pid = pack->pid,
         .payload_len = pack->payload_len
     };

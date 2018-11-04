@@ -17,6 +17,15 @@
 #define RMC_CMD_ACK_SINGLE 2
 #define RMC_CMD_ACK_INTERVAL 3
 
+typedef uint32_t rmc_context_id_t;
+
+typedef struct multicast_header {
+    rmc_context_id_t context_id;
+    payload_len_t payload_len;
+    uint32_t listen_ip; // In host format
+    uint16_t listen_port;
+} multicast_header_t;
+
 typedef struct cmd_ack_single {
     packet_id_t packet_id; // Packet ID to ac
 } cmd_ack_single_t;
@@ -27,11 +36,10 @@ typedef struct cmd_ack_interval {
 } cmd_ack_interval_t;
 
 
-typedef struct cmd_packet {
+typedef struct cmd_packet_header {
     packet_id_t pid;    // ID of first packet ID
     payload_len_t payload_len;
-    uint8_t payload[];
-} cmd_packet_t;
+} cmd_packet_header_t;
 
 
 // Max UDP size is 0xFFE3 (65507). Subtract 0x20 (32) bytes for RMC
@@ -100,7 +108,8 @@ typedef struct rmc_socket {
     // RMC_SOCKET_MODE_OTHER       The socket is used for multicast or TCP listen.
     uint8_t mode;
 
-    struct sockaddr_in remote_address;
+    in_port_t remote_port;    // In host format
+    uint32_t remote_address;  // In host format
 
     // Subscriber and publishers to to manage inflight packets for this socket.
     // The union member to use is specified by the 'mode' member.
@@ -130,7 +139,6 @@ typedef struct rmc_socket {
 
 #define RMC_RESEND_TIMEOUT_DEFAULT 500000
 
-typedef uint32_t rmc_context_id_t;
 
 typedef struct rmc_context {
     pub_context_t pub_ctx;
@@ -142,16 +150,19 @@ typedef struct rmc_context {
     rmc_socket_t sockets[RMC_MAX_SOCKETS]; //
     user_data_t user_data;
 
-    int port; // Used both for TCP listen and mcast.
-    char multicast_addr[256];
-    char multicast_iface_addr[80];
-    struct sockaddr_in mcast_local_addr;
-    struct sockaddr_in mcast_dest_addr;
+    in_addr_t mcast_if_addr; // In host format
+    in_addr_t listen_if_addr; // In host format
+    in_addr_t mcast_group_addr; // In host format
+    int mcast_port; // Must be same for all particants.
+
+    // Must be different for each process on same machine.
+    // Multiple contexts within a single program can share listen port
+    // to do load distribution on incoming connections
+    int listen_port; 
 
     int mcast_recv_descriptor;
     int mcast_send_descriptor;
 
-    char listen_iface_addr[80];
     int listen_descriptor;
 
     
@@ -183,7 +194,8 @@ typedef struct rmc_context {
 
 // All functions return error codes from error
 extern int rmc_init_context(rmc_context_t* context,
-                            char* multicast_addr,  // Domain name or IP
+                            // Domain name or IP of multicast group to join.
+                            char* multicast_group_addr,  
 
                             // IP address to listen to for incoming subscription
                             // connection from subscribers receiving multicast packets
@@ -195,7 +207,9 @@ extern int rmc_init_context(rmc_context_t* context,
                             // Default if 0 ptr: "0.0.0.0" (IFADDR_ANY)
                             char* listen_iface_addr, 
 
-                            int port, // Used for local listen TCP and multicast port
+                            int multicast_port, 
+
+                            int listen_port, 
 
                             // User data that can be extracted with rmc_user_data(.                            
                             // Typical application is for the poll and memory callbacks below
@@ -279,11 +293,13 @@ extern int rmc_free_packet(rmc_context_t* context, sub_packet_t* packet);
 extern void rmc_reset_socket(rmc_socket_t* sock, int index);
 
 extern int rmc_connect_tcp_by_address(rmc_context_t* ctx,
-                                      struct sockaddr_in* sock_addr,
+                                      in_addr_t address,
+                                      in_port_t port,
                                       rmc_poll_index_t* result_index);
 
 extern int rmc_connect_tcp_by_host(rmc_context_t* ctx,
                                    char* server_addr,
+                                   in_port_t port,
                                    rmc_poll_index_t* result_index);
 
 extern int rmc_process_accept(rmc_context_t* ctx,

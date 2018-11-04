@@ -130,7 +130,8 @@ void poll_remove(rmc_context_t* ctx, rmc_poll_t* poll)
 
 #define PUBLISH 1
 #define SUBSCRIBE 2
-void test_rmc_proto(int subs_flag)
+
+void test_rmc_proto(int publisher, char* mcast_group_addr, char* mcast_if_addr, char* listen_if_addr, int mcast_port, int listen_port)
 {
     rmc_context_t* ctx = 0;
     int res = 0;
@@ -143,13 +144,15 @@ void test_rmc_proto(int subs_flag)
     struct epoll_event ev, events[RMC_MAX_SOCKETS];
     pid_t sub_pid = 0;
     user_data_t ud = { .u64 = 0 };
-    int mode = PUBLISH;
+    int mode = 0;
     char buf[16];
 
     signal(SIGHUP, SIG_IGN);
 
     // Create child process that will act as subscriber.
-    if (subs_flag)
+    if (publisher)
+        mode = PUBLISH;
+    else
         mode = SUBSCRIBE;
 
     epollfd = epoll_create1(0);
@@ -161,7 +164,9 @@ void test_rmc_proto(int subs_flag)
 
     ctx = malloc(sizeof(rmc_context_t));
 
-    rmc_init_context(ctx, "239.0.0.1", 0, 0, 4723, (user_data_t) { .i32 = epollfd },
+    rmc_init_context(ctx,
+                     mcast_group_addr, mcast_if_addr, listen_if_addr, mcast_port, listen_port,
+                     (user_data_t) { .i32 = epollfd },
                      poll_add, poll_modify, poll_remove, 0, 0);
     
 
@@ -203,16 +208,21 @@ void test_rmc_proto(int subs_flag)
                    ((events[nfds].events & EPOLLHUP)?" disconnect":""));
 
             if (events[nfds].events & EPOLLIN) {
-                rmc_read(ctx, events[nfds].data.u32);
+                if (!(res = rmc_read(ctx, events[nfds].data.u32)) && events[nfds].data.u32 != RMC_LISTEN_INDEX) {
+                    pack = rmc_get_next_ready_packet(ctx);
+                    if (!pack) {
+                        printf("RMC protocol test 3.1: No packet received\n");
+                        exit(255);
+                    }
 
-                pack = rmc_get_next_ready_packet(ctx);
-                if (!pack) {
-                    printf("RMC protocol test 3.1: No packet received\n");
-                    exit(255);
+                    if (memcmp(pack->payload, "p1", pack->payload_len)) {
+                        printf("RMC protocol test 3.2: Payload differ\n");
+                        exit(255);
+                    }
+                    puts("payload ok");
                 }
-
-                if (memcmp(pack->payload, "p1", pack->payload_len)) {
-                    printf("RMC protocol test 3.2: Payload differ\n");
+                if (res && res != ELOOP) {
+                    printf("RMC protocol test 3.2: rmc_read() returned %s\n", strerror(res));
                     exit(255);
                 }
             }

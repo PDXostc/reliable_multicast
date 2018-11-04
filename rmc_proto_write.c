@@ -42,45 +42,47 @@ static int _process_multicast_write(rmc_context_t* ctx)
     pub_packet_t* pack = pub_next_queued_packet(pctx);
     uint8_t packet[RMC_MAX_PAYLOAD];
     uint8_t *packet_ptr = packet;
-    payload_len_t *hdr_len = 0;
     packet_id_t pid = 0;
     usec_timestamp_t ts = 0;
     pub_packet_list_t snd_list;
     ssize_t res = 0;
+    multicast_header_t *mcast_hdr = (multicast_header_t*) packet_ptr;
+    struct sockaddr_in sock_addr = (struct sockaddr_in) {
+        .sin_family = AF_INET,
+        .sin_port = htons(ctx->mcast_port),
+        .sin_addr = (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }
+    };
 
     if (ctx->mcast_send_descriptor == -1)
         return ENOTCONN;
 
-    
     // Setup context id. 
-    *((rmc_context_id_t*) packet_ptr) = ctx->context_id;
-    packet_ptr += sizeof(rmc_context_id_t);
+    mcast_hdr->context_id = ctx->context_id;
+    mcast_hdr->payload_len = 0; // Will be updated below
 
-    // Setup hdr_len that will be continuously
-    // updated as we fill in the packet.
-    hdr_len = (payload_len_t*) packet_ptr;
-    *hdr_len = 0; 
+    // If listen_ip == 0 then receiver will use source address of packet as tcp
+    // address to connect to.
+    mcast_hdr->listen_ip = ctx->listen_if_addr; 
+    mcast_hdr->listen_port = ctx->listen_port; 
 
-    packet_ptr += sizeof(payload_len_t);
-
+    packet_ptr += sizeof(multicast_header_t);
 
     pub_packet_list_init(&snd_list, 0, 0, 0);
 
-    while(pack && *hdr_len <= RMC_MAX_PAYLOAD) {
+    while(pack && mcast_hdr->payload_len <= RMC_MAX_PAYLOAD) {
         pub_packet_node_t* pnode = 0;
+        cmd_packet_header_t* cmd_pack = (cmd_packet_header_t*) packet_ptr;
 
-        *((packet_id_t*) packet_ptr) = pack->pid;
-        packet_ptr += sizeof(packet_id_t);
-
-        *((payload_len_t*) packet_ptr) = pack->payload_len;
-        packet_ptr += sizeof(payload_len_t);
+        cmd_pack->pid = pack->pid;
+        cmd_pack->payload_len = pack->payload_len;
+        packet_ptr += sizeof(cmd_packet_header_t);
 
         // FIXME: Replace with sendmsg() to get scattered iovector
         //        write.  Saves one memcpy.
         memcpy(packet_ptr, pack->payload, pack->payload_len);
         packet_ptr += pack->payload_len;
 
-        *hdr_len += sizeof(packet_id_t) + sizeof(payload_len_t) + pack->payload_len;
+        mcast_hdr->payload_len += sizeof(cmd_packet_header_t) + pack->payload_len;
 
         pub_packet_list_push_head(&snd_list, pack);
         pnode = pub_packet_list_next(pack->parent_node);
@@ -89,10 +91,10 @@ static int _process_multicast_write(rmc_context_t* ctx)
 
     res = sendto(ctx->mcast_send_descriptor,
                  packet,
-                 sizeof(rmc_context_id_t) + sizeof(payload_len_t) + *hdr_len,
+                 sizeof(multicast_header_t) + mcast_hdr->payload_len,
                  MSG_DONTWAIT,
-                 (struct sockaddr*) &ctx->mcast_dest_addr,
-                 sizeof(ctx->mcast_dest_addr));
+                 (struct sockaddr*) &sock_addr,
+                 sizeof(sock_addr));
 
     if (res == -1) {
         if ( errno != EAGAIN && errno != EWOULDBLOCK)

@@ -52,15 +52,16 @@ static inline void _payload_free(void* payload, payload_len_t len, user_data_t u
 // CONTEXT MANAGEMENT
 // =============
 int rmc_init_context(rmc_context_t* ctx,
-                     char* multicast_addr,
+                     char* mcast_group_addr,
                      // Interface IP to bind mcast to. Default: "0.0.0.0" (IFADDR_ANY)
-                     char* multicast_iface_addr, 
+                     char* mcast_if_addr, 
 
                      // IP address to listen to for incoming subscription
                      // connection from subscribers receiving multicast packets
                      // Default: "0.0.0.0" (IFADDR_ANY)
-                     char* listen_iface_addr, 
-                     int port,
+                     char* listen_if_addr, 
+                     int multicast_port,
+                     int listen_port,
                      user_data_t user_data,
                      void (*poll_add)(rmc_context_t* context, rmc_poll_t* poll),
                      void (*poll_modify)(rmc_context_t* context,
@@ -73,35 +74,49 @@ int rmc_init_context(rmc_context_t* ctx,
 
     
     int ind = 0;
-
-    if (!ctx || !multicast_addr)
+    struct in_addr addr;
+                                     
+    if (!ctx || !mcast_group_addr)
         return EINVAL;
 
     ind = sizeof(ctx->sockets) / sizeof(ctx->sockets[0]);
     while(ind--) 
         _reset_socket(&ctx->sockets[ind], ind);
     
-    if (!multicast_iface_addr)
-        multicast_iface_addr = "0.0.0.0";
+    if (!mcast_if_addr)
+        mcast_if_addr = "0.0.0.0";
 
-    if (!listen_iface_addr)
-        listen_iface_addr = "0.0.0.0";
+    if (!listen_if_addr)
+        listen_if_addr = "0.0.0.0";
 
-    strncpy(ctx->multicast_addr, multicast_addr, sizeof(ctx->multicast_addr));
-    ctx->multicast_addr[sizeof(ctx->multicast_addr)-1] = 0;
+    if (!inet_aton(mcast_group_addr, &addr)) {
+        fprintf(stderr, "rmc_activate_context(multicast_group_addr): Could not resolve %s to IP address\n",
+                mcast_group_addr);
+        return EINVAL;
+    }
+    ctx->mcast_group_addr = ntohl(addr.s_addr);
 
-    strncpy(ctx->multicast_iface_addr, multicast_iface_addr, sizeof(ctx->multicast_iface_addr));
-    ctx->multicast_iface_addr[sizeof(ctx->multicast_iface_addr)-1] = 0;
+    if (!inet_aton(mcast_if_addr, &addr)) {
+        fprintf(stderr, "rmc_activate_context(multicast_interface_addr): Could not resolve %s to IP address\n",
+                mcast_if_addr);
+        return EINVAL;
+    }
+    ctx->mcast_if_addr = ntohl(addr.s_addr);
     
+    if (!inet_aton(listen_if_addr, &addr)) {
+        fprintf(stderr, "rmc_activate_context(_interface_addr): Could not resolve %s to IP address\n",
+                listen_if_addr);
+        return EINVAL;
+    }
+    ctx->listen_if_addr = ntohl(addr.s_addr);
 
-    strncpy(ctx->listen_iface_addr, listen_iface_addr, sizeof(ctx->listen_iface_addr));
-    ctx->listen_iface_addr[sizeof(ctx->listen_iface_addr)-1] = 0;
+    ctx->mcast_port = multicast_port;
+    ctx->listen_port = listen_port;
 
     ctx->mcast_send_descriptor = -1;
     ctx->mcast_recv_descriptor = -1;
     ctx->listen_descriptor = -1;
 
-    ctx->port = port;
     ctx->user_data = user_data;
     ctx->poll_add = poll_add;
     ctx->poll_modify = poll_modify;
@@ -161,14 +176,8 @@ int rmc_activate_context(rmc_context_t* ctx)
     memset((void*) &sock_addr, 0, sizeof(sock_addr));
 
     sock_addr.sin_family = AF_INET;
-    if (!inet_aton(ctx->multicast_iface_addr, &sock_addr.sin_addr)) {
-        fprintf(stderr, "rmc_activate_context(multicast_interface_addr): Could not resolve %s to IP address\n",
-                ctx->multicast_addr);
-        goto error;
-    }
-
-
-    sock_addr.sin_port = htons(ctx->port);
+    sock_addr.sin_addr.s_addr = htonl(ctx->mcast_if_addr);
+    sock_addr.sin_port = htons(ctx->mcast_port);
 
     if (bind(ctx->mcast_recv_descriptor,
              (struct sockaddr *) &sock_addr,
@@ -178,14 +187,9 @@ int rmc_activate_context(rmc_context_t* ctx)
     }
 
 
-    // Join multicast group
-    if (!inet_aton(ctx->multicast_addr, &mreq.imr_multiaddr)) {
-        fprintf(stderr, "rmc_activate_context(multicast_addr): Could not resolve %s to IP address\n",
-                ctx->multicast_addr);
-        goto error;
-    }
-
-    memcpy(&mreq.imr_interface, &sock_addr.sin_addr, sizeof(sock_addr.sin_addr));
+    // Setup multicast group membership
+    mreq.imr_multiaddr.s_addr = htonl(ctx->mcast_group_addr);
+    mreq.imr_interface.s_addr = htonl(ctx->mcast_if_addr);
 
     if (setsockopt(ctx->mcast_recv_descriptor,
                    IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
@@ -209,7 +213,7 @@ int rmc_activate_context(rmc_context_t* ctx)
     }
 
     //
-    // Setup udp send edscriptor to be received by multicast members.
+    // Setup udp send descriptor to be received by multicast members.
     //
     ctx->mcast_send_descriptor = socket (AF_INET, SOCK_DGRAM, 0);
 
@@ -219,14 +223,6 @@ int rmc_activate_context(rmc_context_t* ctx)
     }
 
 
-    // setup destination address to be used by _process_multicast_write
-    memset((void*) &ctx->mcast_dest_addr, 0, sizeof(ctx->mcast_dest_addr));
-    ctx->mcast_dest_addr.sin_family = AF_INET;
-    ctx->mcast_dest_addr.sin_addr = mreq.imr_multiaddr;
-    ctx->mcast_dest_addr.sin_port = htons(ctx->port);
-
-    memset((void*) &ctx->mcast_local_addr, 0, sizeof(ctx->mcast_local_addr));
-    getsockname(ctx->mcast_send_descriptor, &ctx->mcast_local_addr, &sock_len);
 
     // 
     // Setup TCP listen
@@ -252,15 +248,9 @@ int rmc_activate_context(rmc_context_t* ctx)
 
     // Bind to local endpoint.
     sock_addr.sin_family = AF_INET;
+    sock_addr.sin_addr.s_addr = htonl(ctx->listen_if_addr);
+    sock_addr.sin_port = htons(ctx->listen_port);
 
-    if (inet_aton(ctx->listen_iface_addr, &sock_addr.sin_addr) != 1) {
-        errno = EFAULT;
-        goto error;
-    }
-    else
-        sock_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-
-    sock_addr.sin_port = htons(ctx->port);
     if (bind(ctx->listen_descriptor,
              (struct sockaddr *) &sock_addr, sizeof(sock_addr)) < 0) {
         perror("rmc_activate_context(): bind()");
