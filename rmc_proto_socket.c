@@ -83,6 +83,11 @@ int rmc_complete_connect(rmc_context_t* ctx, rmc_socket_t* sock)
     if (!ctx || !sock)
         return EINVAL;
     
+   printf("rmc_complete_connect(): ind[%d] addr[%s:%d]\n",
+          sock->poll_info.rmc_index,
+          inet_ntoa( (struct in_addr) { .s_addr = htonl(sock->remote_address) }),
+          sock->remote_port);
+
     if (getsockopt(sock->poll_info.descriptor,
                    SOL_SOCKET,
                    SO_ERROR,
@@ -101,9 +106,9 @@ int rmc_complete_connect(rmc_context_t* ctx, rmc_socket_t* sock)
     // will resend failed multicast packets via tcp
     sock->mode = RMC_SOCKET_MODE_SUBSCRIBER;
 
-    // We start off in reading mode
     sock->poll_info.action = RMC_POLLREAD;
 
+    // We start off in reading mode
     if (ctx->poll_modify)
         (*ctx->poll_modify)(ctx, &old_info, &sock->poll_info);
 
@@ -111,9 +116,9 @@ int rmc_complete_connect(rmc_context_t* ctx, rmc_socket_t* sock)
 }
                                
 int rmc_connect_tcp_by_address(rmc_context_t* ctx,
-                                      uint32_t address,
-                                      in_port_t port,
-                                      rmc_poll_index_t* result_index)
+                               uint32_t address,
+                               in_port_t port,
+                               rmc_poll_index_t* result_index)
 {
     rmc_poll_index_t c_ind = -1;
     int res = 0;
@@ -124,7 +129,7 @@ int rmc_connect_tcp_by_address(rmc_context_t* ctx,
 
     sock_addr = (struct sockaddr_in) {
         .sin_family = AF_INET,
-        .sin_port = htons(ctx->listen_port),
+        .sin_port = htons(port),
         .sin_addr = (struct in_addr) { .s_addr = htonl(address) }
     };
 
@@ -138,7 +143,7 @@ int rmc_connect_tcp_by_address(rmc_context_t* ctx,
     if (ctx->sockets[c_ind].poll_info.descriptor == -1)
         return errno;
  
-    printf("rmc_connect_tcp_by_address(): %s:%d\n", inet_ntoa(sock_addr.sin_addr), ntohs(sock_addr.sin_port));
+    printf("rmc_connect_tcp_by_address(): ind[%d] addr[%s:%d]\n", c_ind, inet_ntoa(sock_addr.sin_addr), ntohs(sock_addr.sin_port));
 
     
     res = connect(ctx->sockets[c_ind].poll_info.descriptor,
@@ -208,6 +213,7 @@ int rmc_process_accept(rmc_context_t* ctx,
 
     // Find a free slot.
     c_ind = _get_free_slot(ctx);
+
     if (c_ind == -1)
         return ENOMEM;
 

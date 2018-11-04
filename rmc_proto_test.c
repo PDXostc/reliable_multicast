@@ -172,6 +172,7 @@ void test_rmc_proto(int publisher, char* mcast_group_addr, char* mcast_if_addr, 
 
     _test("1.1", rmc_activate_context(ctx));
 
+    printf("context: %.9X\n", ctx->context_id);
     if (mode == PUBLISH)
         rmc_queue_packet(ctx, "p1", 2);
 

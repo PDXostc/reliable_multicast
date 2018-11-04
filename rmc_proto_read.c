@@ -133,7 +133,7 @@ static int _process_multicast_read(rmc_context_t* ctx)
         return EPROTO;
     }
         
-    printf("_process_multicast_read(): ctx_id[0x%.8X] len[%.5d] from[%s:%d] listen[%s:%d]",
+    printf("mcast_rx(): ctx_id[0x%.8X] len[%.5d] from[%s:%d] listen[%s:%d]\n",
            mcast_hdr->context_id,
            mcast_hdr->payload_len,
            inet_ntoa(src_addr.sin_addr), ntohs(src_addr.sin_port),
@@ -154,6 +154,7 @@ static int _process_multicast_read(rmc_context_t* ctx)
     // If we have a complete spec for the networ address in the packet header, use that.
     // If listen_ip_addr is 0, then use the IP address provided in source address returned
     // by recvfrom
+
     if (!mcast_hdr->listen_ip)
         mcast_hdr->listen_ip = ntohl(src_addr.sin_addr.s_addr);
 
@@ -337,6 +338,7 @@ int rmc_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
     if (ctx->sockets[p_ind].poll_info.descriptor == -1)
         return ENOTCONN;
 
+#warning FIXME: Duplicate poll_modify calls
     res = _tcp_read(ctx, p_ind);
     // Read poll is always active. Callback to re-arm.
     if (ctx->poll_modify) {

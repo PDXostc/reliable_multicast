@@ -89,6 +89,12 @@ static int _process_multicast_write(rmc_context_t* ctx)
         pack = pnode?pnode->data:0;
     }
 
+    printf("mcast_tx(): ctx_id[0x%.8X] len[%.5d] from[%s:%d] listen[%s:%d]\n",
+           mcast_hdr->context_id,
+           mcast_hdr->payload_len,
+           inet_ntoa(sock_addr.sin_addr), ntohs(sock_addr.sin_port),
+           inet_ntoa( (struct in_addr) { .s_addr = htonl(mcast_hdr->listen_ip) }) , mcast_hdr->listen_port),
+
     res = sendto(ctx->mcast_send_descriptor,
                  packet,
                  sizeof(multicast_header_t) + mcast_hdr->payload_len,
@@ -205,6 +211,7 @@ int rmc_write(rmc_context_t* ctx, rmc_poll_index_t p_ind)
     uint32_t bytes_left_before = 0;
     uint32_t bytes_left_after = 0;
     rmc_poll_t old_info;
+    rmc_socket_t* sock = 0;
     assert(ctx);
 
 
@@ -216,13 +223,16 @@ int rmc_write(rmc_context_t* ctx, rmc_poll_index_t p_ind)
     if (p_ind >= RMC_MAX_SOCKETS)
         return EINVAL;
 
-    if (ctx->sockets[p_ind].poll_info.descriptor == -1)
+    sock = &ctx->sockets[p_ind];
+
+    if (sock->poll_info.descriptor == -1)
         return ENOTCONN;
 
     old_info = ctx->sockets[p_ind].poll_info;
 
     // We are ready to write data.
-    if (circ_buf_in_use(&ctx->sockets[p_ind].write_buf) == 0) 
+    if (sock->mode != RMC_SOCKET_MODE_CONNECTING &&
+        circ_buf_in_use(&ctx->sockets[p_ind].write_buf) == 0) 
         return ENODATA;
 
     res = _process_tcp_write(ctx, &ctx->sockets[p_ind], &bytes_left_after);
