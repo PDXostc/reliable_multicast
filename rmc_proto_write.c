@@ -107,13 +107,11 @@ static int _process_multicast_write(rmc_context_t* ctx)
             return errno;
 
         if (ctx->poll_modify) {
-            rmc_poll_t pinfo = {
-                .action = RMC_POLLWRITE,
-                .descriptor = ctx->mcast_send_descriptor,
-                .rmc_index = RMC_MULTICAST_SEND_INDEX
-            };
-
-            (*ctx->poll_modify)(ctx, &pinfo, &pinfo);
+            (*ctx->poll_modify)(ctx,
+                                ctx->mcast_send_descriptor,
+                                RMC_MULTICAST_SEND_INDEX,
+                                RMC_POLLWRITE,
+                                RMC_POLLWRITE);
         }
         return 0;
     }
@@ -128,28 +126,18 @@ static int _process_multicast_write(rmc_context_t* ctx)
 
 
     if (ctx->poll_modify) {
-        rmc_poll_t wr_info = {
-            .action = RMC_POLLWRITE,
-            .descriptor = ctx->mcast_send_descriptor,
-            .rmc_index = RMC_MULTICAST_SEND_INDEX
-        };
-        rmc_poll_t nil_info = {
-            .action = 0,
-            .descriptor = ctx->mcast_send_descriptor,
-            .rmc_index = RMC_MULTICAST_SEND_INDEX
-        };
-
         // Do we have more packets to send?
-        if (pub_next_queued_packet(pctx))
-            (*ctx->poll_modify)(ctx, &wr_info, &wr_info);
-        else
-            (*ctx->poll_modify)(ctx, &wr_info, &nil_info);
+        (*ctx->poll_modify)(ctx,
+                            ctx->mcast_send_descriptor,
+                            RMC_MULTICAST_SEND_INDEX,
+                            RMC_POLLWRITE,
+                            pub_next_queued_packet(pctx)?RMC_POLLWRITE:0);
     }
     return 0;
 }
 
 
-static int _process_tcp_write(rmc_context_t* ctx, rmc_socket_t* sock, uint32_t* bytes_left)
+static int _process_tcp_write(rmc_context_t* ctx, rmc_connection_t* sock, uint32_t* bytes_left)
 {
     uint8_t *seg1 = 0;
     uint32_t seg1_len = 0;
@@ -159,7 +147,7 @@ static int _process_tcp_write(rmc_context_t* ctx, rmc_socket_t* sock, uint32_t* 
     ssize_t res = 0;
 
     // Is this socket being connected
-    if (sock->mode == RMC_SOCKET_MODE_CONNECTING) 
+    if (sock->mode == RMC_CONNECTION_MODE_CONNECTING) 
         return rmc_complete_connect(ctx, sock);
 
     // Grab as much data as we can.
@@ -182,7 +170,7 @@ static int _process_tcp_write(rmc_context_t* ctx, rmc_socket_t* sock, uint32_t* 
     iov[1].iov_len = seg2_len;
 
     errno = 0;
-    res = writev(sock->poll_info.descriptor, iov, seg2_len?2:1);
+    res = writev(sock->descriptor, iov, seg2_len?2:1);
 
     // How did that write go?
     if (res == -1) { 
@@ -204,57 +192,61 @@ static int _process_tcp_write(rmc_context_t* ctx, rmc_socket_t* sock, uint32_t* 
     return 0;
 }
 
-int rmc_write(rmc_context_t* ctx, rmc_poll_index_t p_ind)
+int rmc_write(rmc_context_t* ctx, rmc_connection_index_t s_ind)
 {
     int res = 0;
     int rearm_write = 0;
     uint32_t bytes_left_before = 0;
     uint32_t bytes_left_after = 0;
-    rmc_poll_t old_info;
-    rmc_socket_t* sock = 0;
+    rmc_poll_action_t old_action;
+    rmc_connection_t* sock = 0;
     assert(ctx);
 
 
-    if (p_ind == RMC_MULTICAST_SEND_INDEX) {
+    if (s_ind == RMC_MULTICAST_SEND_INDEX) {
         return _process_multicast_write(ctx);
     }
 
-    // Is p_ind within our socket vector?
-    if (p_ind >= RMC_MAX_SOCKETS)
+    // Is s_ind within our connection vector?
+    if (s_ind >= RMC_MAX_CONNECTIONS)
         return EINVAL;
 
-    sock = &ctx->sockets[p_ind];
+    sock = &ctx->connections[s_ind];
 
-    if (sock->poll_info.descriptor == -1)
+    if (sock->descriptor == -1)
         return ENOTCONN;
 
-    old_info = ctx->sockets[p_ind].poll_info;
+    old_action = ctx->connections[s_ind].action;
 
     // We are ready to write data.
-    if (sock->mode != RMC_SOCKET_MODE_CONNECTING &&
-        circ_buf_in_use(&ctx->sockets[p_ind].write_buf) == 0) 
+    if (sock->mode != RMC_CONNECTION_MODE_CONNECTING &&
+        circ_buf_in_use(&ctx->connections[s_ind].write_buf) == 0) 
         return ENODATA;
 
-    res = _process_tcp_write(ctx, &ctx->sockets[p_ind], &bytes_left_after);
+    res = _process_tcp_write(ctx, &ctx->connections[s_ind], &bytes_left_after);
     
     if (bytes_left_after == 0) 
-        ctx->sockets[p_ind].poll_info.action &= ~RMC_POLLWRITE;
+        ctx->connections[s_ind].action &= ~RMC_POLLWRITE;
     else
-        ctx->sockets[p_ind].poll_info.action |= RMC_POLLWRITE;
+        ctx->connections[s_ind].action |= RMC_POLLWRITE;
 
     if (ctx->poll_modify)
-        (*ctx->poll_modify)(ctx, &old_info, &ctx->sockets[p_ind].poll_info);
+        (*ctx->poll_modify)(ctx,
+                            ctx->connections[s_ind].descriptor,
+                            s_ind,
+                            old_action,
+                            ctx->connections[s_ind].action);
 
     return res;
 }
 
 // Send an ack for a packet that has been processed.
 // Called by rmc_free_packet().
-int rmc_proto_ack(rmc_context_t* ctx, rmc_socket_t* sock, sub_packet_t* pack)
+int rmc_proto_ack(rmc_context_t* ctx, rmc_connection_t* sock, sub_packet_t* pack)
 {
     uint32_t available = circ_buf_available(&sock->write_buf);
     uint32_t old_in_use = circ_buf_in_use(&sock->write_buf);
-    rmc_poll_t old_poll_info = sock->poll_info;
+    rmc_poll_action_t old_action = sock->action;
     ssize_t res = 0;
     uint8_t *seg1 = 0;
     uint32_t seg1_len = 0;
@@ -264,7 +256,7 @@ int rmc_proto_ack(rmc_context_t* ctx, rmc_socket_t* sock, sub_packet_t* pack)
         .packet_id = pack->pid
     };
 
-    if (!ctx || !sock || !pack || sock->mode != RMC_SOCKET_MODE_SUBSCRIBER) 
+    if (!ctx || !sock || !pack || sock->mode != RMC_CONNECTION_MODE_SUBSCRIBER) 
         return EINVAL;
 
     // Allocate memory for command
@@ -288,10 +280,14 @@ int rmc_proto_ack(rmc_context_t* ctx, rmc_socket_t* sock, sub_packet_t* pack)
 
     // Do we need to arm the write poll descriptor.
     if (!old_in_use) {
-            // Read poll is always active. Callback to re-arm.
-        sock->poll_info.action |= RMC_POLLWRITE;
+        // Read poll is always active. Callback to re-arm.
+        sock->action |= RMC_POLLWRITE;
         if (ctx->poll_modify)
-            (*ctx->poll_modify)(ctx, &old_poll_info, &sock->poll_info);
+            (*ctx->poll_modify)(ctx,
+                                sock->descriptor,
+                                sock->rmc_index,
+                                old_action,
+                                sock->action);
     }
     
 }

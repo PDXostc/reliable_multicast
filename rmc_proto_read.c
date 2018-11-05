@@ -26,22 +26,22 @@
 #include <netdb.h>
 #include <assert.h>
 
-static inline rmc_socket_t* _find_publisher_by_address(rmc_context_t* ctx,
+static inline rmc_connection_t* _find_publisher_by_address(rmc_context_t* ctx,
                                                        uint32_t address,
                                                        uint16_t port)
 {
-    rmc_poll_index_t ind = 0;
+    rmc_connection_index_t ind = 0;
 
-    // Do we have any sockets in use at all?
-    if (ctx->max_socket_ind == -1)
+    // Do we have any connections in use at all?
+    if (ctx->max_connection_ind == -1)
         return 0;
     
     // FIXME: Replace with hash table search to speed up.
-    while(ind < ctx->max_socket_ind) {
-        if (ctx->sockets[ind].poll_info.descriptor != -1 &&
-            address == ctx->sockets[ind].remote_address &&
-            port == ctx->sockets[ind].remote_port)
-            return &ctx->sockets[ind];
+    while(ind < ctx->max_connection_ind) {
+        if (ctx->connections[ind].descriptor != -1 &&
+            address == ctx->connections[ind].remote_address &&
+            port == ctx->connections[ind].remote_port)
+            return &ctx->connections[ind];
 
         ++ind;
     }
@@ -97,12 +97,7 @@ static int _process_multicast_read(rmc_context_t* ctx)
     socklen_t addr_len = sizeof(src_addr);
     ssize_t res;
     int sock_ind = 0;
-    rmc_socket_t* sock = 0;
-    rmc_poll_t pinfo = {
-        .action = RMC_POLLREAD,
-        .descriptor = ctx->mcast_recv_descriptor,
-        .rmc_index = RMC_MULTICAST_RECV_INDEX
-    };
+    rmc_connection_t* sock = 0;
     multicast_header_t* mcast_hdr = (multicast_header_t*) data;
 
     if (!ctx)
@@ -146,7 +141,11 @@ static int _process_multicast_read(rmc_context_t* ctx)
     if (mcast_hdr->context_id == ctx->context_id) {
         puts(" - loopback (skipped)");
         if (ctx->poll_modify)
-            (*ctx->poll_modify)(ctx, &pinfo, &pinfo);
+            (*ctx->poll_modify)(ctx,
+                                ctx->mcast_recv_descriptor,
+                                RMC_MULTICAST_RECV_INDEX,
+                                RMC_POLLREAD,
+                                RMC_POLLREAD);
         return ELOOP; // Loopback message
     }
     putchar('\n');
@@ -168,7 +167,7 @@ static int _process_multicast_read(rmc_context_t* ctx)
         if (res)
             return res;
 
-        sock = &ctx->sockets[sock_ind];
+        sock = &ctx->connections[sock_ind];
     }
 
     return _decode_multicast(ctx,
@@ -177,12 +176,12 @@ static int _process_multicast_read(rmc_context_t* ctx)
                              &(sock->pubsub.publisher));
 }
 
-static int _process_cmd_packet(rmc_context_t* ctx, rmc_socket_t* sock, payload_len_t len)
+static int _process_cmd_packet(rmc_context_t* ctx, rmc_connection_t* sock, payload_len_t len)
 {
     return 0;
 }
 
-static int _process_cmd_ack_single(rmc_context_t* ctx, rmc_socket_t* sock, payload_len_t len)
+static int _process_cmd_ack_single(rmc_context_t* ctx, rmc_connection_t* sock, payload_len_t len)
 {
     cmd_ack_single_t ack;
     if (len < sizeof(ack))
@@ -200,7 +199,7 @@ static int _process_cmd_ack_single(rmc_context_t* ctx, rmc_socket_t* sock, paylo
     return 0;
 }
 
-static int _process_cmd_ack_interval(rmc_context_t* ctx, rmc_socket_t* sock, payload_len_t len)
+static int _process_cmd_ack_interval(rmc_context_t* ctx, rmc_connection_t* sock, payload_len_t len)
 {
     return 0;
 }
@@ -210,9 +209,9 @@ static int _process_cmd_ack_interval(rmc_context_t* ctx, rmc_socket_t* sock, pay
 // EAGAIN can be returned if one or more commands have been executed
 // and it is the last command that is partial.
 ///
-static int _process_tcp_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
+static int _process_tcp_read(rmc_context_t* ctx, rmc_connection_index_t s_ind)
 {
-    rmc_socket_t* sock = &ctx->sockets[p_ind];
+    rmc_connection_t* sock = &ctx->connections[s_ind];
     uint32_t in_use = circ_buf_in_use(&sock->read_buf);
     uint8_t command = 0;
     int res = 0;
@@ -275,9 +274,9 @@ static int _process_tcp_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
 }
 
 
-int _tcp_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
+int _tcp_read(rmc_context_t* ctx, rmc_connection_index_t s_ind)
 {
-    rmc_socket_t* sock = &ctx->sockets[p_ind];
+    rmc_connection_t* sock = &ctx->connections[s_ind];
     ssize_t res = 0;
     uint8_t *seg1 = 0;
     uint32_t seg1_len = 0;
@@ -303,7 +302,7 @@ int _tcp_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
     iov[1].iov_base = seg2;
     iov[1].iov_len = seg2_len;
     
-    res = readv(sock->poll_info.descriptor, iov, 2);
+    res = readv(sock->descriptor, iov, 2);
 
     if (res == -1)
         return errno;
@@ -312,44 +311,42 @@ int _tcp_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
     // bytes read.
     circ_buf_trim(&sock->read_buf, res);
 
-    return _process_tcp_read(ctx, p_ind);
+    return _process_tcp_read(ctx, s_ind);
     
 }
 
-int rmc_read(rmc_context_t* ctx, rmc_poll_index_t p_ind)
+int rmc_read(rmc_context_t* ctx, rmc_connection_index_t s_ind)
 {
     int res = 0;
 
     if (!ctx)
         return EINVAL;
 
-    if (p_ind == RMC_MULTICAST_RECV_INDEX) 
+    if (s_ind == RMC_MULTICAST_RECV_INDEX) 
         return _process_multicast_read(ctx);
 
 
-    if (p_ind == RMC_LISTEN_INDEX) 
-        return rmc_process_accept(ctx, &p_ind);
+    if (s_ind == RMC_LISTEN_INDEX) 
+        return rmc_process_accept(ctx, &s_ind);
 
 
-    // Is c_ind within our socket vector?
-    if (p_ind >= RMC_MAX_SOCKETS)
+    // Is c_ind within our connection vector?
+    if (s_ind >= RMC_MAX_CONNECTIONS)
         return EINVAL;
 
-    if (ctx->sockets[p_ind].poll_info.descriptor == -1)
+    if (ctx->connections[s_ind].descriptor == -1)
         return ENOTCONN;
 
 #warning FIXME: Duplicate poll_modify calls
-    res = _tcp_read(ctx, p_ind);
+    res = _tcp_read(ctx, s_ind);
     // Read poll is always active. Callback to re-arm.
     if (ctx->poll_modify) {
-        rmc_poll_t pinfo = {
-            .action = RMC_POLLREAD,
-            .descriptor = ctx->sockets[p_ind].poll_info.descriptor,
-            .rmc_index = p_ind
-        };
-        (*ctx->poll_modify)(ctx, &pinfo, &pinfo);
+        (*ctx->poll_modify)(ctx, 
+                            ctx->connections[s_ind].descriptor, 
+                            s_ind, 
+                            RMC_POLLREAD, 
+                            RMC_POLLREAD);
     }
-
     return res;
 }
 

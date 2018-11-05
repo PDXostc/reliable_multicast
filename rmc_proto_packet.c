@@ -41,27 +41,15 @@ int rmc_queue_packet(rmc_context_t* ctx,
     //        returning ENOMEM
     pub_queue_packet(&ctx->pub_ctx, payload, payload_len);
 
-
-
     if (ctx->poll_modify)  {
-        rmc_poll_t wr_info = {
-            .action = RMC_POLLWRITE,
-            .descriptor = ctx->mcast_send_descriptor,
-            .rmc_index = RMC_MULTICAST_SEND_INDEX
-        };
-        rmc_poll_t nil_info = {
-            .action = 0,
-            .descriptor = ctx->mcast_send_descriptor,
-            .rmc_index = RMC_MULTICAST_SEND_INDEX
-        };
-
         // Did we already have a packet pending for send prior
-        // to queueing the lastest packet?
-        if (pack)
-            (*ctx->poll_modify)(ctx, &wr_info, &wr_info);
- 
-        else
-            (*ctx->poll_modify)(ctx, &nil_info, &wr_info);
+        // to queueing the lastest packet? If so, old action
+        // was POLLWRITE, if not, it was 0.
+        (*ctx->poll_modify)(ctx,
+                            ctx->mcast_send_descriptor,
+                            RMC_MULTICAST_SEND_INDEX,
+                            (pack?RMC_POLLWRITE:0),
+                            RMC_POLLWRITE);
     }
 
     return 0;
@@ -80,7 +68,7 @@ sub_packet_t* rmc_get_next_ready_packet(rmc_context_t* ctx)
 
 int rmc_free_packet(rmc_context_t* ctx, sub_packet_t* pack)
 {
-    rmc_socket_t* sock = sub_packet_user_data(pack);
+    rmc_connection_t* sock = sub_packet_user_data(pack);
 
     if (!sock)
         return EINVAL;

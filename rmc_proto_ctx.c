@@ -26,12 +26,15 @@
 #include <netdb.h>
 #include <assert.h>
 
-static void _reset_socket(rmc_socket_t* sock, int index)
+static void _reset_connection(rmc_context_t* ctx, int index)
 {
-    sock->poll_info.action = 0;
-    sock->poll_info.rmc_index = index;
-    sock->poll_info.descriptor = -1;
-    sock->mode = RMC_SOCKET_MODE_UNUSED;
+    rmc_connection_t* sock = &ctx->connections[index];
+
+    sock->action = 0;
+    sock->rmc_index = index;
+    sock->descriptor = -1;
+    sock->owner = ctx;
+    sock->mode = RMC_CONNECTION_MODE_UNUSED;
     circ_buf_init(&sock->read_buf, sock->read_buf_data, sizeof(sock->read_buf_data));
     circ_buf_init(&sock->write_buf, sock->write_buf_data, sizeof(sock->write_buf_data));
     memset(&sock->remote_address, 0, sizeof(sock->remote_address));
@@ -63,14 +66,22 @@ int rmc_init_context(rmc_context_t* ctx,
                      int multicast_port,
                      int listen_port,
                      user_data_t user_data,
-                     void (*poll_add)(rmc_context_t* context, rmc_poll_t* poll),
-                     void (*poll_modify)(rmc_context_t* context,
-                                         rmc_poll_t* old_poll,
-                                         rmc_poll_t* new_poll),
-
-                     void (*poll_remove)(rmc_context_t* context, rmc_poll_t* poll),
-                     void* (*payload_alloc)(rmc_context_t* context, payload_len_t payload_len),
-                     void (*payload_free)(rmc_context_t* context, void* payload, payload_len_t payload_len)) {
+                     void (*poll_add)(struct rmc_context* context,
+                                      int descriptor,
+                                      rmc_connection_index_t index,
+                                      rmc_poll_action_t initial_action),
+                     void (*poll_modify)(struct rmc_context* context,
+                                         int descriptor,
+                                         rmc_connection_index_t index,
+                                         rmc_poll_action_t old_action,
+                                         rmc_poll_action_t new_action),
+                     void (*poll_remove)(struct rmc_context* context,
+                                         int descriptor,
+                                         rmc_connection_index_t index),
+                     void* (*payload_alloc)(struct rmc_context* context, payload_len_t payload_len),
+                     void (*payload_free)(rmc_context_t* context, 
+                                          void* payload,
+                                          payload_len_t payload_len)) {
 
     
     int ind = 0;
@@ -79,9 +90,9 @@ int rmc_init_context(rmc_context_t* ctx,
     if (!ctx || !mcast_group_addr)
         return EINVAL;
 
-    ind = sizeof(ctx->sockets) / sizeof(ctx->sockets[0]);
+    ind = sizeof(ctx->connections) / sizeof(ctx->connections[0]);
     while(ind--) 
-        _reset_socket(&ctx->sockets[ind], ind);
+        _reset_connection(ctx, ind);
     
     if (!mcast_if_addr)
         mcast_if_addr = "0.0.0.0";
@@ -123,9 +134,9 @@ int rmc_init_context(rmc_context_t* ctx,
     ctx->poll_remove = poll_remove;
     ctx->payload_alloc = payload_alloc;
     ctx->payload_free = payload_free;
-    ctx->socket_count = 0;
-    ctx->max_socket_ind = -1; // No sockets in use
-    ctx->resend_timeout = RMC_RESEND_TIMEOUT_DEFAULT;
+    ctx->connection_count = 0;
+    ctx->resend_timeout = RMC_DEFAULT_PACKET_TIMEOUT;
+    ctx->max_connection_ind = -1; // No connections in use
     srand(rmc_usec_monotonic_timestamp() & 0xFFFFFFFF);
     ctx->context_id = rand();
     // outgoing_payload_free() will be called when
@@ -264,22 +275,20 @@ int rmc_activate_context(rmc_context_t* ctx)
 
 
     if (ctx->poll_add) {
-        rmc_poll_t pinfo;
+        (*ctx->poll_add)(ctx,
+                         ctx->mcast_send_descriptor,
+                         RMC_MULTICAST_SEND_INDEX,
+                         RMC_POLLWRITE);
 
-        pinfo.descriptor = ctx->mcast_send_descriptor;
-        pinfo.action = 0;
-        pinfo.rmc_index = RMC_MULTICAST_SEND_INDEX;
-        (*ctx->poll_add)(ctx, &pinfo);
+        (*ctx->poll_add)(ctx,
+                         ctx->mcast_recv_descriptor,
+                         RMC_MULTICAST_RECV_INDEX,
+                         RMC_POLLREAD);
 
-        pinfo.descriptor = ctx->mcast_recv_descriptor;
-        pinfo.action = RMC_POLLREAD;
-        pinfo.rmc_index = RMC_MULTICAST_RECV_INDEX;
-        (*ctx->poll_add)(ctx, &pinfo);
-
-        pinfo.descriptor = ctx->listen_descriptor;
-        pinfo.action = RMC_POLLREAD;
-        pinfo.rmc_index = RMC_LISTEN_INDEX;
-        (*ctx->poll_add)(ctx, &pinfo);
+        (*ctx->poll_add)(ctx,
+                         ctx->listen_descriptor,
+                         RMC_LISTEN_INDEX,
+                         RMC_POLLREAD);
     }
 
     return 0;
@@ -315,6 +324,14 @@ user_data_t rmc_user_data(rmc_context_t* ctx)
         return (user_data_t) { .u64 = 0 };
 
     return ctx->user_data;
+}
+
+rmc_context_id_t rmc_context_id(rmc_context_t* ctx)
+{
+    if (!ctx)
+        return 0;
+
+    return ctx->context_id;
 }
 
 int rmc_set_user_data(rmc_context_t* ctx, user_data_t user_data)

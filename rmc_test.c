@@ -97,5 +97,5 @@ int main(int argc, char* argv[])
     test_sub();
 
     // If we have an argument, we will be the subscriber.
-    test_rmc_proto(publisher, mcast_group_addr, mcast_if_addr, listen_if_addr, mcast_port, listen_port);
+//    test_rmc_proto(publisher, mcast_group_addr, mcast_if_addr, listen_if_addr, mcast_port, listen_port);
 }

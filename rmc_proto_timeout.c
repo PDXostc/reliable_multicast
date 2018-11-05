@@ -29,10 +29,13 @@
 // =============
 // TIMEOUT MANAGEMENT
 // =============
-static int _process_packet_timeout(rmc_context_t* ctx, pub_subscriber_t* sub, pub_packet_t* pack, usec_timestamp_t timeout_ts)
+static int _process_packet_timeout(rmc_context_t* ctx,
+                                   pub_subscriber_t* sub,
+                                   pub_packet_t* pack,
+                                   usec_timestamp_t timeout_ts)
 {
     // Send the packet via TCP.
-    rmc_socket_t* sock = 0;
+    rmc_connection_t* sock = 0;
     uint8_t *seg1 = 0;
     uint32_t seg1_len = 0;
     uint8_t *seg2 = 0;
@@ -47,8 +50,8 @@ static int _process_packet_timeout(rmc_context_t* ctx, pub_subscriber_t* sub, pu
     if (!ctx || !sub || !pack)
         return EINVAL;
 
-    sock = (rmc_socket_t*) pub_subscriber_user_data(sub);
-    if (!sock || sock->mode != RMC_SOCKET_MODE_PUBLISHER)
+    sock = (rmc_connection_t*) pub_subscriber_user_data(sub);
+    if (!sock || sock->mode != RMC_CONNECTION_MODE_PUBLISHER)
         return EINVAL;
         
     // Do we have enough circular buffer meomory available?
@@ -86,12 +89,16 @@ static int _process_packet_timeout(rmc_context_t* ctx, pub_subscriber_t* sub, pu
         memcpy(seg2, ((uint8_t*) pack->payload) + seg1_len, seg2_len);
 
     // Setup the poll write action
-    if (!(sock->poll_info.action & RMC_POLLWRITE)) {
-        rmc_poll_t old_info = sock->poll_info;
+    if (!(sock->action & RMC_POLLWRITE)) {
+        rmc_poll_action_t old_action = sock->action;
 
-        sock->poll_info.action |= RMC_POLLWRITE;
+        sock->action |= RMC_POLLWRITE;
         if (ctx->poll_modify)
-            (*ctx->poll_modify)(ctx, &old_info, &sock->poll_info);
+            (*ctx->poll_modify)(ctx,
+                                sock->descriptor,
+                                sock->rmc_index,
+                                old_action,
+                                sock->action);
     }    
     
     return 0;
