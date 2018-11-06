@@ -112,23 +112,23 @@ static int _process_multicast_read(rmc_context_t* ctx)
                    (struct sockaddr*) &src_addr, &addr_len);
 
     if (res == -1) {
-        perror("rmc_proto::rmc_read_multicast(): recvfrom()");
+        perror("  rmc_proto::rmc_read_multicast(): recvfrom()");
         return errno;
     }
 
     if (res < sizeof(multicast_header_t)) {
-        fprintf(stderr, "Corrupt header. Needed [%lu] header bytes. Got %lu\n",
+        fprintf(stderr, "  Corrupt header. Needed [%lu] header bytes. Got %lu\n",
                 sizeof(multicast_header_t), res);
         return EPROTO;
     }
                 
     if (res < sizeof(multicast_header_t) + mcast_hdr->payload_len) {
-        fprintf(stderr, "Corrupt packet. Needed [%lu] header + payload bytes. Got %lu\n",
+        fprintf(stderr, "  Corrupt packet. Needed [%lu] header + payload bytes. Got %lu\n",
                 sizeof(multicast_header_t) + mcast_hdr->payload_len, res);
         return EPROTO;
     }
         
-    printf("mcast_rx(): ctx_id[0x%.8X] len[%.5d] from[%s:%d] listen[%s:%d]\n",
+    printf("  mcast_rx(): ctx_id[0x%.8X] len[%.5d] from[%s:%d] listen[%s:%d]",
            mcast_hdr->context_id,
            mcast_hdr->payload_len,
            inet_ntoa(src_addr.sin_addr), ntohs(src_addr.sin_port),
@@ -337,7 +337,6 @@ int rmc_read(rmc_context_t* ctx, rmc_connection_index_t s_ind)
     if (ctx->connections[s_ind].descriptor == -1)
         return ENOTCONN;
 
-#warning FIXME: Duplicate poll_modify calls
     res = _tcp_read(ctx, s_ind);
     // Read poll is always active. Callback to re-arm.
     if (ctx->poll_modify) {

@@ -278,7 +278,7 @@ int rmc_activate_context(rmc_context_t* ctx)
         (*ctx->poll_add)(ctx,
                          ctx->mcast_send_descriptor,
                          RMC_MULTICAST_SEND_INDEX,
-                         RMC_POLLWRITE);
+                         0);
 
         (*ctx->poll_add)(ctx,
                          ctx->mcast_recv_descriptor,

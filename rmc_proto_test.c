@@ -17,6 +17,9 @@
 #include <unistd.h>
 #include <errno.h>
 
+rmc_context_t* ctx1 = 0;
+rmc_context_t* ctx2 = 0;
+
 
 // We need user data that points out both
 // the pollset file descriptor and the context associated.
@@ -40,6 +43,26 @@ static char* _index(rmc_connection_index_t index, char* res)
     }
     return 0;
 }
+
+static int _descriptor(rmc_context_t* ctx,
+                       rmc_connection_index_t index)
+{
+    switch(index) {
+    case RMC_MULTICAST_RECV_INDEX:
+        return ctx->mcast_recv_descriptor;
+
+    case RMC_MULTICAST_SEND_INDEX:
+        return ctx->mcast_send_descriptor;
+
+    case RMC_LISTEN_INDEX:
+        return ctx->listen_descriptor;
+
+    default:
+        return ctx->connections[index].descriptor;
+
+    }
+}
+
 
 static void* _test_proto_alloc(payload_len_t plen)
 {
@@ -86,8 +109,10 @@ void poll_add(rmc_context_t* ctx,
     if (action & RMC_POLLWRITE)
         ev.events |= EPOLLOUT;
 
-    printf("poll_add(%s)%s%s%s\n",
+    printf("poll_add(%s:%s:%d)%s%s%s\n",
+           (ctx == ctx1)?"ctx1":"ctx2",
            _index(index, buf),
+           descriptor,
            ((action & RMC_POLLREAD)?" read":""),
            ((action & RMC_POLLWRITE)?" write":""),
            (!(action & (RMC_POLLREAD | RMC_POLLWRITE)))?" [none]":"");
@@ -119,8 +144,10 @@ void poll_modify(rmc_context_t* ctx,
     if (new_action & RMC_POLLWRITE)
         ev.events |= EPOLLOUT;
 
-    printf("poll_modify(%s)%s%s%s\n",
+    printf("poll_modify(%s:%s:%d)%s%s%s\n",
+           (ctx == ctx1)?"ctx1":"ctx2",
            _index(index, buf),
+           descriptor,
            ((new_action & RMC_POLLREAD)?" read":""),
            ((new_action & RMC_POLLWRITE)?" write":""),
            (!(new_action & (RMC_POLLREAD | RMC_POLLWRITE)))?" [none]":"");
@@ -159,8 +186,6 @@ void test_rmc_proto(int publisher,
                     int mcast_port,
                     int listen_port)
 {
-    rmc_context_t* ctx1 = 0;
-    rmc_context_t* ctx2 = 0;
     int res = 0;
     int send_sock = 0;
     int send_ind = 0;
@@ -215,7 +240,7 @@ void test_rmc_proto(int publisher,
         int poll_tout1 = -1;
         int poll_tout2 = -1;
         int nfds = 0;
-
+        
         // Get the next timeout from ctx11
         // If we get ENODATA back, it means that we have no timeouts queued.
         if (rmc_get_next_timeout(ctx1, &tout) != ENODATA) 
@@ -239,41 +264,66 @@ void test_rmc_proto(int publisher,
             rmc_process_timeout(ctx2);
             continue;
         }
+
         printf("poll_wait(): %d results\n", nfds);
         while(nfds--) {
-            printf("  poll_wait(%s)%s%s%s\n",
-                   _index(events[nfds].data.u32, buf),
+            rmc_context_t *ctx = 0;
+            rmc_connection_index_t c_ind = events[nfds].data.u64 & 0xFFFFFFFF;
+            rmc_context_id_t ctx_id = events[nfds].data.u64 >> 32;
+
+            // Figure out which context that triggered the event.
+            if (ctx_id == rmc_context_id(ctx1))
+                ctx = ctx1;
+
+            if (ctx_id == rmc_context_id(ctx2))
+                ctx = ctx2;
+
+            if (ctx_id != rmc_context_id(ctx1) &&
+                ctx_id != rmc_context_id(ctx2)) {
+                printf("RMC protocol test 3.1: Event context ID [%.9X] did not match ctx1[%.9X] or ctx2[%.9X]\n",
+                       ctx_id, rmc_context_id(ctx1), rmc_context_id(ctx2));
+                exit(255);
+            }
+                             
+            printf("  poll_wait(%s:%s:%d)%s%s%s\n",
+                   (ctx == ctx1)?"ctx1":"ctx2", 
+                   _index(c_ind, buf),
+                   _descriptor(ctx, c_ind),
                    ((events[nfds].events & EPOLLIN)?" read":""),
                    ((events[nfds].events & EPOLLOUT)?" write":""),
                    ((events[nfds].events & EPOLLHUP)?" disconnect":""));
 
             if (events[nfds].events & EPOLLIN) {
-                if (!(res = rmc_read(ctx1, events[nfds].data.u32)) && events[nfds].data.u32 != RMC_LISTEN_INDEX) {
-                    pack = rmc_get_next_ready_packet(ctx1);
+                if (!(res = rmc_read(ctx, events[nfds].data.u32)) &&
+                    events[nfds].data.u32 != RMC_LISTEN_INDEX) {
+
+                    pack = rmc_get_next_ready_packet(ctx);
                     if (!pack) {
-                        printf("RMC protocol test 3.1: No packet received\n");
+                        printf("  RMC protocol test 3.2: No packet received\n");
                         exit(255);
                     }
 
                     if (memcmp(pack->payload, "p1", pack->payload_len)) {
-                        printf("RMC protocol test 3.2: Payload differ\n");
+                        printf("  RMC protocol test 3.3: Payload differ\n");
                         exit(255);
                     }
-                    puts("payload ok");
+                    puts("  payload ok");
                 }
                 if (res && res != ELOOP) {
-                    printf("RMC protocol test 3.2: rmc_read() returned %s\n", strerror(res));
+                    printf("  RMC protocol test 3.4: rmc_read() returned %s\n", strerror(res));
                     exit(255);
                 }
             }
 
             if (events[nfds].events & EPOLLOUT) {
-                rmc_write(ctx1, events[nfds].data.u32);
+                rmc_write(ctx, c_ind);
             }
 
             if (events[nfds].events & EPOLLHUP) {
-                rmc_close_tcp(ctx1, events[nfds].data.u32);
+                rmc_close_tcp(ctx, c_ind);
             }
+            putchar('\n');
         }
     }
 }
+ 

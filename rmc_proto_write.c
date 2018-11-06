@@ -89,7 +89,7 @@ static int _process_multicast_write(rmc_context_t* ctx)
         pack = pnode?pnode->data:0;
     }
 
-    printf("mcast_tx(): ctx_id[0x%.8X] len[%.5d] from[%s:%d] listen[%s:%d]\n",
+    printf("  mcast_tx(): ctx_id[0x%.8X] len[%.5d] from[%s:%d] listen[%s:%d]\n",
            mcast_hdr->context_id,
            mcast_hdr->payload_len,
            inet_ntoa(sock_addr.sin_addr), ntohs(sock_addr.sin_port),
@@ -146,9 +146,6 @@ static int _process_tcp_write(rmc_context_t* ctx, rmc_connection_t* sock, uint32
     struct iovec iov[2];
     ssize_t res = 0;
 
-    // Is this socket being connected
-    if (sock->mode == RMC_CONNECTION_MODE_CONNECTING) 
-        return rmc_complete_connect(ctx, sock);
 
     // Grab as much data as we can.
     // The call will only return available
@@ -216,11 +213,15 @@ int rmc_write(rmc_context_t* ctx, rmc_connection_index_t s_ind)
     if (sock->descriptor == -1)
         return ENOTCONN;
 
+
+    // Is this socket in the process of being connected
+    if (sock->mode == RMC_CONNECTION_MODE_CONNECTING) 
+        return rmc_complete_connect(ctx, sock);
+
     old_action = ctx->connections[s_ind].action;
 
-    // We are ready to write data.
-    if (sock->mode != RMC_CONNECTION_MODE_CONNECTING &&
-        circ_buf_in_use(&ctx->connections[s_ind].write_buf) == 0) 
+    // Do we have any data to write?
+    if (circ_buf_in_use(&ctx->connections[s_ind].write_buf) == 0) 
         return ENODATA;
 
     res = _process_tcp_write(ctx, &ctx->connections[s_ind], &bytes_left_after);
