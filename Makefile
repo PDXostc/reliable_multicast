@@ -17,7 +17,9 @@ OBJ= interval.o \
 	rmc_proto_ctx.o
 
 TEST_OBJ = interval_test.o \
-	rmc_proto_test.o \
+	rmc_proto_test_common.o \
+	rmc_proto_test_pub.o \
+	rmc_proto_test_sub.o \
 	pub_test.o \
 	list_test.o \
 	rmc_test.o \

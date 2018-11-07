@@ -96,7 +96,7 @@ packet_id_t pub_queue_packet(pub_context_t* ctx,
     // node to send in pub_next_queued_packet().
     //
     // Set parent node to the list_node_t representing
-    // the pending packet in ctx->queed for quick unlinking.
+    // the pending packet in ctx->queued for quick unlinking.
     //
     ppack->parent_node =
         pub_packet_list_insert_sorted(&ctx->queued,
