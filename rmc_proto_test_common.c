@@ -157,29 +157,21 @@ void poll_remove(rmc_context_t* ctx,
 }
 
 
-int process_packet(rmc_context_t* ctx, int major, int minor)
-{
-    sub_packet_t* pack = 0;
 
-    pack = rmc_get_next_ready_packet(ctx);
-    _test("rmc_proto_test[%d.%d] process_packet():rmc_get_next_ready_packet(): %s\n", major, minor, pack?0:ENODATA);
+#define RMC_MIN(x,y) ((x)<(y)?(x):(y))
 
-    return minor + 1;
-}
-
-
-int process_events(rmc_context_t* ctx, int epollfd, int major)
+int process_events(rmc_context_t* ctx, int epollfd, usec_timestamp_t timeout, int major)
 {
     struct epoll_event events[RMC_MAX_CONNECTIONS];
     char buf[16];
-    usec_timestamp_t tout = 0;
+    usec_timestamp_t tout = timeout;
     int nfds = 0;
         
     // Get the next timeout 
     // If we get ENODATA back, it means that we have no timeouts queued.
-    if (rmc_get_next_timeout(ctx, &tout) == ENODATA)
-        tout = 100000; // 100 msec.
-
+    if (rmc_get_next_timeout(ctx, &tout) != ENODATA && timeout != -1)
+        tout = RMC_MIN(tout, timeout);
+    
 
     nfds = epoll_wait(epollfd, events, RMC_MAX_CONNECTIONS, tout / 1000);
     if (nfds == -1) {
@@ -197,8 +189,7 @@ int process_events(rmc_context_t* ctx, int epollfd, int major)
 
     while(nfds--) {
         int res = 0;
-        rmc_connection_index_t c_ind = events[nfds].data.u64 & 0xFFFFFFFF;
-
+        rmc_connection_index_t c_ind = events[nfds].data.u32;
         // Figure out which context that triggered the event.
 
         printf("poll_wait(%s:%d)%s%s%s\n",
@@ -208,20 +199,24 @@ int process_events(rmc_context_t* ctx, int epollfd, int major)
                ((events[nfds].events & EPOLLOUT)?" write":""),
                ((events[nfds].events & EPOLLHUP)?" disconnect":""));
 
+        if (events[nfds].events & EPOLLHUP) {
+            _test("rmc_proto_test[%d.%d] process_events():rmc_close_tcp(): %s\n",
+                  major, 11, rmc_close_tcp(ctx, c_ind));
+            continue;
+        }
+
         if (events[nfds].events & EPOLLIN) {
-            res = rmc_read(ctx, events[nfds].data.u32);
+            res = rmc_read(ctx, c_ind);
 
             // Did we read a loopback message we sent ourselves?
             if (res == ELOOP)
-                continue;
+                continue;       
 
             _test("rmc_proto_test[%d.%d] process_events():rmc_read(): %s\n", major, 1, res);
                 
             // If this was a connection call processed, we can continue.
             if (events[nfds].data.u32 == RMC_LISTEN_INDEX)
                 continue;
-                    
-            process_packet(ctx, 3, 2);
         }
 
         if (events[nfds].events & EPOLLOUT) 
@@ -229,9 +224,6 @@ int process_events(rmc_context_t* ctx, int epollfd, int major)
                   major, 10,
                   rmc_write(ctx, c_ind));
 
-        if (events[nfds].events & EPOLLHUP) 
-            _test("rmc_proto_test[%d.%d] process_events():rmc_close_tcp(): %s\n",
-                  major, 11, rmc_close_tcp(ctx, c_ind));
     }
     return 0;
 }

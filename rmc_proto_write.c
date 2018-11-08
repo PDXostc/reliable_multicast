@@ -47,6 +47,8 @@ static int _process_multicast_write(rmc_context_t* ctx)
     pub_packet_list_t snd_list;
     ssize_t res = 0;
     multicast_header_t *mcast_hdr = (multicast_header_t*) packet_ptr;
+    char* listen_addr = 0;
+    char* mcast_addr = 0;
     struct sockaddr_in sock_addr = (struct sockaddr_in) {
         .sin_family = AF_INET,
         .sin_port = htons(ctx->mcast_port),
@@ -69,6 +71,9 @@ static int _process_multicast_write(rmc_context_t* ctx)
 
     pub_packet_list_init(&snd_list, 0, 0, 0);
 
+    listen_addr = inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->listen_if_addr) });
+    mcast_addr = inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) });
+
     while(pack && mcast_hdr->payload_len <= RMC_MAX_PAYLOAD) {
         pub_packet_node_t* pnode = 0;
         cmd_packet_header_t* cmd_pack = (cmd_packet_header_t*) packet_ptr;
@@ -85,15 +90,17 @@ static int _process_multicast_write(rmc_context_t* ctx)
         mcast_hdr->payload_len += sizeof(cmd_packet_header_t) + pack->payload_len;
 
         pub_packet_list_push_head(&snd_list, pack);
-        pnode = pub_packet_list_next(pack->parent_node);
+
+        // FIXME: Maybe add a specific API call to traverse queued packages?
+        pnode = pub_packet_list_prev(pack->parent_node);
         pack = pnode?pnode->data:0;
     }
 
-    printf("  mcast_tx(): ctx_id[0x%.8X] len[%.5d] from[%s:%d] listen[%s:%d]\n",
+    printf("mcast_tx(): ctx_id[0x%.8X] len[%.5d] mcast[%s:%d] listen[%s:%d]\n",
            mcast_hdr->context_id,
            mcast_hdr->payload_len,
-           inet_ntoa(sock_addr.sin_addr), ntohs(sock_addr.sin_port),
-           inet_ntoa( (struct in_addr) { .s_addr = htonl(mcast_hdr->listen_ip) }) , mcast_hdr->listen_port),
+           mcast_addr, ntohs(sock_addr.sin_port),
+           listen_addr, mcast_hdr->listen_port);
 
     res = sendto(ctx->mcast_send_descriptor,
                  packet,
@@ -121,9 +128,13 @@ static int _process_multicast_write(rmc_context_t* ctx)
     // Mark all packages in the multicast packet we just
     // sent in the multicast message as sent.
     // pub_packet_sent will call free_o
-    while(pub_packet_list_pop_head(&snd_list, &pack))
+    while(pub_packet_list_pop_head(&snd_list, &pack)) {
+        printf("inflight[%lu]\n", pack->pid);
         pub_packet_sent(pctx, pack, ts);
+    }
 
+    extern void test_print_context(pub_context_t* ctx);
+    test_print_context(&ctx->pub_ctx);
 
     if (ctx->poll_modify) {
         // Do we have more packets to send?
@@ -215,8 +226,10 @@ int rmc_write(rmc_context_t* ctx, rmc_connection_index_t s_ind)
 
 
     // Is this socket in the process of being connected
-    if (sock->mode == RMC_CONNECTION_MODE_CONNECTING) 
-        return rmc_complete_connect(ctx, sock);
+    if (sock->mode == RMC_CONNECTION_MODE_CONNECTING) {
+        rmc_complete_connect(ctx, sock);
+        return 0;
+    }
 
     old_action = ctx->connections[s_ind].action;
 
@@ -279,17 +292,19 @@ int rmc_proto_ack(rmc_context_t* ctx, rmc_connection_t* sock, sub_packet_t* pack
     if (seg2_len) 
         memcpy(seg2, ((uint8_t*) &ack) + seg1_len, seg2_len);
 
+    // We always want to read from the tcp  socket.
+    sock->action = RMC_POLLREAD;
+
     // Do we need to arm the write poll descriptor.
-    if (!old_in_use) {
-        // Read poll is always active. Callback to re-arm.
+    if (!old_in_use) 
         sock->action |= RMC_POLLWRITE;
-        if (ctx->poll_modify)
-            (*ctx->poll_modify)(ctx,
-                                sock->descriptor,
-                                sock->rmc_index,
-                                old_action,
-                                sock->action);
-    }
+
+    if (ctx->poll_modify)
+        (*ctx->poll_modify)(ctx,
+                            sock->descriptor,
+                            sock->rmc_index,
+                            old_action,
+                            sock->action);
     
 }
 

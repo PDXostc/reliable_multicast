@@ -48,7 +48,7 @@ static uint8_t _test_print_subscriber(pub_sub_node_t* node, void* dt)
     return 1;
 }
 
-static void test_print_context(pub_context_t* ctx)
+void test_print_context(pub_context_t* ctx)
 {
     printf("Context           %p\n", ctx);
     printf("Next PID          %lu\n", ctx->next_pid);
@@ -147,7 +147,7 @@ void test_pub(void)
 
     // Check that we have four of original seven packets left in queue.
     if (pub_packet_list_size(&ctx.queued) != 4) {
-        printf("Failed pub test 3.1. Wanted size , got %d\n",
+        printf("Failed pub test 3.1. Wanted size 4, got %d\n",
                pub_packet_list_size(&ctx.queued));
         exit(255);
     }

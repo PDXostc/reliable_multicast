@@ -23,6 +23,7 @@
 typedef struct {
     char* payload;
     packet_id_t pid;
+    uint32_t msec_wait;
 } rmc_test_data_t;
 
 extern char* _index(rmc_connection_index_t index, char* res);
@@ -56,5 +57,6 @@ extern int process_packet(rmc_context_t* ctx, int major, int minor);
 
 extern void queue_test_data(rmc_context_t* ctx, rmc_test_data_t* td_arr, int td_arr_ind);
 
-extern int process_events(rmc_context_t* ctx, int epollfd, int major);
+extern int process_events(rmc_context_t* ctx, int epollfd, usec_timestamp_t timeout, int major);
+
 #endif // __RMC_PROTO_TEST_COMMON_H__

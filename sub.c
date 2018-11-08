@@ -47,7 +47,7 @@ int sub_packet_is_duplicate(sub_publisher_t* pub, packet_id_t pid)
                                              return dt1->pid == dt2->pid;
                                          })))?1:0;
 }
-                        
+
 
 int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
                         void* payload,
@@ -56,7 +56,6 @@ int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
     sub_packet_t* pack = 0;
     assert(pub);
 
-        
     pack = _alloc_pending_packet();
     pack->pid = pid;
     pack->payload = payload;
@@ -132,7 +131,6 @@ sub_packet_t* sub_next_ready_packet(sub_publisher_t* pub)
     node = sub_packet_list_head(&pub->ready);
     return node?node->data:0;
 }
-
 
 
 void sub_packet_dispatched(sub_packet_t* pack)

@@ -37,8 +37,8 @@ static inline rmc_connection_t* _find_publisher_by_address(rmc_context_t* ctx,
         return 0;
     
     // FIXME: Replace with hash table search to speed up.
-    while(ind < ctx->max_connection_ind) {
-        if (ctx->connections[ind].descriptor != -1 &&
+    while(ind <= ctx->max_connection_ind) {
+        if (ctx->connections[ind].descriptor != -1 &&  
             address == ctx->connections[ind].remote_address &&
             port == ctx->connections[ind].remote_port)
             return &ctx->connections[ind];
@@ -95,7 +95,8 @@ static int _process_multicast_read(rmc_context_t* ctx)
     uint8_t *data = buffer;
     struct sockaddr_in src_addr;
     socklen_t addr_len = sizeof(src_addr);
-    ssize_t res;
+    ssize_t len = 0;
+    int res = 0;
     int sock_ind = 0;
     rmc_connection_t* sock = 0;
     multicast_header_t* mcast_hdr = (multicast_header_t*) data;
@@ -106,25 +107,25 @@ static int _process_multicast_read(rmc_context_t* ctx)
     if (ctx->mcast_recv_descriptor == -1)
         return ENOTCONN;
 
-    res = recvfrom(ctx->mcast_recv_descriptor,
+    len = recvfrom(ctx->mcast_recv_descriptor,
                    buffer, sizeof(buffer),
                    0,
                    (struct sockaddr*) &src_addr, &addr_len);
 
-    if (res == -1) {
+    if (len == -1) {
         perror("  rmc_proto::rmc_read_multicast(): recvfrom()");
         return errno;
     }
 
-    if (res < sizeof(multicast_header_t)) {
+    if (len < sizeof(multicast_header_t)) {
         fprintf(stderr, "  Corrupt header. Needed [%lu] header bytes. Got %lu\n",
-                sizeof(multicast_header_t), res);
+                sizeof(multicast_header_t), len);
         return EPROTO;
     }
                 
-    if (res < sizeof(multicast_header_t) + mcast_hdr->payload_len) {
+    if (len < sizeof(multicast_header_t) + mcast_hdr->payload_len) {
         fprintf(stderr, "  Corrupt packet. Needed [%lu] header + payload bytes. Got %lu\n",
-                sizeof(multicast_header_t) + mcast_hdr->payload_len, res);
+                sizeof(multicast_header_t) + mcast_hdr->payload_len, len);
         return EPROTO;
     }
         
@@ -153,27 +154,45 @@ static int _process_multicast_read(rmc_context_t* ctx)
     // If we have a complete spec for the networ address in the packet header, use that.
     // If listen_ip_addr is 0, then use the IP address provided in source address returned
     // by recvfrom
-
+    //
     if (!mcast_hdr->listen_ip)
         mcast_hdr->listen_ip = ntohl(src_addr.sin_addr.s_addr);
 
+    // Find the socket we use to ack received packets back to the publisher.
     sock = _find_publisher_by_address(ctx, mcast_hdr->listen_ip, mcast_hdr->listen_port);
 
-    // No publisher found?
+    // If no socket is setup, initiate the connection to the publisher.
+    // Drop the recived packet
     if (!sock) {
         // Add an outbound tcp connection to the publisher.
-        int res = 0;
         res = rmc_connect_tcp_by_address(ctx, mcast_hdr->listen_ip, mcast_hdr->listen_port, &sock_ind);
-        if (res)
-            return res;
-
-        sock = &ctx->connections[sock_ind];
+        goto rearm;
     }
 
-    return _decode_multicast(ctx,
+    // Drop the packet if we are still setting up the packet
+    if (sock->mode == RMC_CONNECTION_MODE_CONNECTING) {
+        res = 0;
+        goto rearm;
+    }
+
+    // We have a valid ack socket back to the server.
+    // Processs the packet
+    res =  _decode_multicast(ctx,
                              data,
                              mcast_hdr->payload_len,
                              &(sock->pubsub.publisher));
+
+rearm:
+
+    // Re-arm the poll descriptor and return.
+    if (ctx->poll_modify)
+        (*ctx->poll_modify)(ctx,
+                            ctx->mcast_recv_descriptor,
+                            RMC_MULTICAST_RECV_INDEX,
+                            RMC_POLLREAD,
+                            RMC_POLLREAD);
+
+    return res;
 }
 
 static int _process_cmd_packet(rmc_context_t* ctx, rmc_connection_t* sock, payload_len_t len)
@@ -187,14 +206,11 @@ static int _process_cmd_ack_single(rmc_context_t* ctx, rmc_connection_t* sock, p
     if (len < sizeof(ack))
         return EAGAIN;
 
-    // If len is different than sizeof ack, drop it
-    // and return a protocol error.
-    if (len > sizeof(ack)) {
-        circ_buf_free(&sock->read_buf, len, 0);
-        return EPROTO;
-    }
-    
     circ_buf_read(&sock->read_buf, (uint8_t*) &ack, sizeof(ack), 0);
+    circ_buf_free(&sock->read_buf, sizeof(ack), 0);
+    printf("Acking[%lu]\n", ack.packet_id);
+    extern void test_print_context(pub_context_t* ctx);
+    test_print_context(&ctx->pub_ctx);
     pub_packet_ack(&sock->pubsub.subscriber, ack.packet_id);
     return 0;
 }
@@ -222,12 +238,11 @@ static int _process_tcp_read(rmc_context_t* ctx, rmc_connection_index_t s_ind)
 
     // We have at least one byte available.
     res = circ_buf_read(&sock->read_buf, &command, 1, 0);
+    circ_buf_free(&sock->read_buf, 1, &in_use);
 
     if (res)
         return res;
     
-    in_use -= 1;
-
     while(1) {
         switch(command) {
         case RMC_CMD_PACKET:
@@ -249,13 +264,6 @@ static int _process_tcp_read(rmc_context_t* ctx, rmc_connection_index_t s_ind)
             // FIXME: Disconnect subscriber and report issue.
             return EPROTO;
         }
-
-        // Free the number of the bytes that cmd occupies.
-        // _process_tcp_command() will have freed the number of bytes
-        // taken up by whatever the command payload itself takes up,
-        // leaving the first byte of the remaining data in use to be
-        // the start of the next command.
-        circ_buf_free(&sock->read_buf, 1, &in_use);
 
         in_use = circ_buf_in_use(&sock->read_buf);
 

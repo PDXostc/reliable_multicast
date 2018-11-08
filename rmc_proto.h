@@ -102,6 +102,7 @@ typedef struct rmc_connection {
     // RMC_CONNECTION_MODE_PUBLISHER   The connection is used to publish acks and resend packets 
     // RMC_CONNECTION_MODE_SUBSCRIBER  The connection is used to subscribe to acks and resends
     // RMC_CONNECTION_MODE_OTHER       The connection is used for multicast or TCP listen.
+    // RMC_CONNECTION_MODE_CONNECTING  The outbound connection is being setup.
     uint8_t mode;
 
     in_port_t remote_port;    // In host format

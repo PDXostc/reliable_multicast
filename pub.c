@@ -194,8 +194,9 @@ void pub_packet_ack(pub_subscriber_t* sub, packet_id_t pid)
     assert(sub);
 
     // Traverse all inflight packets of the subscriber and find the
-    // one matching pid. We do this from the rear since we are more likely
-    // to get an ack on an older packet with a lower pid than a newer one
+    // one matching pid. We do this from the rear since we are more
+    // likely to get an ack on an older packet with a lower pid than a
+    // newer one with a higher pid.
     node = pub_packet_list_tail(&sub->inflight);
 
     while(node) {

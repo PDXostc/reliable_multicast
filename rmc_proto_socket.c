@@ -60,7 +60,6 @@ static void _reset_max_connection_ind(rmc_context_t* ctx)
 }
 
 
-
 void rmc_reset_connection(rmc_connection_t* sock, int index)
 {
     sock->action = 0;
@@ -72,6 +71,7 @@ void rmc_reset_connection(rmc_connection_t* sock, int index)
     memset(&sock->remote_address, 0, sizeof(sock->remote_address));
 }
 
+
 // Complete async connect. Called from rmc_write().
 int rmc_complete_connect(rmc_context_t* ctx, rmc_connection_t* sock)
 {
@@ -81,23 +81,41 @@ int rmc_complete_connect(rmc_context_t* ctx, rmc_connection_t* sock)
     if (!ctx || !sock)
         return EINVAL;
     
-   printf("rmc_complete_connect(): ind[%d] addr[%s:%d]\n",
-          sock->rmc_index,
-          inet_ntoa( (struct in_addr) { .s_addr = htonl(sock->remote_address) }),
-          sock->remote_port);
 
     if (getsockopt(sock->descriptor,
                    SOL_SOCKET,
                    SO_ERROR,
                    &sock_err,
-                   &len) == -1) 
-        // FIXME: Close
-        return errno;
-
-    if (sock_err != 0)
-        // FIXME: Close
+                   &len) == -1) {
+        printf("rmc_complete_connect(): ind[%d] addr[%s:%d]: getsockopt(): %s\n",
+               sock->rmc_index,
+               inet_ntoa( (struct in_addr) {
+                       .s_addr = htonl(sock->remote_address)
+                           }),
+               sock->remote_port,
+               strerror(errno));
+        sock_err = errno; // Save it.
+        rmc_close_tcp(ctx, sock->rmc_index);
         return sock_err;
+    }
+
+    if (sock_err != 0) {
+        printf("rmc_complete_connect(): ind[%d] addr[%s:%d]: %s\n",
+               sock->rmc_index,
+               inet_ntoa( (struct in_addr) {
+                       .s_addr = htonl(sock->remote_address)
+                           }),
+               sock->remote_port,
+               strerror(sock_err));
+
+        if (*ctx->poll_remove)
+            (*ctx->poll_remove)(ctx, sock->descriptor, sock->rmc_index);
+
+        rmc_close_tcp(ctx, sock->rmc_index);
+        return sock_err;
+    }
     
+    sock->mode = RMC_CONNECTION_MODE_SUBSCRIBER;
     old_action = sock->action;
 
     // We are subscribing to data from the publisher, which
@@ -154,7 +172,7 @@ int rmc_connect_tcp_by_address(rmc_context_t* ctx,
         close(ctx->connections[c_ind].descriptor);
         ctx->connections[c_ind].descriptor = -1;
         _reset_max_connection_ind(ctx);
-        return err;
+        return 0; // This is not an error, just a failed subscriber setup.
     }
 
     
@@ -230,7 +248,7 @@ int rmc_process_accept(rmc_context_t* ctx,
     pub_init_subscriber(&ctx->connections[c_ind].pubsub.subscriber, &ctx->pub_ctx, &ctx->connections[c_ind]);
 
     ctx->connections[c_ind].mode = RMC_CONNECTION_MODE_PUBLISHER;
-    memcpy(&ctx->connections[c_ind].remote_address, &src_addr, sizeof(src_addr));
+    memcpy(&ctx->connections[c_ind].remote_address, &src_addr.sin_addr.s_addr, sizeof(src_addr.sin_addr.s_addr));
 
     ctx->connections[c_ind].action = RMC_POLLREAD;
     if (ctx->poll_add)
@@ -257,28 +275,37 @@ int rmc_process_accept(rmc_context_t* ctx,
 
 int rmc_close_tcp(rmc_context_t* ctx, rmc_connection_index_t s_ind)
 {
-
+    rmc_connection_t* sock = 0;
+    
     // Is s_ind within our connection vector?
+
     if (s_ind >= RMC_MAX_CONNECTIONS)
         return EINVAL;
 
-    if (ctx->connections[s_ind].descriptor == -1)
+    sock = &ctx->connections[s_ind];
+
+    // Are we connected
+    if (sock->descriptor == -1)
         return ENOTCONN;
-
-    if (shutdown(ctx->connections[s_ind].descriptor, SHUT_RDWR) != 0)
+    
+    // Shutdown any completed connection.
+    if (sock->mode != RMC_CONNECTION_MODE_CONNECTING &&
+        shutdown(sock->descriptor, SHUT_RDWR) != 0)
         return errno;
 
-    if (close(ctx->connections[s_ind].descriptor) != 0)
-        return errno;
-
-    rmc_reset_connection(&ctx->connections[s_ind], s_ind);
-
+    // Delete from caller's poll vector.
     if (ctx->poll_remove)
-        (*ctx->poll_remove)(ctx, ctx->connections[s_ind].descriptor, s_ind);
+        (*ctx->poll_remove)(ctx, sock->descriptor, s_ind);
+
+    if (close(sock->descriptor) != 0)
+        return errno;
+
+    rmc_reset_connection(sock, s_ind);
 
     if (s_ind == ctx->max_connection_ind)
         _reset_max_connection_ind(ctx);
-    
+
+    return 0;
 }
 
 
