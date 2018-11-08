@@ -42,41 +42,37 @@ static packet_id_t _next_pid(pub_context_t* ctx)
 
 
 void pub_init_context(pub_context_t* ctx,
-                      user_data_t user_data, 
-                      void (*payload_free)(void*, payload_len_t, user_data_t))
+                      user_data_t ctx_user_data,
+                      void (*pub_payload_free)(void*, payload_len_t, user_data_t))
 {
     assert(ctx);
 
+    ctx->ctx_user_data = ctx_user_data;
     pub_sub_list_init(&ctx->subscribers, 0, 0, 0);
     pub_packet_list_init(&ctx->queued, 0, 0, 0);
     pub_packet_list_init(&ctx->inflight, 0, 0, 0);
-    ctx->payload_free = payload_free;
-    ctx->user_data = user_data;
+    ctx->pub_payload_free = pub_payload_free;
     ctx->next_pid = 1;
 
 }
 
 
-void pub_init_subscriber(pub_subscriber_t* sub, pub_context_t* ctx, void* user_data)
+void pub_init_subscriber(pub_subscriber_t* sub, pub_context_t* ctx)
 {
 
     assert(sub);
     assert(ctx);
 
     sub->context = ctx;
-    sub->user_data = user_data;
     pub_packet_list_init(&sub->inflight, 0, 0, 0);
     pub_sub_list_push_tail(&ctx->subscribers, sub);
 }
 
-inline void* pub_subscriber_user_data(pub_subscriber_t* sub)
-{
-    return sub?sub->user_data:0;
-}
 
 packet_id_t pub_queue_packet(pub_context_t* ctx,
                              void* payload,
-                             payload_len_t payload_len)
+                             payload_len_t payload_len,
+                             user_data_t pkg_user_data)
 {
     pub_packet_node_t *node = 0;
     pub_packet_t* ppack = 0;
@@ -90,6 +86,7 @@ packet_id_t pub_queue_packet(pub_context_t* ctx,
     ppack->payload_len = payload_len;
     ppack->ref_count = 0;
     ppack->send_ts = 0; // Will be set by pub_packet_sent()
+    ppack->pkg_user_data = pkg_user_data; // Handed to (*payload_free)()
 
     // Insert into ctx->queued, sorted in descending order.
     // We will pop off this list at the tail to get the next
@@ -230,7 +227,9 @@ void pub_packet_ack(pub_subscriber_t* sub, packet_id_t pid)
         pub_packet_list_delete(ppack->parent_node);
 
         // Free data using function provided to pub_init_context
-        (*sub->context->payload_free)(ppack->payload, ppack->payload_len, sub->context->user_data);
+        (*sub->context->pub_payload_free)(ppack->payload,
+                                          ppack->payload_len,
+                                          ppack->pkg_user_data);
 
         // Delete the ppack.
         _free_pending_packet(ppack);
@@ -298,4 +297,14 @@ void pub_get_oldest_subscriber(pub_context_t* ctx, pub_subscriber_t** subscriber
                               }), 0);
     
                           
+}
+
+user_data_t pub_packet_user_data(pub_packet_t* ppack)
+{
+    return ppack?ppack->pkg_user_data:user_data_nil();
+}
+
+user_data_t pub_user_data(pub_context_t* ctx)
+{
+    return ctx?ctx->ctx_user_data:user_data_nil();
 }

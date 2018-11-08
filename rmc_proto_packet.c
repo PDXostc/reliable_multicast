@@ -31,15 +31,16 @@ int rmc_queue_packet(rmc_context_t* ctx,
                      void* payload,
                      payload_len_t payload_len)
 {
-    pub_packet_t *pack = pub_next_queued_packet(&ctx->pub_ctx);
+    pub_packet_t *pack;
 
     if (!ctx || !payload || !payload_len)
         return EINVAL;
     
-    
-    // FIXME: Upper limit to how many packets we can queue before
+    pack = pub_next_queued_packet(&ctx->pub_ctx);    
+ 
+   // FIXME: Upper limit to how many packets we can queue before
     //        returning ENOMEM
-    pub_queue_packet(&ctx->pub_ctx, payload, payload_len);
+    pub_queue_packet(&ctx->pub_ctx, payload, payload_len, user_data_ptr(ctx));
 
     if (ctx->poll_modify)  {
         // Did we already have a packet pending for send prior
@@ -68,7 +69,7 @@ sub_packet_t* rmc_get_next_ready_packet(rmc_context_t* ctx)
 
 int rmc_free_packet(rmc_context_t* ctx, sub_packet_t* pack)
 {
-    rmc_connection_t* sock = sub_packet_user_data(pack);
+    rmc_connection_t* sock = sub_packet_user_data(pack).ptr;
 
     if (!sock)
         return EINVAL;

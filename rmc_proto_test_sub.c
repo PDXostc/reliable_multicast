@@ -31,6 +31,22 @@ static void process_incoming_data(rmc_context_t* ctx, sub_packet_t* pack, rmc_te
         
     rmc_free_packet(ctx, pack);
 }
+void* sub_alloc(rmc_context_t* context,
+                payload_len_t payload_len,
+                user_data_t user_data)
+{
+    puts("sub_alloc(): called");
+}
+    
+// Free payload provided by rmc_queue_packet()
+void sub_free(rmc_context_t* context,
+              void* payload,
+              payload_len_t payload_len,
+              user_data_t user_data) 
+{
+    puts("sub_free(): called");
+}
+
 
 void test_rmc_proto_sub(char* mcast_group_addr,
 
@@ -77,7 +93,7 @@ void test_rmc_proto_sub(char* mcast_group_addr,
                      mcast_port,
                      listen_port,
                      (user_data_t) { .i32 = epollfd },
-                     poll_add, poll_modify, poll_remove, 0, 0);
+                     poll_add, poll_modify, poll_remove, sub_alloc, sub_free);
 
     _test("rmc_proto_test_sub[%d.%d] activate_context(): %s",
           1, 1,

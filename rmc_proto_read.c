@@ -51,10 +51,12 @@ static inline rmc_connection_t* _find_publisher_by_address(rmc_context_t* ctx,
 static int _decode_multicast(rmc_context_t* ctx,
                              uint8_t* packet,
                              ssize_t packet_len,
-                             sub_publisher_t* pub)
+                             rmc_connection_t* sock)
 {
     payload_len_t len = (payload_len_t) packet_len;
     uint8_t* payload = 0;
+    sub_publisher_t* pub = &sock->pubsub.publisher;
+
     // Traverse the received datagram and extract all packets
     while(len) {
         cmd_packet_header_t* cmd_pack = (cmd_packet_header_t*) packet;
@@ -66,8 +68,8 @@ static int _decode_multicast(rmc_context_t* ctx,
         // Use the provided memory allocator to reserve memory for
         // incoming payload.
         // Use malloc() if nothing is specified.
-        if (ctx->payload_alloc)
-            payload = (*ctx->payload_alloc)(ctx, cmd_pack->payload_len);
+        if (ctx->sub_payload_alloc)
+            payload = (*ctx->sub_payload_alloc)(ctx, cmd_pack->payload_len, ctx->user_data);
         else
             payload = malloc(cmd_pack->payload_len);
 
@@ -79,7 +81,7 @@ static int _decode_multicast(rmc_context_t* ctx,
         packet += cmd_pack->payload_len;
         len -= sizeof(cmd_packet_header_t) + cmd_pack->payload_len;
 
-        sub_packet_received(pub, cmd_pack->pid, payload, cmd_pack->payload_len);
+        sub_packet_received(pub, cmd_pack->pid,payload, cmd_pack->payload_len, user_data_ptr(sock));
     }
 
     // Process received packages, moving consectutive ones
@@ -113,23 +115,23 @@ static int _process_multicast_read(rmc_context_t* ctx)
                    (struct sockaddr*) &src_addr, &addr_len);
 
     if (len == -1) {
-        perror("  rmc_proto::rmc_read_multicast(): recvfrom()");
+        perror("rmc_proto::rmc_read_multicast(): recvfrom()");
         return errno;
     }
 
     if (len < sizeof(multicast_header_t)) {
-        fprintf(stderr, "  Corrupt header. Needed [%lu] header bytes. Got %lu\n",
+        fprintf(stderr, "Corrupt header. Needed [%lu] header bytes. Got %lu\n",
                 sizeof(multicast_header_t), len);
         return EPROTO;
     }
                 
     if (len < sizeof(multicast_header_t) + mcast_hdr->payload_len) {
-        fprintf(stderr, "  Corrupt packet. Needed [%lu] header + payload bytes. Got %lu\n",
+        fprintf(stderr, "Corrupt packet. Needed [%lu] header + payload bytes. Got %lu\n",
                 sizeof(multicast_header_t) + mcast_hdr->payload_len, len);
         return EPROTO;
     }
         
-    printf("  mcast_rx(): ctx_id[0x%.8X] len[%.5d] from[%s:%d] listen[%s:%d]",
+    printf("mcast_rx(): ctx_id[0x%.8X] len[%.5d] from[%s:%d] listen[%s:%d]",
            mcast_hdr->context_id,
            mcast_hdr->payload_len,
            inet_ntoa(src_addr.sin_addr), ntohs(src_addr.sin_port),
@@ -180,7 +182,7 @@ static int _process_multicast_read(rmc_context_t* ctx)
     res =  _decode_multicast(ctx,
                              data,
                              mcast_hdr->payload_len,
-                             &(sock->pubsub.publisher));
+                             sock);
 
 rearm:
 

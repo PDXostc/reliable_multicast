@@ -29,6 +29,12 @@ typedef union {
     int64_t i64;
 } user_data_t;
 
+#define user_data_nil() ((user_data_t) { .u64 = 0 })
+#define user_data_u64(_u64) ((user_data_t) { .u64 = _u64 })
+#define user_data_i64(_i64) ((user_data_t) { .i64 = _i64 })
+#define user_data_u32(_u32) ((user_data_t) { .u32 = _u32 })
+#define user_data_i32(_i32) ((user_data_t) { .i32 = _i32 })
+#define user_data_ptr(_ptr) ((user_data_t) { .ptr = _ptr })
 
 // Used for iterators etc.
 #define lambda(return_type, function_body) \
@@ -41,3 +47,4 @@ typedef union {
 extern usec_timestamp_t rmc_usec_monotonic_timestamp(void);
 
 #endif // __RMC_COMMON_H__
+

@@ -273,6 +273,15 @@ int rmc_proto_ack(rmc_context_t* ctx, rmc_connection_t* sock, sub_packet_t* pack
     if (!ctx || !sock || !pack || sock->mode != RMC_CONNECTION_MODE_SUBSCRIBER) 
         return EINVAL;
 
+    printf("ack(): ctx_id[0x%.8X] pid[%lu] mcast[%s:%d] listen[%s:%d]\n",
+           ctx->context_id,
+           pack->pid,
+           inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }),
+           ctx->mcast_port,
+           inet_ntoa( (struct in_addr) { .s_addr = htonl(sock->remote_address) }),
+           sock->remote_port);
+
+
     // Allocate memory for command
     circ_buf_alloc(&sock->write_buf, 1,
                    &seg1, &seg1_len,
@@ -285,7 +294,6 @@ int rmc_proto_ack(rmc_context_t* ctx, rmc_connection_t* sock, sub_packet_t* pack
     circ_buf_alloc(&sock->write_buf, sizeof(ack) ,
                    &seg1, &seg1_len,
                    &seg2, &seg2_len);
-
 
     // Copy in packet header
     memcpy(seg1, (uint8_t*) &ack, seg1_len);

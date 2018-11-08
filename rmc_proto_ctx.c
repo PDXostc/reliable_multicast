@@ -46,7 +46,17 @@ static inline void _payload_free(void* payload, payload_len_t len, user_data_t u
     rmc_context_t* ctx = (rmc_context_t*) user_data.ptr;
 
     if (*ctx->payload_free)
-        (*ctx->payload_free)(ctx, payload, len);
+        (*ctx->payload_free)(ctx, payload, len, user_data);
+    else
+        free(payload);
+}
+
+static inline void _payload_free(void* payload, payload_len_t len, user_data_t user_data)
+{
+    rmc_context_t* ctx = (rmc_context_t*) user_data.ptr;
+
+    if (*ctx->pub_payload_free)
+        (*ctx->pub_payload_free)(ctx, payload, len, user_data);
     else
         free(payload);
 }
@@ -66,24 +76,35 @@ int rmc_init_context(rmc_context_t* ctx,
                      int multicast_port,
                      int listen_port,
                      user_data_t user_data,
+
                      void (*poll_add)(struct rmc_context* context,
                                       int descriptor,
                                       rmc_connection_index_t index,
                                       rmc_poll_action_t initial_action),
+
                      void (*poll_modify)(struct rmc_context* context,
                                          int descriptor,
                                          rmc_connection_index_t index,
                                          rmc_poll_action_t old_action,
                                          rmc_poll_action_t new_action),
+
                      void (*poll_remove)(struct rmc_context* context,
                                          int descriptor,
                                          rmc_connection_index_t index),
-                     void* (*payload_alloc)(struct rmc_context* context, payload_len_t payload_len),
-                     void (*payload_free)(rmc_context_t* context, 
-                                          void* payload,
-                                          payload_len_t payload_len)) {
 
-    
+                     void* (*pub_payload_alloc)(struct rmc_context* context,
+                                                payload_len_t payload_len,
+                                                user_data_t user_data),
+
+                     void (*pub_payload_free)(rmc_context_t* context, 
+                                              void* payload,
+                                              payload_len_t payload_len,
+                                              user_data_t user_data),
+
+                     void* (*sub_payload_alloc)(struct rmc_context* context,
+                                                payload_len_t payload_len,
+                                                user_data_t user_data),
+) {
     int ind = 0;
     struct in_addr addr;
                                      
@@ -132,8 +153,12 @@ int rmc_init_context(rmc_context_t* ctx,
     ctx->poll_add = poll_add;
     ctx->poll_modify = poll_modify;
     ctx->poll_remove = poll_remove;
-    ctx->payload_alloc = payload_alloc;
-    ctx->payload_free = payload_free;
+
+    ctx->pub_payload_alloc = pub_payload_alloc;
+    ctx->pub_payload_free = pub_payload_free;
+
+    ctx->sub_payload_alloc = sub_payload_alloc;
+
     ctx->connection_count = 0;
     ctx->resend_timeout = RMC_DEFAULT_PACKET_TIMEOUT;
     ctx->max_connection_ind = -1; // No connections in use
@@ -145,10 +170,10 @@ int rmc_init_context(rmc_context_t* ctx,
     // When all subscribers have acknowledged,
     // outgoing_payload_free() is called to free the payload.
     pub_init_context(&ctx->pub_ctx,
-                     (user_data_t) { .ptr = ctx },
+                     user_data_nil(),
                      _payload_free);
 
-    sub_init_context(&ctx->sub_ctx, 0);
+    sub_init_context(&ctx->sub_ctx, _payload_free);
 
     return 0;
 }

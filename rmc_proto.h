@@ -151,7 +151,7 @@ typedef struct rmc_context {
     in_addr_t listen_if_addr; // In host format
     in_addr_t mcast_group_addr; // In host format
     int mcast_port; // Must be same for all particants.
-
+ 
     // Must be different for each process on same machine.
     // Multiple contexts within a single program can share listen port
     // to do load distribution on incoming connections
@@ -189,10 +189,20 @@ typedef struct rmc_context {
                         rmc_connection_index_t index);
 
     // Called to alloc memory for incoming data.
-    void* (*payload_alloc)(struct rmc_context* context, payload_len_t payload_len);
+    void* (*pub_payload_alloc)(struct rmc_context* context,
+                               payload_len_t payload_len,
+                               user_data_t user_data);
     
     // Free payload provided by rmc_queue_packet()
-    void (*payload_free)(struct rmc_context* context, void* payload, payload_len_t payload_len);
+    void (*pub_payload_free)(struct rmc_context* context,
+                             void* payload,
+                             payload_len_t payload_len,
+                             user_data_t user_data);
+
+    // Called to alloc memory for incoming data.
+    void* (*sub_payload_alloc)(struct rmc_context* context,
+                               payload_len_t payload_len,
+                               user_data_t user_data);
 } rmc_context_t;
 
 
@@ -267,14 +277,60 @@ extern int rmc_init_context(rmc_context_t* context,
                             // Also called to allocate memory for incoming
                             // packets read, which will be pointed to
                             // by rmc_get_next_ready_packet(.., void* payload)
-                            void* (*payload_alloc)(struct rmc_context* context, payload_len_t payload_len),
+                            void* (*pub_payload_alloc)(struct rmc_context* context,
+                                                       payload_len_t payload_len,
+                                                       user_data_t user_data),
 
-                            // Function called to free payload pointed to by
-                            // rmc_queue_packet(). Will be invoked by rmc_write()
-                            // when payload has been successfully sent.
-                            void (*payload_free)(struct rmc_context* context,
+                            // Function called in order to:
+                            // 1. To free the memory pointed to by
+                            //    payload in a rmc_queue_packet()
+                            //    call. Will be invoked by rmc_write()
+                            //    when payload has been successfully
+                            //    sent.
+                            //
+                            // 2. To free multicast payload space
+                            //    allocated by rmc_read() when
+                            //    queueing packets for
+                            //    processing. Will be invoked by
+                            //    rmc_free_packet(), which is called
+                            //    to indicate that packet retrieved
+                            //    with rmc_get_next_ready_packet().
+                            // 
+                            // 3. 
+                            void (*pub_payload_free)(struct rmc_context* context,
+                                                     void* payload,
+                                                     payload_len_t payload_len,
+                                                     user_data_t user_data),
+
+                            // Function to call to allocated payload memory specified
+                            // by queue_packet()
+                            // Also called to allocate memory for incoming
+                            // packets read, which will be pointed to
+                            // by rmc_get_next_ready_packet(.., void* payload)
+                            void* (*sub_payload_alloc)(struct rmc_context* context,
+                                                   payload_len_t payload_len,
+                                                   user_data_t user_data),
+
+                            // Function called in order to:
+                            // 1. To free the memory pointed to by
+                            //    payload in a rmc_queue_packet()
+                            //    call. Will be invoked by rmc_write()
+                            //    when payload has been successfully
+                            //    sent.
+                            //
+                            // 2. To free multicast payload space
+                            //    allocated by rmc_read() when
+                            //    queueing packets for
+                            //    processing. Will be invoked by
+                            //    rmc_free_packet(), which is called
+                            //    to indicate that packet retrieved
+                            //    with rmc_get_next_ready_packet().
+                            // 
+                            // 3. 
+                            void (*sub_payload_free)(struct rmc_context* context,
                                                  void* payload,
-                                                 payload_len_t payload_len));
+                                                 payload_len_t payload_len,
+                                                 user_data_t user_data));
 
 
 extern int rmc_activate_context(rmc_context_t* context);

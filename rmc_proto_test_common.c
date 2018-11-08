@@ -61,7 +61,7 @@ void* _test_proto_alloc(payload_len_t plen)
 
 void test_proto_free(void* payload, payload_len_t plen)
 {
-    free(payload);
+    //gfree(payload);
     return;
 }
 
@@ -223,7 +223,6 @@ int process_events(rmc_context_t* ctx, int epollfd, usec_timestamp_t timeout, in
             _test("rmc_proto_test[%d.%d] process_events():rmc_write(): %s\n",
                   major, 10,
                   rmc_write(ctx, c_ind));
-
     }
     return 0;
 }

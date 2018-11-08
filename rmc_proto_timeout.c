@@ -50,7 +50,7 @@ static int _process_packet_timeout(rmc_context_t* ctx,
     if (!ctx || !sub || !pack)
         return EINVAL;
 
-    sock = (rmc_connection_t*) pub_subscriber_user_data(sub);
+    sock = (rmc_connection_t*) pub_packet_user_data(pack).ptr;
     if (!sock || sock->mode != RMC_CONNECTION_MODE_PUBLISHER)
         return EINVAL;
         

@@ -174,14 +174,12 @@ int rmc_connect_tcp_by_address(rmc_context_t* ctx,
         _reset_max_connection_ind(ctx);
         return 0; // This is not an error, just a failed subscriber setup.
     }
-
     
     ctx->connections[c_ind].remote_address = address;
     ctx->connections[c_ind].remote_port = port;
 
     sub_init_publisher(&ctx->connections[c_ind].pubsub.publisher,
-                       &ctx->sub_ctx,
-                       &ctx->connections[c_ind]);
+                       &ctx->sub_ctx);
 
     // We are subscribing to data from the publisher, which
     // will resend failed multicast packets via tcp
@@ -245,7 +243,7 @@ int rmc_process_accept(rmc_context_t* ctx,
 
 
     // The remote end is the subscriber of packets that we pulish
-    pub_init_subscriber(&ctx->connections[c_ind].pubsub.subscriber, &ctx->pub_ctx, &ctx->connections[c_ind]);
+    pub_init_subscriber(&ctx->connections[c_ind].pubsub.subscriber, &ctx->pub_ctx);
 
     ctx->connections[c_ind].mode = RMC_CONNECTION_MODE_PUBLISHER;
     memcpy(&ctx->connections[c_ind].remote_address, &src_addr.sin_addr.s_addr, sizeof(src_addr.sin_addr.s_addr));

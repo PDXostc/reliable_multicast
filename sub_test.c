@@ -11,7 +11,7 @@
 #include <string.h>
 #include <stdarg.h>
 
-static void _test_sub_free(void* payload, payload_len_t plen)
+static void _test_sub_free(void* payload, payload_len_t plen, user_data_t user_data)
 {
     // We are not allocating payload from heap.
     return;
@@ -121,7 +121,7 @@ static void add_received_packets(sub_publisher_t* pub,
 
         for(pid = start; pid != stop + 1; ++pid) {
             sprintf(buf, "%lu", pid);
-            sub_packet_received(pub, pid, buf, strlen(buf)+1);
+            sub_packet_received(pub, pid, buf, strlen(buf)+1, user_data_nil());
         }
 
         start = va_arg(ap, packet_id_t);
@@ -190,7 +190,7 @@ void reset_publisher(sub_context_t* ctx, sub_publisher_t* pub)
         sub_packet_dispatched(pack);
 
     sub_remove_publisher(pub);
-    sub_init_publisher(pub, ctx, 0);
+    sub_init_publisher(pub, ctx);
     return;
 }
 
@@ -209,9 +209,9 @@ void test_sub(void)
     sub_init_context(&ctx, _test_sub_free);
     intv_list_init(&holes, 0, 0, 0);
 
-    sub_init_publisher(&pub1, &ctx, 0);
-    sub_init_publisher(&pub2, &ctx, 0);
-    sub_init_publisher(&pub3, &ctx, 0);
+    sub_init_publisher(&pub1, &ctx);
+    sub_init_publisher(&pub2, &ctx);
+    sub_init_publisher(&pub3, &ctx);
 
 
 

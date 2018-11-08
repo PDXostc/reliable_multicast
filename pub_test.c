@@ -85,21 +85,20 @@ void test_pub(void)
     packet_id_t pid = 0;
     pub_sub_list_t sub_lst;
     pub_packet_node_t* pnode = 0;
-    user_data_t ud = { .ptr = 0};
 
-    pub_init_context(&ctx, ud, _test_pub_free);
-    pub_init_subscriber(&sub1, &ctx, 0);
-    pub_init_subscriber(&sub2, &ctx, 0);
-    pub_init_subscriber(&sub3, &ctx, 0);
+    pub_init_context(&ctx, user_data_nil(), _test_pub_free);
+    pub_init_subscriber(&sub1, &ctx);
+    pub_init_subscriber(&sub2, &ctx);
+    pub_init_subscriber(&sub3, &ctx);
 
-    pub_queue_packet(&ctx, "1", 2);
-    pub_queue_packet(&ctx, "2", 2);
-    pub_queue_packet(&ctx, "3", 2);
-    pub_queue_packet(&ctx, "4", 2);
-    pub_queue_packet(&ctx, "5", 2);
-    pub_queue_packet(&ctx, "6", 2);
+    pub_queue_packet(&ctx, "1", 2, user_data_nil());
+    pub_queue_packet(&ctx, "2", 2, user_data_nil());
+    pub_queue_packet(&ctx, "3", 2, user_data_nil());
+    pub_queue_packet(&ctx, "4", 2, user_data_nil());
+    pub_queue_packet(&ctx, "5", 2, user_data_nil());
+    pub_queue_packet(&ctx, "6", 2, user_data_nil());
 
-    pid = pub_queue_packet(&ctx, "7", 2);
+    pid = pub_queue_packet(&ctx, "7", 2, user_data_nil());
 
     if (pid != 7) {
         printf("Failed pub test 1.1. Wanted packet id 7, got %lu\n",
@@ -410,18 +409,18 @@ void test_pub(void)
     //
     // Check that collection of timed out packages works.
     //
-    if ((pid = pub_queue_packet(&ctx, "1", 2)) != 1) {
+    if ((pid = pub_queue_packet(&ctx, "1", 2, user_data_nil())) != 1) {
         printf("Failed pub test 12.1. Wanted pid 1, got %lu\n",
                pid);
         exit(255);
     }            
     // Queue integrity has already been tested. Trust rest of pids to
     // be 2-6.
-    pub_queue_packet(&ctx, "2", 2);
-    pub_queue_packet(&ctx, "3", 2);
-    pub_queue_packet(&ctx, "4", 2);
-    pub_queue_packet(&ctx, "5", 2);
-    pub_queue_packet(&ctx, "6", 2);
+    pub_queue_packet(&ctx, "2", 2, user_data_nil());
+    pub_queue_packet(&ctx, "3", 2, user_data_nil());
+    pub_queue_packet(&ctx, "4", 2, user_data_nil());
+    pub_queue_packet(&ctx, "5", 2, user_data_nil());
+    pub_queue_packet(&ctx, "6", 2, user_data_nil());
 
     // Send each packt in turn, increasing time stamp
     // by one for each packet
