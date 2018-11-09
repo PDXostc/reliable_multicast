@@ -65,7 +65,7 @@ static uint8_t _test_print_publisher(sub_publisher_node_t* node, void* dt)
     return 1;
 }
 
-static void test_print_context(sub_context_t* ctx)
+void test_print_sub_context(sub_context_t* ctx)
 {
     printf("Context           %p\n", ctx);
 
@@ -690,7 +690,41 @@ void test_sub(void)
         printf("Failed test 6.7 Failed dup packet detection.\n");
         exit(255);
     }
+    reset_publisher(&ctx, &pub1);
+    add_received_packets(&pub1,
+                         2, 2,
+                         0,0);
+    
+    // Failure case detected during higher-level debugging
+    // If we start with a pid different than 1, we fail
+    sub_process_received_packets(&pub1);
 
+    if (sub_packet_list_size(&pub1.received) != 0) {
+        printf("Failed test 7.0 Wanted zero.\n");
+        exit(255);
+    }
+
+    if (sub_packet_list_size(&pub1.ready) != 1) {
+        printf("Failed test 7.1 Wanted 1.\n");
+        exit(255);
+    }
+
+    add_received_packets(&pub1,
+                         3, 3,
+                         0,0);
+    
+    // Failure case detected during higher-level debugging
+    sub_process_received_packets(&pub1);
+
+    if (sub_packet_list_size(&pub1.received) != 0) {
+        printf("Failed test 7.2 Wanted zero.\n");
+        exit(255);
+    }
+    
+    if (sub_packet_list_size(&pub1.ready) != 2) {
+        printf("Failed test 7.3 Wanted 2.\n");
+        exit(255);
+    }
 }
 
 

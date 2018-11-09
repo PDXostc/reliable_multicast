@@ -26,20 +26,30 @@
 #include <netdb.h>
 #include <assert.h>
 
-static inline rmc_connection_t* _find_publisher_by_address(rmc_context_t* ctx,
-                                                       uint32_t address,
-                                                       uint16_t port)
+static inline rmc_connection_t* _find_publisher_by_listen_address(rmc_context_t* ctx,
+                                                                  uint32_t listen_address,
+                                                                  uint16_t port)
 {
     rmc_connection_index_t ind = 0;
+    char want_addr_str[80];
+    char have_addr_str[80];
 
     // Do we have any connections in use at all?
     if (ctx->max_connection_ind == -1)
         return 0;
     
     // FIXME: Replace with hash table search to speed up.
+    strcpy(want_addr_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(listen_address) }));
+
+
     while(ind <= ctx->max_connection_ind) {
+        strcpy(have_addr_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->connections[ind].remote_address)}));
+        printf("_find_publisher_by_address() Want[%s:%d] Have[%s:%d]\n",
+               want_addr_str, port,
+               have_addr_str, ctx->connections[ind].remote_port);
+
         if (ctx->connections[ind].descriptor != -1 &&  
-            address == ctx->connections[ind].remote_address &&
+            listen_address == ctx->connections[ind].remote_address &&
             port == ctx->connections[ind].remote_port)
             return &ctx->connections[ind];
 
@@ -87,7 +97,13 @@ static int _decode_multicast(rmc_context_t* ctx,
 
     // Process received packages, moving consectutive ones
     // over to the ready queue.
+    extern void test_print_sub_context(sub_context_t* ctx);
+    puts("\nBEFORE");
+    test_print_sub_context(&ctx->sub_ctx);
     sub_process_received_packets(pub);
+
+    puts("\nAFTER");
+    test_print_sub_context(&ctx->sub_ctx);
 
     return 0;
 }
@@ -96,6 +112,8 @@ static int _process_multicast_read(rmc_context_t* ctx, uint8_t* read_res)
 {
     uint8_t buffer[RMC_MAX_PAYLOAD];
     uint8_t *data = buffer;
+    char src_addr_str[80];
+    char listen_addr_str[80];
     struct sockaddr_in src_addr;
     socklen_t addr_len = sizeof(src_addr);
     ssize_t len = 0;
@@ -135,11 +153,13 @@ static int _process_multicast_read(rmc_context_t* ctx, uint8_t* read_res)
         return EPROTO;
     }
         
+    strcpy(src_addr_str, inet_ntoa(src_addr.sin_addr));
+    strcpy(listen_addr_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(mcast_hdr->listen_ip) }));
     printf("mcast_rx(): ctx_id[0x%.8X] len[%.5d] from[%s:%d] listen[%s:%d]",
            mcast_hdr->context_id,
            mcast_hdr->payload_len,
-           inet_ntoa(src_addr.sin_addr), ntohs(src_addr.sin_port),
-           inet_ntoa( (struct in_addr) { .s_addr = htonl(mcast_hdr->listen_ip) }) , mcast_hdr->listen_port),
+           src_addr_str, ntohs(src_addr.sin_port),
+           listen_addr_str, mcast_hdr->listen_port);
            
 
     data += sizeof(multicast_header_t);
@@ -153,7 +173,7 @@ static int _process_multicast_read(rmc_context_t* ctx, uint8_t* read_res)
                                 RMC_MULTICAST_RECV_INDEX,
                                 RMC_POLLREAD,
                                 RMC_POLLREAD);
-        *read_res = RMC_MULTICAST_LOOPBACK;
+        *read_res = RMC_READ_MULTICAST_LOOPBACK;
         return 0; // Loopback message
     }
     putchar('\n');
@@ -166,7 +186,7 @@ static int _process_multicast_read(rmc_context_t* ctx, uint8_t* read_res)
         mcast_hdr->listen_ip = ntohl(src_addr.sin_addr.s_addr);
 
     // Find the socket we use to ack received packets back to the publisher.
-    sock = _find_publisher_by_address(ctx, mcast_hdr->listen_ip, mcast_hdr->listen_port);
+    sock = _find_publisher_by_listen_address(ctx, mcast_hdr->listen_ip, mcast_hdr->listen_port);
 
     // If no socket is setup, initiate the connection to the publisher.
     // Drop the recived packet
@@ -192,13 +212,12 @@ static int _process_multicast_read(rmc_context_t* ctx, uint8_t* read_res)
     if (read_res)
         *read_res = RMC_READ_MULTICAST;
     
-    res =  _decode_multicast(ctx,
-                             data,
-                             mcast_hdr->payload_len,
-                             sock);
+    // Record if we have any packets ready to ack prior
+    // to decoding additional packets.
+    res = _decode_multicast(ctx, data, mcast_hdr->payload_len, sock);
+        
 
 rearm:
-
     // Re-arm the poll descriptor and return.
     if (ctx->poll_modify)
         (*ctx->poll_modify)(ctx,
@@ -225,8 +244,8 @@ static int _process_cmd_ack_single(rmc_context_t* ctx, rmc_connection_t* sock, p
     circ_buf_read(&sock->read_buf, (uint8_t*) &ack, sizeof(ack), 0);
     circ_buf_free(&sock->read_buf, sizeof(ack), 0);
     printf("Acking[%lu]\n", ack.packet_id);
-    extern void test_print_context(pub_context_t* ctx);
-    test_print_context(&ctx->pub_ctx);
+//    extern void test_print_pub_context(pub_context_t* ctx);
+//    test_print_pub_context(&ctx->pub_ctx);
     pub_packet_ack(&sock->pubsub.subscriber,
                    ack.packet_id,
                    lambda(void, (void* payload, payload_len_t payload_len, user_data_t user_data) {
@@ -255,11 +274,28 @@ static int _process_tcp_read(rmc_context_t* ctx,
     rmc_connection_t* sock = &ctx->connections[s_ind];
     uint32_t in_use = circ_buf_in_use(&sock->read_buf);
     uint8_t command = 0;
-    int res = 0;
+    int sock_err = 0;
+    socklen_t len = sizeof(sock_err);
+    int res;
 
     // Do we have a command byte?
-    if (in_use < 1)
-        return EAGAIN;
+    if (in_use < 1) {
+        if (getsockopt(sock->descriptor,
+                       SOL_SOCKET,
+                       SO_ERROR,
+                       &sock_err,
+                       &len) == -1) {
+            printf("process_tcp_read(): getsockopt(): %s\n",
+                   strerror(errno));
+            sock_err = errno; // Save it.
+            rmc_close_tcp(ctx, sock->rmc_index);
+            return sock_err;
+        }
+        printf("process_tcp_read(): getsockopt(ok): %s\n",
+               strerror(sock_err));
+        return sock_err;
+    }
+
 
     // We have at least one byte available.
     res = circ_buf_read(&sock->read_buf, &command, 1, 0);
@@ -348,7 +384,7 @@ int _tcp_read(rmc_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* read_re
     res = readv(sock->descriptor, iov, 2);
 
 
-    if (res == -1) {
+    if (res == -1 || res == 0) {
         if (read_res)
             *read_res = RMC_READ_ERROR;
         return errno;
@@ -401,6 +437,7 @@ int rmc_read(rmc_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* read_res
     }
 
     res = _tcp_read(ctx, s_ind, read_res);
+
     // Read poll is always active. Callback to re-arm.
     if (ctx->poll_modify) {
         (*ctx->poll_modify)(ctx, 

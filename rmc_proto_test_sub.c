@@ -16,6 +16,10 @@ static void process_incoming_data(rmc_context_t* ctx, sub_packet_t* pack, rmc_te
                ind, pack->pid, td->pid, (char*) pack->payload);
         exit(255);
     }
+
+    // Send an ack back to the publisher
+    rmc_proto_ack(ctx, pack);
+
     if (strcmp((char*) pack->payload, td->payload)) {
         printf("rmc_proto_test_sub[3.3] ind[%d] pid[%lu] incoming data[%s] differs from expected [%s]\n",
                ind, pack->pid, (char*) pack->payload, td->payload);
@@ -100,9 +104,9 @@ void test_rmc_proto_sub(char* mcast_group_addr,
         sub_packet_t* pack = 0;
         process_events(ctx, epollfd, -1, 3, &ind);
         pack = rmc_get_next_ready_packet(ctx);
-        if (!pack) 
+        if (!pack) {
             continue;
-
+        }
         process_incoming_data(ctx, pack, &td[ind], ind);
         ++ind;
     }

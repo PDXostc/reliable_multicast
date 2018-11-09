@@ -73,16 +73,6 @@ int rmc_packet_dispatched(rmc_context_t* ctx, sub_packet_t* pack)
 
     if (!sock)
         return EINVAL;
-
-    // Check that we are not connecting or are a subscriber.
-    // Packets processed by the subscriber prior to the
-    // tcp channel back to the publisher having been completed
-    // will not be registered by the publisher as unacked
-    // since at least one ack is needed over tcp before
-    // it starts tracking missing packets.
-    //
-    if (sock->mode == RMC_CONNECTION_MODE_SUBSCRIBER)
-        rmc_proto_ack(ctx, sock, pack);
     
     sub_packet_dispatched(pack);
 }

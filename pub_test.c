@@ -42,7 +42,7 @@ static uint8_t _test_print_subscriber(pub_sub_node_t* node, void* dt)
     return 1;
 }
 
-void test_print_context(pub_context_t* ctx)
+void test_print_pub_context(pub_context_t* ctx)
 {
     printf("Context           %p\n", ctx);
     printf("Next PID          %lu\n", ctx->next_pid);

@@ -133,8 +133,8 @@ static int _process_multicast_write(rmc_context_t* ctx)
         pub_packet_sent(pctx, pack, ts);
     }
 
-    extern void test_print_context(pub_context_t* ctx);
-    test_print_context(&ctx->pub_ctx);
+//    extern void test_print_pub_context(pub_context_t* ctx);
+//    test_print_pub_context(&ctx->pub_ctx);
 
     if (ctx->poll_modify) {
         // Do we have more packets to send?
@@ -256,23 +256,32 @@ int rmc_write(rmc_context_t* ctx, rmc_connection_index_t s_ind)
 
 // Send an ack for a packet that has been processed.
 // Called by rmc_free_packet().
-int rmc_proto_ack(rmc_context_t* ctx, rmc_connection_t* sock, sub_packet_t* pack)
+int rmc_proto_ack(rmc_context_t* ctx, sub_packet_t* pack)
 {
-    uint32_t available = circ_buf_available(&sock->write_buf);
-    uint32_t old_in_use = circ_buf_in_use(&sock->write_buf);
-    rmc_poll_action_t old_action = sock->action;
     ssize_t res = 0;
     uint8_t *seg1 = 0;
     uint32_t seg1_len = 0;
     uint8_t *seg2 = 0;
     uint32_t seg2_len = 0;
+    rmc_connection_t* sock = 0;
     cmd_ack_single_t ack = {
         .packet_id = pack->pid
     };
+    uint32_t available = 0;
+    uint32_t old_in_use = 0;
+    rmc_poll_action_t old_action = 0;
 
-    if (!ctx || !sock || !pack || sock->mode != RMC_CONNECTION_MODE_SUBSCRIBER) 
+    if (!ctx || !pack)
         return EINVAL;
 
+    sock = sub_packet_user_data(pack).ptr;
+    if (sock->mode != RMC_CONNECTION_MODE_SUBSCRIBER)
+        return EINVAL;
+
+
+    available = circ_buf_available(&sock->write_buf);
+    old_in_use = circ_buf_in_use(&sock->write_buf);
+    old_action = sock->action;
     printf("ack(): ctx_id[0x%.8X] pid[%lu] mcast[%s:%d] listen[%s:%d]\n",
            ctx->context_id,
            pack->pid,

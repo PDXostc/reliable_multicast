@@ -153,6 +153,9 @@ char* _read_res_string(uint8_t res)
     case RMC_READ_MULTICAST:
         return "multicast";
  
+    case RMC_READ_MULTICAST_LOOPBACK:
+        return "multicast loopback";
+ 
     case RMC_READ_MULTICAST_NEW:
         return "new multicast";
 
@@ -179,11 +182,14 @@ int process_events(rmc_context_t* ctx, int epollfd, usec_timestamp_t timeout, in
         
     // Get the next timeout 
     // If we get ENODATA back, it means that we have no timeouts queued.
-    if (rmc_get_next_timeout(ctx, &tout) != ENODATA && timeout != -1)
-        tout = RMC_MIN(tout, timeout);
+    rmc_get_next_timeout(ctx, &tout);
+    if (tout == -1)
+        tout = timeout;
     
+    if (timeout != -1 && tout != -1)
+        tout = RMC_MIN(tout, timeout);
 
-    nfds = epoll_wait(epollfd, events, RMC_MAX_CONNECTIONS, tout / 1000);
+    nfds = epoll_wait(epollfd, events, RMC_MAX_CONNECTIONS, (tout == -1)?-1:(tout / 1000));
     if (nfds == -1) {
         perror("epoll_wait");
         exit(255);
@@ -195,7 +201,7 @@ int process_events(rmc_context_t* ctx, int epollfd, usec_timestamp_t timeout, in
         return ETIME;
     }
 
-//    printf("poll_wait(): %d results\n", nfds);
+    // printf("poll_wait(): %d results\n", nfds);
 
     while(nfds--) {
         int res = 0;
@@ -241,5 +247,4 @@ int process_events(rmc_context_t* ctx, int epollfd, usec_timestamp_t timeout, in
     }
     return 0;
 }
-
 

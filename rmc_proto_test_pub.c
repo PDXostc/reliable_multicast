@@ -38,7 +38,7 @@ void queue_test_data(rmc_context_t* ctx, rmc_test_data_t* td_arr, int td_arr_ind
 
     // Patch node with the correct pid.
 //    pub_packet_list_tail(&ctx->pub_ctx.queued)->data->pid = td_arr[td_arr_ind].pid;
-    pub_packet_list_for_each(&ctx->pub_ctx.queued, _test_print_pending, (void*) (uint64_t) 1);
+//    pub_packet_list_for_each(&ctx->pub_ctx.queued, _test_print_pending, (void*) (uint64_t) 1);
     
 }
 
@@ -104,7 +104,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
         
         // Process events until it is time to queue and send the next
         // frame (or quit).
-        printf("now[%lu] wait_until[%lu]\n", now, wait_until);
+        printf("tout[%lu]\n", wait_until - now);
         while(now <= wait_until) {
             t_out = (wait_until - now);
             process_events(ctx, epollfd, t_out, 2, &ind);

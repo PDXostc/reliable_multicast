@@ -99,15 +99,14 @@ int rmc_complete_connect(rmc_context_t* ctx, rmc_connection_t* sock)
         return sock_err;
     }
 
+    printf("rmc_complete_connect(): ind[%d] addr[%s:%d]: %s\n",
+           sock->rmc_index,
+           inet_ntoa( (struct in_addr) {
+                   .s_addr = htonl(sock->remote_address)
+                       }),
+           sock->remote_port,
+           strerror(sock_err));
     if (sock_err != 0) {
-        printf("rmc_complete_connect(): ind[%d] addr[%s:%d]: %s\n",
-               sock->rmc_index,
-               inet_ntoa( (struct in_addr) {
-                       .s_addr = htonl(sock->remote_address)
-                           }),
-               sock->remote_port,
-               strerror(sock_err));
-
         if (*ctx->poll_remove)
             (*ctx->poll_remove)(ctx, sock->descriptor, sock->rmc_index);
 
@@ -115,13 +114,16 @@ int rmc_complete_connect(rmc_context_t* ctx, rmc_connection_t* sock)
         return sock_err;
     }
     
-    sock->mode = RMC_CONNECTION_MODE_SUBSCRIBER;
-    old_action = sock->action;
 
     // We are subscribing to data from the publisher, which
     // will resend failed multicast packets via tcp
+
     sock->mode = RMC_CONNECTION_MODE_SUBSCRIBER;
+    old_action = sock->action;
     sock->action = RMC_POLLREAD;
+
+    // The remote end is the publisher of packets that we subscriber to
+    sub_init_publisher(&sock->pubsub.publisher, &ctx->sub_ctx);
 
     // We start off in reading mode
     if (ctx->poll_modify)
@@ -177,9 +179,6 @@ int rmc_connect_tcp_by_address(rmc_context_t* ctx,
     
     ctx->connections[c_ind].remote_address = address;
     ctx->connections[c_ind].remote_port = port;
-
-    sub_init_publisher(&ctx->connections[c_ind].pubsub.publisher,
-                       &ctx->sub_ctx);
 
     // We are subscribing to data from the publisher, which
     // will resend failed multicast packets via tcp
@@ -246,7 +245,7 @@ int rmc_process_accept(rmc_context_t* ctx,
     pub_init_subscriber(&ctx->connections[c_ind].pubsub.subscriber, &ctx->pub_ctx);
 
     ctx->connections[c_ind].mode = RMC_CONNECTION_MODE_PUBLISHER;
-    memcpy(&ctx->connections[c_ind].remote_address, &src_addr.sin_addr.s_addr, sizeof(src_addr.sin_addr.s_addr));
+    ctx->connections[c_ind].remote_address = src_addr.sin_addr.s_addr;
 
     ctx->connections[c_ind].action = RMC_POLLREAD;
     if (ctx->poll_add)

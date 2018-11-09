@@ -323,7 +323,7 @@ extern int rmc_process_timeout(rmc_context_t* context);
 
 // A multicast loopback message, sent by self, was detected and
 // discarded
-#define RMC_MULTICAST_LOOPBACK 2
+#define RMC_READ_MULTICAST_LOOPBACK 2
 
 // Multicast package was received from a new publisher. Discarded, but
 // a tcp connection is being setup to publisher
@@ -369,9 +369,7 @@ extern int rmc_process_accept(rmc_context_t* ctx,
                               rmc_connection_index_t* result_index);
 
 extern int rmc_close_tcp(rmc_context_t* ctx, rmc_connection_index_t s_ind);
-extern int rmc_proto_ack(rmc_context_t* ctx,
-                         rmc_connection_t* sock,
-                         sub_packet_t* pack);
+extern int rmc_proto_ack(rmc_context_t* ctx, sub_packet_t* pack);
 
 extern int rmc_complete_connect(rmc_context_t* ctx, rmc_connection_t* sock);
 #endif // __RMC_PROTO_H__

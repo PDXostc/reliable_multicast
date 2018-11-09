@@ -97,6 +97,11 @@ void sub_process_received_packets(sub_publisher_t* pub)
     // last successfully received packet from the received
     // queue top
     node = sub_packet_list_head(&pub->received);
+
+    // Initialize pub->max_pid_ready if not setup already
+    if (node && !pub->max_pid_ready)
+        pub->max_pid_ready = node->data->pid - 1;
+
     while(node) {
         if (pub->max_pid_ready &&
             node->data->pid != pub->max_pid_ready + 1)

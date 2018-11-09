@@ -170,9 +170,9 @@ int rmc_get_next_timeout(rmc_context_t* ctx, usec_timestamp_t* result)
     // Query the publisher for all 
     pub_get_oldest_subscriber(&ctx->pub_ctx, &sub, &pack);
 
-    // If no subscriber has inflight packets, then set result to 0.
+    // If no subscriber has inflight packets, then set result to -1.
     if (!sub) {
-        *result = 0;
+        *result = -1;
         return ENODATA;
     }
 
