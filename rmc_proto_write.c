@@ -315,4 +315,3 @@ int rmc_proto_ack(rmc_context_t* ctx, rmc_connection_t* sock, sub_packet_t* pack
                             sock->action);
     
 }
-

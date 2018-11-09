@@ -188,21 +188,19 @@ typedef struct rmc_context {
                         int descriptor,
                         rmc_connection_index_t index);
 
-    // Called to alloc memory for incoming data.
-    void* (*pub_payload_alloc)(struct rmc_context* context,
-                               payload_len_t payload_len,
-                               user_data_t user_data);
     
-    // Free payload provided by rmc_queue_packet()
-    void (*pub_payload_free)(struct rmc_context* context,
-                             void* payload,
+    // Called to alloc memory for incoming data.
+    // that needs to be processed.
+    void* (*sub_payload_alloc)(payload_len_t payload_len,
+                               user_data_t user_data);
+
+    // Callback to free memory for packets that has been
+    // successfully sent out.
+    void (*pub_payload_free)(void* payload,
                              payload_len_t payload_len,
                              user_data_t user_data);
 
-    // Called to alloc memory for incoming data.
-    void* (*sub_payload_alloc)(struct rmc_context* context,
-                               payload_len_t payload_len,
-                               user_data_t user_data);
+
 } rmc_context_t;
 
 
@@ -272,65 +270,30 @@ extern int rmc_init_context(rmc_context_t* context,
                                                 rmc_connection_index_t index),
 
 
-                            // Function to call to allocated payload memory specified
-                            // by queue_packet()
-                            // Also called to allocate memory for incoming
-                            // packets read, which will be pointed to
-                            // by rmc_get_next_ready_packet(.., void* payload)
-                            void* (*pub_payload_alloc)(struct rmc_context* context,
-                                                       payload_len_t payload_len,
+
+
+                            // Callback to allocate payload memory used to store
+                            // incoming packages. Called via rmc_read() when
+                            // a new multicast or tcp payload packet is delivered.
+                            //
+                            // The allocated memory has to manually freed by the caller
+                            // after an rmc_packet_dispatched() has been called to
+                            // mark the packet as processed.
+                            //
+                            // If set to 0, malloc() will be used.
+                            void* (*sub_payload_alloc)(payload_len_t payload_len,
                                                        user_data_t user_data),
 
-                            // Function called in order to:
-                            // 1. To free the memory pointed to by
-                            //    payload in a rmc_queue_packet()
-                            //    call. Will be invoked by rmc_write()
-                            //    when payload has been successfully
-                            //    sent.
+                            // Callback to previously allocated memory provided
+                            // by the caller of rmc_queue_packet().
                             //
-                            // 2. To free multicast payload space
-                            //    allocated by rmc_read() when
-                            //    queueing packets for
-                            //    processing. Will be invoked by
-                            //    rmc_free_packet(), which is called
-                            //    to indicate that packet retrieved
-                            //    with rmc_get_next_ready_packet().
-                            // 
-                            // 3. 
-                            void (*pub_payload_free)(struct rmc_context* context,
-                                                     void* payload,
+                            // Invoked by rmc_read() when an ack has been collected
+                            // from all subscribers.
+                            //
+                            // If set 0, free() will be used.
+                            void (*pub_payload_free)(void* payload,
                                                      payload_len_t payload_len,
-                                                     user_data_t user_data),
-
-                            // Function to call to allocated payload memory specified
-                            // by queue_packet()
-                            // Also called to allocate memory for incoming
-                            // packets read, which will be pointed to
-                            // by rmc_get_next_ready_packet(.., void* payload)
-                            void* (*sub_payload_alloc)(struct rmc_context* context,
-                                                   payload_len_t payload_len,
-                                                   user_data_t user_data),
-
-                            // Function called in order to:
-                            // 1. To free the memory pointed to by
-                            //    payload in a rmc_queue_packet()
-                            //    call. Will be invoked by rmc_write()
-                            //    when payload has been successfully
-                            //    sent.
-                            //
-                            // 2. To free multicast payload space
-                            //    allocated by rmc_read() when
-                            //    queueing packets for
-                            //    processing. Will be invoked by
-                            //    rmc_free_packet(), which is called
-                            //    to indicate that packet retrieved
-                            //    with rmc_get_next_ready_packet().
-                            // 
-                            // 3. 
-                            void (*sub_payload_free)(struct rmc_context* context,
-                                                 void* payload,
-                                                 payload_len_t payload_len,
-                                                 user_data_t user_data));
+                                                     user_data_t user_data));
 
 
 extern int rmc_activate_context(rmc_context_t* context);
@@ -350,7 +313,34 @@ extern rmc_context_id_t rmc_context_id(rmc_context_t* ctx);
 extern int rmc_get_next_timeout(rmc_context_t* context, usec_timestamp_t* result);
 extern int rmc_process_timeout(rmc_context_t* context);
 
-extern int rmc_read(rmc_context_t* context, rmc_connection_index_t rmc_index);
+// If a valid pointer, res will be set to:
+
+// An error occurred, check return value
+#define RMC_READ_ERROR 0
+
+// Multicast package was received
+#define RMC_READ_MULTICAST 1
+
+// A multicast loopback message, sent by self, was detected and
+// discarded
+#define RMC_MULTICAST_LOOPBACK 2
+
+// Multicast package was received from a new publisher. Discarded, but
+// a tcp connection is being setup to publisher
+#define RMC_READ_MULTICAST_NEW 3
+
+// Multicast package was received from a publisher. Discarded since
+// tcp connection is not yet complete
+#define RMC_READ_MULTICAST_NOT_READY 4
+
+// TCP Data was read and processed.
+#define RMC_READ_TCP 5
+
+// TCP accept was processed.
+#define RMC_READ_ACCEPT 6
+
+
+extern int rmc_read(rmc_context_t* context, rmc_connection_index_t rmc_index, uint8_t* res);
 extern int rmc_write(rmc_context_t* context, rmc_connection_index_t rmc_index);
 extern int rmc_queue_packet(rmc_context_t* context, void* payload, payload_len_t payload_len);
 extern int rmc_get_poll_size(rmc_context_t* context, int *result);
@@ -358,7 +348,9 @@ extern int rmc_get_poll_vector(rmc_context_t* context, rmc_connection_t* result,
 extern int rmc_get_poll(rmc_context_t* context, int rmc_index, rmc_connection_t* result);
 extern int rmc_get_ready_packet_count(rmc_context_t* context);
 extern sub_packet_t* rmc_get_next_ready_packet(rmc_context_t* context);
-extern int rmc_free_packet(rmc_context_t* context, sub_packet_t* packet);
+
+// CALLER STILL HAS TO FREE packet->payload!
+extern int rmc_packet_dispatched(rmc_context_t* context, sub_packet_t* packet);
 
 // FIXME: MOVE TO INTERNAL HEADER FILE
 extern void rmc_reset_connection(rmc_connection_t* sock, int index);

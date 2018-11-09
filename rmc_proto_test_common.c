@@ -50,22 +50,6 @@ int _descriptor(rmc_context_t* ctx,
     }
 }
 
-
-void* _test_proto_alloc(payload_len_t plen)
-{
-    void* res = malloc(plen);
-
-    assert(res);
-    return res;
-}
-
-void test_proto_free(void* payload, payload_len_t plen)
-{
-    //gfree(payload);
-    return;
-}
-
-
 void _test(char* fmt_string, int major, int minor, int error)
 {
     if (!error)
@@ -128,12 +112,12 @@ void poll_modify(rmc_context_t* ctx,
     if (new_action & RMC_POLLWRITE)
         ev.events |= EPOLLOUT;
 
-    printf("poll_modify(%s:%d)%s%s%s\n",
-           _index(index, buf),
-           descriptor,
-           ((new_action & RMC_POLLREAD)?" read":""),
-           ((new_action & RMC_POLLWRITE)?" write":""),
-           (!(new_action & (RMC_POLLREAD | RMC_POLLWRITE)))?" [none]":"");
+//    printf("poll_modify(%s:%d)%s%s%s\n",
+//           _index(index, buf),
+//           descriptor,
+//           ((new_action & RMC_POLLREAD)?" read":""),
+//           ((new_action & RMC_POLLWRITE)?" write":""),
+//           (!(new_action & (RMC_POLLREAD | RMC_POLLWRITE)))?" [none]":"");
 
     if (epoll_ctl(epollfd, EPOLL_CTL_MOD, descriptor, &ev) == -1) {
         perror("epoll_ctl(modify)");
@@ -160,7 +144,33 @@ void poll_remove(rmc_context_t* ctx,
 
 #define RMC_MIN(x,y) ((x)<(y)?(x):(y))
 
-int process_events(rmc_context_t* ctx, int epollfd, usec_timestamp_t timeout, int major)
+char* _read_res_string(uint8_t res)
+{
+    switch(res) {
+    case RMC_READ_ERROR:
+        return "error";
+        
+    case RMC_READ_MULTICAST:
+        return "multicast";
+ 
+    case RMC_READ_MULTICAST_NEW:
+        return "new multicast";
+
+     case RMC_READ_MULTICAST_NOT_READY:
+        return "multicast not ready";
+        
+    case RMC_READ_TCP:
+        return "tcp";
+        
+    case RMC_READ_ACCEPT:
+        return "accpept";
+
+    default:
+        return "[unknown]";
+        
+    }
+}
+int process_events(rmc_context_t* ctx, int epollfd, usec_timestamp_t timeout, int major, int* ind)
 {
     struct epoll_event events[RMC_MAX_CONNECTIONS];
     char buf[16];
@@ -185,20 +195,21 @@ int process_events(rmc_context_t* ctx, int epollfd, usec_timestamp_t timeout, in
         return ETIME;
     }
 
-    printf("poll_wait(): %d results\n", nfds);
+//    printf("poll_wait(): %d results\n", nfds);
 
     while(nfds--) {
         int res = 0;
+        uint8_t read_res = 0;
         rmc_connection_index_t c_ind = events[nfds].data.u32;
-        // Figure out which context that triggered the event.
 
-        printf("poll_wait(%s:%d)%s%s%s\n",
-               _index(c_ind, buf), _descriptor(ctx, c_ind),
-               ((events[nfds].events & EPOLLIN)?" read":""),
+//        printf("poll_wait(%s:%d)%s%s%s\n",
+//               _index(c_ind, buf), _descriptor(ctx, c_ind),
+//               ((events[nfds].events & EPOLLIN)?" read":""),
+//
+//               ((events[nfds].events & EPOLLOUT)?" write":""),
+//               ((events[nfds].events & EPOLLHUP)?" disconnect":""));
 
-               ((events[nfds].events & EPOLLOUT)?" write":""),
-               ((events[nfds].events & EPOLLHUP)?" disconnect":""));
-
+        // Figure out what to do.
         if (events[nfds].events & EPOLLHUP) {
             _test("rmc_proto_test[%d.%d] process_events():rmc_close_tcp(): %s\n",
                   major, 11, rmc_close_tcp(ctx, c_ind));
@@ -206,17 +217,21 @@ int process_events(rmc_context_t* ctx, int epollfd, usec_timestamp_t timeout, in
         }
 
         if (events[nfds].events & EPOLLIN) {
-            res = rmc_read(ctx, c_ind);
-
+            errno = 0;
+            res = rmc_read(ctx, c_ind, &read_res);
             // Did we read a loopback message we sent ourselves?
+            printf("process_events(%s):%s\n", _read_res_string(read_res), strerror(errno));
             if (res == ELOOP)
                 continue;       
 
             _test("rmc_proto_test[%d.%d] process_events():rmc_read(): %s\n", major, 1, res);
                 
             // If this was a connection call processed, we can continue.
-            if (events[nfds].data.u32 == RMC_LISTEN_INDEX)
+            if (read_res == RMC_READ_ACCEPT)
                 continue;
+
+            if (read_res == RMC_READ_MULTICAST)
+                *ind++;
         }
 
         if (events[nfds].events & EPOLLOUT) 

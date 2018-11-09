@@ -57,6 +57,6 @@ extern int process_packet(rmc_context_t* ctx, int major, int minor);
 
 extern void queue_test_data(rmc_context_t* ctx, rmc_test_data_t* td_arr, int td_arr_ind);
 
-extern int process_events(rmc_context_t* ctx, int epollfd, usec_timestamp_t timeout, int major);
+extern int process_events(rmc_context_t* ctx, int epollfd, usec_timestamp_t timeout, int major, int* index);
 
 #endif // __RMC_PROTO_TEST_COMMON_H__

@@ -94,15 +94,6 @@ typedef struct pub_context {
     // are referredd to by subscriber_t::inflight.
     pub_packet_list_t inflight; 
     packet_id_t next_pid;
-
-    // Provided by pub_init_context().
-    // Retrievable via pub_user_data()
-    user_data_t ctx_user_data; 
-
-    // The payload, payload length, and user data are all the same
-    // values as provided with the pub_queue_packet() call whose
-    // data is now to be freed.
-    void (*pub_payload_free)(void*, payload_len_t, user_data_t);
 } pub_context_t;
 
 
@@ -111,12 +102,12 @@ typedef struct pub_context {
 // payload_free will be called to free the data pointed to by 'payload'
 // in pub_queue_packet() once the packet has been ack:ed by all subscribers.
 //
-extern void pub_init_context(pub_context_t* ctx,
-                             user_data_t ctx_user_data,
-                             void (*pub_payload_free)(void*, payload_len_t, user_data_t));
-
+extern void pub_init_context(pub_context_t* ctx);
 
 extern void pub_init_subscriber(pub_subscriber_t* sub, pub_context_t* ctx);
+
+// Payload will be freed by callback to (*pub_payload_free)() argument
+// of pub_packet_ack()
 extern packet_id_t pub_queue_packet(pub_context_t* ctx,
                                     void* payload,
                                     payload_len_t payload_len,
@@ -129,7 +120,13 @@ extern void pub_packet_sent(pub_context_t* ctx,
                             pub_packet_t* ppack,
                             usec_timestamp_t send_ts);
 
-extern void pub_packet_ack(pub_subscriber_t* sub, packet_id_t pid);
+extern void pub_packet_ack(pub_subscriber_t* sub,
+                           packet_id_t pid,
+                           // Called if this was the last subscriber acking the packet
+                           // meaning that we can discard it.
+                           void (*pub_payload_free)(void* payload,
+                                                    payload_len_t payload_len,
+                                                    user_data_t user_data));
 
 // Collect all subscribers that have unacknowledged
 // packets older than or equal to max_age usecs.

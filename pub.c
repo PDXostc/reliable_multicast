@@ -41,17 +41,13 @@ static packet_id_t _next_pid(pub_context_t* ctx)
 }
 
 
-void pub_init_context(pub_context_t* ctx,
-                      user_data_t ctx_user_data,
-                      void (*pub_payload_free)(void*, payload_len_t, user_data_t))
+void pub_init_context(pub_context_t* ctx)
 {
     assert(ctx);
 
-    ctx->ctx_user_data = ctx_user_data;
     pub_sub_list_init(&ctx->subscribers, 0, 0, 0);
     pub_packet_list_init(&ctx->queued, 0, 0, 0);
     pub_packet_list_init(&ctx->inflight, 0, 0, 0);
-    ctx->pub_payload_free = pub_payload_free;
     ctx->next_pid = 1;
 
 }
@@ -183,7 +179,11 @@ void pub_packet_sent(pub_context_t* ctx,
 }
 
 
-void pub_packet_ack(pub_subscriber_t* sub, packet_id_t pid)
+void pub_packet_ack(pub_subscriber_t* sub,
+                    packet_id_t pid,
+                    void (*pub_payload_free)(void* payload,
+                                             payload_len_t payload_len,
+                                             user_data_t user_data))
 {
     pub_packet_node_t* node = 0; // Packets
     pub_packet_t* ppack = 0;
@@ -226,10 +226,11 @@ void pub_packet_ack(pub_subscriber_t* sub, packet_id_t pid)
     if (!ppack->ref_count) {
         pub_packet_list_delete(ppack->parent_node);
 
-        // Free data using function provided to pub_init_context
-        (*sub->context->pub_payload_free)(ppack->payload,
-                                          ppack->payload_len,
-                                          ppack->pkg_user_data);
+        // Free data using function provided with this call.
+        if (pub_payload_free)
+            (*pub_payload_free)(ppack->payload,
+                                ppack->payload_len,
+                                ppack->pkg_user_data);
 
         // Delete the ppack.
         _free_pending_packet(ppack);
@@ -302,9 +303,4 @@ void pub_get_oldest_subscriber(pub_context_t* ctx, pub_subscriber_t** subscriber
 user_data_t pub_packet_user_data(pub_packet_t* ppack)
 {
     return ppack?ppack->pkg_user_data:user_data_nil();
-}
-
-user_data_t pub_user_data(pub_context_t* ctx)
-{
-    return ctx?ctx->ctx_user_data:user_data_nil();
 }

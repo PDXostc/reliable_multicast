@@ -45,13 +45,9 @@ typedef sub_publisher_node sub_publisher_node_t;
 
 typedef struct sub_context {
     sub_publisher_list_t publishers; // of sub_publisher_t for all publishers we are subscribing to.
-
-    // All arguments are from the sub_packet_received() call
-    void (*sub_payload_free)(void*, payload_len_t, user_data_t pkg_user_data);
 } sub_context_t; 
 
-extern void sub_init_context(sub_context_t* ctx,
-                             void (*sub_payload_free)(void*, payload_len_t, user_data_t pkg_user_data));
+extern void sub_init_context(sub_context_t* ctx);
 
 extern int sub_packet_is_duplicate(sub_publisher_t* pub,
                                    packet_id_t pid);
@@ -72,7 +68,9 @@ extern void sub_packet_dispatched(sub_packet_t* pack);
 extern void sub_get_missing_packets(sub_publisher_t* sub, intv_list_t* res);
 extern void sub_init_publisher(sub_publisher_t* pub, sub_context_t* ctx);
 extern sub_publisher_t* sub_find_publisher(sub_context_t* ctx, void* address, int address_len);
-extern void sub_remove_publisher(sub_publisher_t* pub);
+extern void sub_remove_publisher(sub_publisher_t*,
+                                 void (*)(void*, payload_len_t, user_data_t));;
+
 extern sub_packet_t* sub_get_next_ready_packet(sub_context_t* ctx);
 extern int sub_get_ready_packet_count(sub_context_t* ctx);
 

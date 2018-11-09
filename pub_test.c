@@ -9,12 +9,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static void _test_pub_free(void* payload, payload_len_t plen, user_data_t user_data)
-{
-    // We are not allocating payload from heap.
-    return;
-}
-
 static uint8_t _test_print_pending(pub_packet_node_t* node, void* dt)
 {
     pub_packet_t* pack = (pub_packet_t*) node->data;
@@ -86,7 +80,7 @@ void test_pub(void)
     pub_sub_list_t sub_lst;
     pub_packet_node_t* pnode = 0;
 
-    pub_init_context(&ctx, user_data_nil(), _test_pub_free);
+    pub_init_context(&ctx);
     pub_init_subscriber(&sub1, &ctx);
     pub_init_subscriber(&sub2, &ctx);
     pub_init_subscriber(&sub3, &ctx);
@@ -198,7 +192,7 @@ void test_pub(void)
     }
 
     // Ack the first packet.
-    pub_packet_ack(&sub1, 1);
+    pub_packet_ack(&sub1, 1, 0);
 
     //
     // Do we have two elements left in flight for subscriber.
@@ -241,8 +235,8 @@ void test_pub(void)
     }
 
     // Ack the remaining two subscribers for pid 1.
-    pub_packet_ack(&sub2, 1);
-    pub_packet_ack(&sub3, 1);
+    pub_packet_ack(&sub2, 1, 0);
+    pub_packet_ack(&sub3, 1, 0);
 
     // Check size of inflight elements, which should have been decreased by one.
     if (pub_packet_list_size(&ctx.inflight) != 2) {
@@ -251,7 +245,7 @@ void test_pub(void)
         exit(255);
     }        
 
-    // Check that the first inflight package is pid 2
+    // Check that the first in
     pack = (pub_packet_t*) pub_packet_list_tail(&ctx.inflight)->data;
     if (pack->pid != 2) {
         printf("Failed pub test 7.2. Wanted pid 2, got %lu\n",
@@ -260,9 +254,9 @@ void test_pub(void)
     }
 
     // Ack the next packet out of order, with pid 3 being acked before pid 2.
-    pub_packet_ack(&sub1, 3);
-    pub_packet_ack(&sub2, 3);
-    pub_packet_ack(&sub3, 3);
+    pub_packet_ack(&sub1, 3, 0);
+    pub_packet_ack(&sub2, 3, 0);
+    pub_packet_ack(&sub3, 3, 0);
 
     // Check size of inflight elements for sub2, which should be 1 (pid 3)
     if (pub_packet_list_size(&sub2.inflight) != 1) {
@@ -300,9 +294,9 @@ void test_pub(void)
     // 
     // Ack packet 2, which is the last one
     //
-    pub_packet_ack(&sub1, 2);
-    pub_packet_ack(&sub2, 2);
-    pub_packet_ack(&sub3, 2);
+    pub_packet_ack(&sub1, 2, 0);
+    pub_packet_ack(&sub2, 2, 0);
+    pub_packet_ack(&sub3, 2, 0);
 
     // Check size of inflight elements for sub2, which should be 1 (pid 3)
     if (pub_packet_list_size(&sub3.inflight) != 0) {
@@ -354,21 +348,21 @@ void test_pub(void)
     pub_packet_sent(&ctx, pack, rmc_usec_monotonic_timestamp());
 
     // Ack all the packages in a semi-random order
-    pub_packet_ack(&sub1, 5);
-    pub_packet_ack(&sub2, 5);
-    pub_packet_ack(&sub3, 5);
+    pub_packet_ack(&sub1, 5, 0);
+    pub_packet_ack(&sub2, 5, 0);
+    pub_packet_ack(&sub3, 5, 0);
 
-    pub_packet_ack(&sub1, 7);
-    pub_packet_ack(&sub2, 7);
-    pub_packet_ack(&sub3, 7);
+    pub_packet_ack(&sub1, 7, 0);
+    pub_packet_ack(&sub2, 7, 0);
+    pub_packet_ack(&sub3, 7, 0);
 
-    pub_packet_ack(&sub1, 6);
-    pub_packet_ack(&sub2, 6);
-    pub_packet_ack(&sub3, 6);
+    pub_packet_ack(&sub1, 6, 0);
+    pub_packet_ack(&sub2, 6, 0);
+    pub_packet_ack(&sub3, 6, 0);
 
-    pub_packet_ack(&sub1, 4);
-    pub_packet_ack(&sub2, 4);
-    pub_packet_ack(&sub3, 4);
+    pub_packet_ack(&sub1, 4, 0);
+    pub_packet_ack(&sub2, 4, 0);
+    pub_packet_ack(&sub3, 4, 0);
 
     // Check that everything is empty
     if (pub_packet_list_size(&ctx.inflight) != 0) {
@@ -449,9 +443,9 @@ void test_pub(void)
     // sub2: - 2 3 4 5 6
     // sub3: - 2 3 4 5 6
     //
-    pub_packet_ack(&sub1, 1);
-    pub_packet_ack(&sub2, 1);
-    pub_packet_ack(&sub3, 1);
+    pub_packet_ack(&sub1, 1, 0);
+    pub_packet_ack(&sub2, 1, 0);
+    pub_packet_ack(&sub3, 1, 0);
 
     // Sub3 will have all packes acked
     //
@@ -460,11 +454,11 @@ void test_pub(void)
     // sub2: - 2 3 4 5 6
     // sub3: - - - - - -
     //
-    pub_packet_ack(&sub3, 2);
-    pub_packet_ack(&sub3, 3);
-    pub_packet_ack(&sub3, 4);
-    pub_packet_ack(&sub3, 5);
-    pub_packet_ack(&sub3, 6);
+    pub_packet_ack(&sub3, 2, 0);
+    pub_packet_ack(&sub3, 3, 0);
+    pub_packet_ack(&sub3, 4, 0);
+    pub_packet_ack(&sub3, 5, 0);
+    pub_packet_ack(&sub3, 6, 0);
 
     // Ack p2 and p3 for sub2
     //
@@ -472,8 +466,8 @@ void test_pub(void)
     // sub1: - 2 3 4 5 6
     // sub2: - - - 4 5 6
     // sub3: - - - - - -
-    pub_packet_ack(&sub2, 2);
-    pub_packet_ack(&sub2, 3);
+    pub_packet_ack(&sub2, 2, 0);
+    pub_packet_ack(&sub2, 3, 0);
 
     // Get all packets sent >= 2 usecs ago.
     // Expected hits of subscribers:

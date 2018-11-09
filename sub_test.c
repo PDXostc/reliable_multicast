@@ -11,11 +11,6 @@
 #include <string.h>
 #include <stdarg.h>
 
-static void _test_sub_free(void* payload, payload_len_t plen, user_data_t user_data)
-{
-    // We are not allocating payload from heap.
-    return;
-}
 
 static uint8_t _test_print_pending(sub_packet_node_t* node, void* dt)
 {
@@ -189,7 +184,7 @@ void reset_publisher(sub_context_t* ctx, sub_publisher_t* pub)
     while((pack = sub_next_ready_packet(pub)))
         sub_packet_dispatched(pack);
 
-    sub_remove_publisher(pub);
+    sub_remove_publisher(pub, 0);
     sub_init_publisher(pub, ctx);
     return;
 }
@@ -206,7 +201,7 @@ void test_sub(void)
     sub_packet_node_t* node = 0;
     packet_interval_t intv = { .first_pid =0, .last_pid = 0};
 
-    sub_init_context(&ctx, _test_sub_free);
+    sub_init_context(&ctx);
     intv_list_init(&holes, 0, 0, 0);
 
     sub_init_publisher(&pub1, &ctx);

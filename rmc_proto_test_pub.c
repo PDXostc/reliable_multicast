@@ -60,7 +60,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
     pid_t sub_pid = 0;
     user_data_t ud = { .u64 = 0 };
     int ind = 0;
-    int countdown = 100;
+    int countdown = 10;
     static rmc_test_data_t td[] = {
         { "ping", 1, 100 },
         { "p1", 2, 0 },
@@ -84,7 +84,9 @@ void test_rmc_proto_pub(char* mcast_group_addr,
     rmc_init_context(ctx,
                      mcast_group_addr, mcast_if_addr, listen_if_addr, mcast_port, listen_port,
                      (user_data_t) { .i32 = epollfd },
-                     poll_add, poll_modify, poll_remove, 0, 0);
+                     poll_add, poll_modify, poll_remove,
+                     0, lambda(void, (void* pl, payload_len_t len, user_data_t dt) { }));
+
 
 
     _test("rmc_proto_test_pub[%d.%d] activate_context(): %s",
@@ -105,9 +107,14 @@ void test_rmc_proto_pub(char* mcast_group_addr,
         printf("now[%lu] wait_until[%lu]\n", now, wait_until);
         while(now <= wait_until) {
             t_out = (wait_until - now);
-            process_events(ctx, epollfd, t_out, 2);
+            process_events(ctx, epollfd, t_out, 2, &ind);
             now = rmc_usec_monotonic_timestamp();
         }
+    }
+
+    while(countdown--) {
+        printf("tick[%d]\n", countdown);
+        process_events(ctx, epollfd, 1000000, 2, &ind);
     }
     puts("Done");
 }

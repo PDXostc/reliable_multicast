@@ -138,19 +138,13 @@ sub_packet_t* sub_next_ready_packet(sub_publisher_t* pub)
 void sub_packet_dispatched(sub_packet_t* pack)
 {
     sub_packet_node_t* node = 0;
-    sub_context_t* ctx = 0;
 
     assert(pack);
     assert(pack->owner_node);
     assert(pack->publisher);
 
-    ctx = pack->publisher->owner;
-
     // Unlink from ready list. 
     sub_packet_list_delete(pack->owner_node);
-
-    if (ctx->sub_payload_free)
-        (*ctx->sub_payload_free)(pack->payload, pack->payload_len, pack->pkg_user_data);
 }
 
 
@@ -252,7 +246,8 @@ void sub_init_publisher(sub_publisher_t* pub, sub_context_t* ctx)
 }
 
 
-void sub_remove_publisher(sub_publisher_t* pub)
+void sub_remove_publisher(sub_publisher_t* pub,
+                          void (*free_cb)(void*, payload_len_t, user_data_t))
 {
     sub_context_t* ctx = 0;
     sub_publisher_node_t* pub_node = 0;
@@ -276,12 +271,15 @@ void sub_remove_publisher(sub_publisher_t* pub)
 
     // Go through each list and wipe them.
     while(sub_packet_list_pop_head(&pub->received, &pack)) {
-        (*ctx->sub_payload_free)(pack->payload, pack->payload_len, pack->pkg_user_data);
+        if (free_cb)
+            (*free_cb)(pack->payload, pack->payload_len, pack->pkg_user_data);
         _free_pending_packet(pack);
     }
 
     while(sub_packet_list_pop_head(&pub->ready, &pack)) {
-        (*ctx->sub_payload_free)(pack->payload, pack->payload_len, pack->pkg_user_data);
+        if (free_cb)
+            (*free_cb)(pack->payload, pack->payload_len, pack->pkg_user_data);
+
         _free_pending_packet(pack);
     }
 
@@ -290,11 +288,9 @@ void sub_remove_publisher(sub_publisher_t* pub)
 
 
 
-void sub_init_context(sub_context_t* ctx,
-                      void (*sub_payload_free)(void*, payload_len_t, user_data_t))
+void sub_init_context(sub_context_t* ctx)
 {
     sub_publisher_list_init(&ctx->publishers, 0, 0, 0);
-    ctx->sub_payload_free = sub_payload_free;
 }
 
 

@@ -96,12 +96,12 @@ int main(int argc, char* argv[])
         }
     }
     
-//    run_list_tests();
-//    test_packet_interval();
-//    test_packet_intervals();
-//    test_circular_buffer();
-//    test_pub();
-//    test_sub();
+    run_list_tests();
+    test_packet_interval();
+    test_packet_intervals();
+    test_circular_buffer();
+    test_pub(); 
+    test_sub();
 
     // Check with mode we run in.
     if (publisher)
