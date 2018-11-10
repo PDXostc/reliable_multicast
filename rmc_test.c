@@ -10,6 +10,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <fcntl.h>
 
 extern void test_packet_interval();
 extern void test_packet_intervals();
@@ -58,6 +62,7 @@ int main(int argc, char* argv[])
     char listen_if_addr[80];
     int listen_port = PORT_DEFAULT;
     int mcast_port = PORT_DEFAULT;
+    pid_t ch_pid = 0;
 
     strcpy(mcast_if_addr, MULTICAST_IF_ADDR_DEFAULT);
     strcpy(listen_if_addr, LISTEN_IF_ADDR_DEFAULT);
@@ -103,11 +108,34 @@ int main(int argc, char* argv[])
     test_pub(); 
     test_sub();
 
-    // Check with mode we run in.
-    if (publisher)
-        test_rmc_proto_pub(mcast_group_addr, mcast_if_addr, listen_if_addr, mcast_port, listen_port);
-    else
+    // Fork a child for subscriber.
+    if (!(ch_pid = fork())) {
+        // Redirect stdout and stderr
+        if (!(stdout = freopen("rmc_test_sub.log", "a", stdout))) {
+            perror("stdout -> rmc_test_sub.log");
+            exit(1);
+        }
+        if (!(stderr = freopen("rmc_test_sub.log", "a", stderr))) {
+            perror("stdout -> rmc_test_sub.log");
+            exit(1);
+        }
+        puts("\n\n\n\n\n\n\n\nSUBSCRIBER\n");
         test_rmc_proto_sub(mcast_group_addr, mcast_if_addr, listen_if_addr, mcast_port, listen_port + 1);
-        
+        exit(0);
+    }
+    // Wait for subscriber to come to life.
+    usleep(100000);
+    // Redirect stdout and stderr
+    if (!(stdout = freopen("rmc_test_pub.log", "a", stdout))) {
+        perror("stdout -> rmc_test_pub.log");
+        exit(1);
+    }
+    if (!(stderr = freopen("rmc_test_pub.log", "a", stderr))) {
+        perror("stdout -> rmc_test_pub.log");
+        exit(1);
+    }
+    puts("\n\n\n\n\n\n\n\nPUBLISHER\n");
+    test_rmc_proto_pub(mcast_group_addr, mcast_if_addr, listen_if_addr, mcast_port, listen_port);
+    waitpid(ch_pid, 0, 0);
     exit(0);
-}
+} 

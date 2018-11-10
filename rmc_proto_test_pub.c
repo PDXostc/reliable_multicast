@@ -12,7 +12,7 @@ static uint8_t _test_print_pending(pub_packet_node_t* node, void* dt)
     pub_packet_t* pack = (pub_packet_t*) node->data;
     int indent = (int) (uint64_t) dt;
 
-    printf("%*cPending Packet  %p\n", indent*2, ' ', pack);
+    printf("%*cPacket          %p\n", indent*2, ' ', pack);
     printf("%*c  PID             %lu\n", indent*2, ' ', pack->pid);
     printf("%*c  Sent timestamp  %lu\n", indent*2, ' ', pack->send_ts);
     printf("%*c  Reference count %d\n", indent*2, ' ', pack->ref_count);
@@ -37,8 +37,8 @@ void queue_test_data(rmc_context_t* ctx, rmc_test_data_t* td_arr, int td_arr_ind
     }
 
     // Patch node with the correct pid.
-//    pub_packet_list_tail(&ctx->pub_ctx.queued)->data->pid = td_arr[td_arr_ind].pid;
-//    pub_packet_list_for_each(&ctx->pub_ctx.queued, _test_print_pending, (void*) (uint64_t) 1);
+    pub_packet_list_tail(&ctx->pub_ctx.queued)->data->pid = td_arr[td_arr_ind].pid;
+    pub_packet_list_for_each(&ctx->pub_ctx.queued, _test_print_pending, (void*) (uint64_t) 1);
     
 }
 
@@ -64,9 +64,9 @@ void test_rmc_proto_pub(char* mcast_group_addr,
     static rmc_test_data_t td[] = {
         { "ping", 1, 100 },
         { "p1", 2, 0 },
-        { "p2", 3, 0 },
         { "p3", 4, 0 },
-        { "exit", 5, 1000 }, // Wait for 1000 msec until exiting.
+        { "p2", 3, 0 },
+        { "exit", 5, 1000 }, // Wait for 1000 msec until exiting to process residual event.
     };
 
 

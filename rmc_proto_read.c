@@ -68,12 +68,17 @@ static int _decode_multicast(rmc_context_t* ctx,
     sub_publisher_t* pub = &conn->pubsub.publisher;
 
     // Traverse the received datagram and extract all packets
+    puts("_decode_multicast()");
     while(len) {
         cmd_packet_header_t* cmd_pack = (cmd_packet_header_t*) packet;
 
+        printf("Len[%d] Hdr Len[%lu] Payload Len[%d]\n", len, sizeof(cmd_packet_header_t), cmd_pack->payload_len);
+
         // Check that we do not have a duplicate
-        if (sub_packet_is_duplicate(pub, cmd_pack->pid))
+        if (sub_packet_is_duplicate(pub, cmd_pack->pid)) {
+            printf("_decode_multicast(%lu): Duplicate or pre-connect straggler\n", cmd_pack->pid);
             continue;
+        }
 
         // Use the provided memory allocator to reserve memory for
         // incoming payload.
@@ -95,6 +100,7 @@ static int _decode_multicast(rmc_context_t* ctx,
         sub_packet_received(pub, cmd_pack->pid,payload, cmd_pack->payload_len, user_data_ptr(conn));
     }
 
+    extern void test_print_sub_context(sub_context_t* ctx);
     // Process received packages, moving consectutive ones
     // over to the ready queue.
     sub_process_received_packets(pub);

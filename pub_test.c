@@ -14,7 +14,7 @@ static uint8_t _test_print_pending(pub_packet_node_t* node, void* dt)
     pub_packet_t* pack = (pub_packet_t*) node->data;
     int indent = (int) (uint64_t) dt;
 
-    printf("%*cPending Packet  %p\n", indent*2, ' ', pack);
+    printf("%*cPacket          %p\n", indent*2, ' ', pack);
     printf("%*c  PID             %lu\n", indent*2, ' ', pack->pid);
     printf("%*c  Sent timestamp  %lu\n", indent*2, ' ', pack->send_ts);
     printf("%*c  Reference count %d\n", indent*2, ' ', pack->ref_count);

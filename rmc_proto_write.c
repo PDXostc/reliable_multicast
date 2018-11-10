@@ -74,6 +74,10 @@ static int _process_multicast_write(rmc_context_t* ctx)
     listen_addr = inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->listen_if_addr) });
     mcast_addr = inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) });
 
+    printf("mcast_tx(): ctx_id[0x%.8X] mcast[%s:%d] listen[%s:%d]",
+           mcast_hdr->context_id,
+           mcast_addr, ntohs(sock_addr.sin_port),
+           listen_addr, mcast_hdr->listen_port);
     while(pack && mcast_hdr->payload_len <= RMC_MAX_PAYLOAD) {
         pub_packet_node_t* pnode = 0;
         cmd_packet_header_t* cmd_pack = (cmd_packet_header_t*) packet_ptr;
@@ -91,16 +95,13 @@ static int _process_multicast_write(rmc_context_t* ctx)
 
         pub_packet_list_push_head(&snd_list, pack);
 
+        printf(" pid[%lu]\n", pack->pid);
         // FIXME: Maybe add a specific API call to traverse queued packages?
         pnode = pub_packet_list_prev(pack->parent_node);
         pack = pnode?pnode->data:0;
     }
 
-    printf("mcast_tx(): ctx_id[0x%.8X] len[%.5d] mcast[%s:%d] listen[%s:%d]\n",
-           mcast_hdr->context_id,
-           mcast_hdr->payload_len,
-           mcast_addr, ntohs(sock_addr.sin_port),
-           listen_addr, mcast_hdr->listen_port);
+    printf(" - len[%.5d]\n", mcast_hdr->payload_len);
 
     res = sendto(ctx->mcast_send_descriptor,
                  packet,
