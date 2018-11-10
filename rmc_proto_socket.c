@@ -61,81 +61,81 @@ static void _reset_max_connection_ind(rmc_context_t* ctx)
 }
 
 
-void rmc_reset_connection(rmc_connection_t* sock, int index)
+void rmc_reset_connection(rmc_connection_t* conn, int index)
 {
-    sock->action = 0;
-    sock->connection_index = index;
-    sock->descriptor = -1;
-    sock->mode = RMC_CONNECTION_MODE_UNUSED;
-    circ_buf_init(&sock->read_buf, sock->read_buf_data, sizeof(sock->read_buf_data));
-    circ_buf_init(&sock->write_buf, sock->write_buf_data, sizeof(sock->write_buf_data));
-    memset(&sock->remote_address, 0, sizeof(sock->remote_address));
+    conn->action = 0;
+    conn->connection_index = index;
+    conn->descriptor = -1;
+    conn->mode = RMC_CONNECTION_MODE_UNUSED;
+    circ_buf_init(&conn->read_buf, conn->read_buf_data, sizeof(conn->read_buf_data));
+    circ_buf_init(&conn->write_buf, conn->write_buf_data, sizeof(conn->write_buf_data));
+    memset(&conn->remote_address, 0, sizeof(conn->remote_address));
 }
 
 
 // Complete async connect. Called from rmc_write().
-int rmc_complete_connect(rmc_context_t* ctx, rmc_connection_t* sock)
+int rmc_complete_connect(rmc_context_t* ctx, rmc_connection_t* conn)
 {
     rmc_poll_action_t old_action = 0;
     int sock_err = 0;
     socklen_t len = sizeof(sock_err);
     int tr = 1;
-    if (!ctx || !sock)
+    if (!ctx || !conn)
         return EINVAL;
     
 
-    if (getsockopt(sock->descriptor,
+    if (getsockopt(conn->descriptor,
                    SOL_SOCKET,
                    SO_ERROR,
                    &sock_err,
                    &len) == -1) {
         printf("rmc_complete_connect(): ind[%d] addr[%s:%d]: getsockopt(): %s\n",
-               sock->connection_index,
+               conn->connection_index,
                inet_ntoa( (struct in_addr) {
-                       .s_addr = htonl(sock->remote_address)
+                       .s_addr = htonl(conn->remote_address)
                            }),
-               sock->remote_port,
+               conn->remote_port,
                strerror(errno));
         sock_err = errno; // Save it.
-        rmc_close_connection(ctx, sock->connection_index);
+        rmc_close_connection(ctx, conn->connection_index);
         return sock_err;
     }
 
     printf("rmc_complete_connect(): ind[%d] addr[%s:%d]: %s\n",
-           sock->connection_index,
-           inet_ntoa( (struct in_addr) {.s_addr = htonl(sock->remote_address) }),
-           sock->remote_port,
+           conn->connection_index,
+           inet_ntoa( (struct in_addr) {.s_addr = htonl(conn->remote_address) }),
+           conn->remote_port,
            strerror(sock_err));
 
     if (sock_err != 0) {
         if (*ctx->poll_remove)
-            (*ctx->poll_remove)(ctx, sock->descriptor, sock->connection_index);
+            (*ctx->poll_remove)(ctx, conn->descriptor, conn->connection_index);
 
-        rmc_close_connection(ctx, sock->connection_index);
+        rmc_close_connection(ctx, conn->connection_index);
         return sock_err;
     }
     
     // Disable Nagle algorithm since latency is of essence when we send
     // out acks.
-    if (setsockopt( sock->descriptor, IPPROTO_TCP, TCP_NODELAY, (void *)&tr, sizeof(tr))) {
+    if (setsockopt( conn->descriptor, IPPROTO_TCP, TCP_NODELAY, (void *)&tr, sizeof(tr))) {
         sock_err = errno;
-        rmc_close_connection(ctx, sock->connection_index);
+        rmc_close_connection(ctx, conn->connection_index);
         return sock_err;
     }
 
     // We are subscribing to data from the publisher, which
     // will resend failed multicast packets via tcp
 
-    sock->mode = RMC_CONNECTION_MODE_SUBSCRIBER;
-    old_action = sock->action;
-    sock->action = RMC_POLLREAD;
+    conn->mode = RMC_CONNECTION_MODE_SUBSCRIBER;
+    old_action = conn->action;
+    conn->action = RMC_POLLREAD;
 
     // The remote end is the publisher of packets that we subscriber to
-    sub_init_publisher(&sock->pubsub.publisher, &ctx->sub_ctx);
+    sub_init_publisher(&conn->pubsub.publisher, &ctx->sub_ctx);
 
     // We start off in reading mode
     if (ctx->poll_modify)
-        (*ctx->poll_modify)(ctx, sock->descriptor, sock->connection_index, old_action, sock->action);
+        (*ctx->poll_modify)(ctx, conn->descriptor, conn->connection_index, old_action, conn->action);
 
     return 0;
 }
@@ -280,32 +280,32 @@ int rmc_process_accept(rmc_context_t* ctx,
 
 int rmc_close_connection(rmc_context_t* ctx, rmc_connection_index_t s_ind)
 {
-    rmc_connection_t* sock = 0;
+    rmc_connection_t* conn = 0;
     
     // Is s_ind within our connection vector?
 
     if (s_ind >= RMC_MAX_CONNECTIONS)
         return EINVAL;
 
-    sock = &ctx->connections[s_ind];
+    conn = &ctx->connections[s_ind];
 
     // Are we connected
-    if (sock->descriptor == -1)
+    if (conn->descriptor == -1)
         return ENOTCONN;
     
     // Shutdown any completed connection.
-    if (sock->mode != RMC_CONNECTION_MODE_CONNECTING &&
-        shutdown(sock->descriptor, SHUT_RDWR) != 0)
+    if (conn->mode != RMC_CONNECTION_MODE_CONNECTING &&
+        shutdown(conn->descriptor, SHUT_RDWR) != 0)
         return errno;
 
     // Delete from caller's poll vector.
     if (ctx->poll_remove)
-        (*ctx->poll_remove)(ctx, sock->descriptor, s_ind);
+        (*ctx->poll_remove)(ctx, conn->descriptor, s_ind);
 
-    if (close(sock->descriptor) != 0)
+    if (close(conn->descriptor) != 0)
         return errno;
 
-    rmc_reset_connection(sock, s_ind);
+    rmc_reset_connection(conn, s_ind);
 
     if (s_ind == ctx->max_connection_ind)
         _reset_max_connection_ind(ctx);

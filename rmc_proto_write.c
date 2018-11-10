@@ -32,7 +32,6 @@
 //        to use TCP's flow control until congestion has eased.
 
 
-
 // =============
 // SOCKET WRITE
 // =============
@@ -78,6 +77,7 @@ static int _process_multicast_write(rmc_context_t* ctx)
            mcast_hdr->context_id,
            mcast_addr, ntohs(sock_addr.sin_port),
            listen_addr, mcast_hdr->listen_port);
+
     while(pack && mcast_hdr->payload_len <= RMC_MAX_PAYLOAD) {
         pub_packet_node_t* pnode = 0;
         cmd_packet_header_t* cmd_pack = (cmd_packet_header_t*) packet_ptr;
@@ -148,7 +148,7 @@ static int _process_multicast_write(rmc_context_t* ctx)
 }
 
 
-static int _process_tcp_write(rmc_context_t* ctx, rmc_connection_t* sock, uint32_t* bytes_left)
+static int _process_tcp_write(rmc_context_t* ctx, rmc_connection_t* conn, uint32_t* bytes_left)
 {
     uint8_t *seg1 = 0;
     uint32_t seg1_len = 0;
@@ -161,8 +161,8 @@ static int _process_tcp_write(rmc_context_t* ctx, rmc_connection_t* sock, uint32
     // Grab as much data as we can.
     // The call will only return available
     // data.
-    circ_buf_read_segment(&sock->write_buf,
-                          sizeof(sock->write_buf_data),
+    circ_buf_read_segment(&conn->write_buf,
+                          sizeof(conn->write_buf_data),
                           &seg1, &seg1_len,
                           &seg2, &seg2_len);
 
@@ -178,16 +178,16 @@ static int _process_tcp_write(rmc_context_t* ctx, rmc_connection_t* sock, uint32
     iov[1].iov_len = seg2_len;
 
     errno = 0;
-    res = writev(sock->descriptor, iov, seg2_len?2:1);
+    res = writev(conn->descriptor, iov, seg2_len?2:1);
 
     // How did that write go?
     if (res == -1) { 
-        *bytes_left = circ_buf_in_use(&sock->write_buf);
+        *bytes_left = circ_buf_in_use(&conn->write_buf);
         return errno;
     }
 
     if (res == 0) { 
-        *bytes_left = circ_buf_in_use(&sock->write_buf);
+        *bytes_left = circ_buf_in_use(&conn->write_buf);
         return 0;
     }
 
@@ -195,7 +195,7 @@ static int _process_tcp_write(rmc_context_t* ctx, rmc_connection_t* sock, uint32
     // bytes from the circular buffer.
     // At the same time grab number of bytes left to
     // send from the buffer.,
-    circ_buf_free(&sock->write_buf, res, bytes_left);
+    circ_buf_free(&conn->write_buf, res, bytes_left);
 
     return 0;
 }
@@ -207,7 +207,7 @@ int rmc_write(rmc_context_t* ctx, rmc_connection_index_t s_ind)
     uint32_t bytes_left_before = 0;
     uint32_t bytes_left_after = 0;
     rmc_poll_action_t old_action;
-    rmc_connection_t* sock = 0;
+    rmc_connection_t* conn = 0;
     assert(ctx);
 
 
@@ -219,15 +219,15 @@ int rmc_write(rmc_context_t* ctx, rmc_connection_index_t s_ind)
     if (s_ind >= RMC_MAX_CONNECTIONS)
         return EINVAL;
 
-    sock = &ctx->connections[s_ind];
+    conn = &ctx->connections[s_ind];
 
-    if (sock->descriptor == -1)
+    if (conn->descriptor == -1)
         return ENOTCONN;
 
 
     // Is this socket in the process of being connected
-    if (sock->mode == RMC_CONNECTION_MODE_CONNECTING) {
-        rmc_complete_connect(ctx, sock);
+    if (conn->mode == RMC_CONNECTION_MODE_CONNECTING) {
+        rmc_complete_connect(ctx, conn);
         return 0;
     }
 
@@ -254,73 +254,3 @@ int rmc_write(rmc_context_t* ctx, rmc_connection_index_t s_ind)
     return res;
 }
 
-// Send an ack for a packet that has been processed.
-// Called by rmc_free_packet().
-int rmc_proto_ack(rmc_context_t* ctx, sub_packet_t* pack)
-{
-    ssize_t res = 0;
-    uint8_t *seg1 = 0;
-    uint32_t seg1_len = 0;
-    uint8_t *seg2 = 0;
-    uint32_t seg2_len = 0;
-    rmc_connection_t* sock = 0;
-    cmd_ack_single_t ack = {
-        .packet_id = pack->pid
-    };
-    uint32_t available = 0;
-    uint32_t old_in_use = 0;
-    rmc_poll_action_t old_action = 0;
-
-    if (!ctx || !pack)
-        return EINVAL;
-
-    sock = sub_packet_user_data(pack).ptr;
-    if (sock->mode != RMC_CONNECTION_MODE_SUBSCRIBER)
-        return EINVAL;
-
-
-    available = circ_buf_available(&sock->write_buf);
-    old_in_use = circ_buf_in_use(&sock->write_buf);
-    old_action = sock->action;
-    printf("ack(): ctx_id[0x%.8X] pid[%lu] mcast[%s:%d] listen[%s:%d]\n",
-           ctx->context_id,
-           pack->pid,
-           inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }),
-           ctx->mcast_port,
-           inet_ntoa( (struct in_addr) { .s_addr = htonl(sock->remote_address) }),
-           sock->remote_port);
-
-
-    // Allocate memory for command
-    circ_buf_alloc(&sock->write_buf, 1,
-                   &seg1, &seg1_len,
-                   &seg2, &seg2_len);
-
-
-    *seg1 = RMC_CMD_ACK_SINGLE;
-
-    // Allocate memory for packet header
-    circ_buf_alloc(&sock->write_buf, sizeof(ack) ,
-                   &seg1, &seg1_len,
-                   &seg2, &seg2_len);
-
-    // Copy in packet header
-    memcpy(seg1, (uint8_t*) &ack, seg1_len);
-    if (seg2_len) 
-        memcpy(seg2, ((uint8_t*) &ack) + seg1_len, seg2_len);
-
-    // We always want to read from the tcp  socket.
-    sock->action = RMC_POLLREAD;
-
-    // Do we need to arm the write poll descriptor.
-    if (!old_in_use) 
-        sock->action |= RMC_POLLWRITE;
-
-    if (ctx->poll_modify)
-        (*ctx->poll_modify)(ctx,
-                            sock->descriptor,
-                            sock->connection_index,
-                            old_action,
-                            sock->action);
-    
-}

@@ -35,7 +35,7 @@ static int _process_packet_timeout(rmc_context_t* ctx,
                                    usec_timestamp_t timeout_ts)
 {
     // Send the packet via TCP.
-    rmc_connection_t* sock = 0;
+    rmc_connection_t* conn = 0;
     uint8_t *seg1 = 0;
     uint32_t seg1_len = 0;
     uint8_t *seg2 = 0;
@@ -50,16 +50,16 @@ static int _process_packet_timeout(rmc_context_t* ctx,
     if (!ctx || !sub || !pack)
         return EINVAL;
 
-    sock = (rmc_connection_t*) pub_packet_user_data(pack).ptr;
-    if (!sock || sock->mode != RMC_CONNECTION_MODE_PUBLISHER)
+    conn = (rmc_connection_t*) pub_packet_user_data(pack).ptr;
+    if (!conn || conn->mode != RMC_CONNECTION_MODE_PUBLISHER)
         return EINVAL;
         
     // Do we have enough circular buffer meomory available?
-    if (circ_buf_available(&sock->write_buf) < 1 + sizeof(pack) + pack->payload_len)
+    if (circ_buf_available(&conn->write_buf) < 1 + sizeof(pack) + pack->payload_len)
         return ENOMEM;
     
     // Allocate memory for command
-    circ_buf_alloc(&sock->write_buf, 1,
+    circ_buf_alloc(&conn->write_buf, 1,
                    &seg1, &seg1_len,
                    &seg2, &seg2_len);
 
@@ -67,7 +67,7 @@ static int _process_packet_timeout(rmc_context_t* ctx,
     *seg1 = cmd;
 
     // Allocate memory for packet header
-    circ_buf_alloc(&sock->write_buf, sizeof(pack_cmd) ,
+    circ_buf_alloc(&conn->write_buf, sizeof(pack_cmd) ,
                    &seg1, &seg1_len,
                    &seg2, &seg2_len);
 
@@ -78,7 +78,7 @@ static int _process_packet_timeout(rmc_context_t* ctx,
         memcpy(seg2, ((uint8_t*) &pack_cmd) + seg1_len, seg2_len);
 
     // Allocate packet payload
-    circ_buf_alloc(&sock->write_buf, sizeof(pack),
+    circ_buf_alloc(&conn->write_buf, sizeof(pack),
                    &seg1, &seg1_len,
                    &seg2, &seg2_len);
 
@@ -89,16 +89,16 @@ static int _process_packet_timeout(rmc_context_t* ctx,
         memcpy(seg2, ((uint8_t*) pack->payload) + seg1_len, seg2_len);
 
     // Setup the poll write action
-    if (!(sock->action & RMC_POLLWRITE)) {
-        rmc_poll_action_t old_action = sock->action;
+    if (!(conn->action & RMC_POLLWRITE)) {
+        rmc_poll_action_t old_action = conn->action;
 
-        sock->action |= RMC_POLLWRITE;
+        conn->action |= RMC_POLLWRITE;
         if (ctx->poll_modify)
             (*ctx->poll_modify)(ctx,
-                                sock->descriptor,
-                                sock->connection_index,
+                                conn->descriptor,
+                                conn->connection_index,
                                 old_action,
-                                sock->action);
+                                conn->action);
     }    
     
     return 0;

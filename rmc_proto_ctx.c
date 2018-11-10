@@ -28,16 +28,16 @@
 
 static void _reset_connection(rmc_context_t* ctx, int index)
 {
-    rmc_connection_t* sock = &ctx->connections[index];
+    rmc_connection_t* conn = &ctx->connections[index];
 
-    sock->action = 0;
-    sock->connection_index = index;
-    sock->descriptor = -1;
-    sock->owner = ctx;
-    sock->mode = RMC_CONNECTION_MODE_UNUSED;
-    circ_buf_init(&sock->read_buf, sock->read_buf_data, sizeof(sock->read_buf_data));
-    circ_buf_init(&sock->write_buf, sock->write_buf_data, sizeof(sock->write_buf_data));
-    memset(&sock->remote_address, 0, sizeof(sock->remote_address));
+    conn->action = 0;
+    conn->connection_index = index;
+    conn->descriptor = -1;
+    conn->owner = ctx;
+    conn->mode = RMC_CONNECTION_MODE_UNUSED;
+    circ_buf_init(&conn->read_buf, conn->read_buf_data, sizeof(conn->read_buf_data));
+    circ_buf_init(&conn->write_buf, conn->write_buf_data, sizeof(conn->write_buf_data));
+    memset(&conn->remote_address, 0, sizeof(conn->remote_address));
 }
 
 // =============

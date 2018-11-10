@@ -100,7 +100,6 @@ static int _decode_multicast(rmc_context_t* ctx,
         sub_packet_received(pub, cmd_pack->pid,payload, cmd_pack->payload_len, user_data_ptr(conn));
     }
 
-    extern void test_print_sub_context(sub_context_t* ctx);
     // Process received packages, moving consectutive ones
     // over to the ready queue.
     sub_process_received_packets(pub);
