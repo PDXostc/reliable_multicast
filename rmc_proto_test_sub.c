@@ -30,6 +30,8 @@ static void process_incoming_data(rmc_context_t* ctx, sub_packet_t* pack, rmc_te
     
     if (!strcmp(pack->payload, "exit")) {
         puts("Got exit trigger from publisher");
+        // Get the final ack out
+        rmc_write(ctx, rmc_sub_packet_connection(pack));
         exit(0);
     }
         

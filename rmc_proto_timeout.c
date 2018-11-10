@@ -96,7 +96,7 @@ static int _process_packet_timeout(rmc_context_t* ctx,
         if (ctx->poll_modify)
             (*ctx->poll_modify)(ctx,
                                 sock->descriptor,
-                                sock->rmc_index,
+                                sock->connection_index,
                                 old_action,
                                 sock->action);
     }    

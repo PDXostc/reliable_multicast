@@ -74,11 +74,11 @@ typedef uint16_t rmc_poll_action_t;
 typedef struct rmc_connection {
     // Index of owner rmc_connection_t struct in the master
     // rmc_context_t::connections[] array.
-    // rmc_context_t::connections[rmc_index].poll_info is this struct.
+    // rmc_context_t::connections[connection_index].poll_info is this struct.
     // Special cases on RMC_MULTICAST_INDEX and RMC_LISTEN_INDEX
     // to identify the multicast and listen descriptors used
     // by rmc_context_t;x
-    rmc_connection_index_t rmc_index;
+    rmc_connection_index_t connection_index;
 
     // Action is a bitmask of RMC_POLLREAD and RMC_POLLWRITE
     rmc_poll_action_t action;
@@ -233,13 +233,13 @@ extern int rmc_init_context(rmc_context_t* context,
                             //
                             // poll->action & RMC_POLLREAD
                             // specifies that we want rmc_write() to
-                            // be called (with poll->rmc_index as an
+                            // be called (with poll->connection_index as an
                             // argument) when the connection can be
                             // written to (asynchronously).
                             //
                             // poll->action & RMC_POLLWRITE
                             // specifies that we want rmc_write() to
-                            // be called (with poll->rmc_index as an
+                            // be called (with poll->connection_index as an
                             // argument) when the connection can be
                             // written to (asynchronously).
                             //
@@ -339,13 +339,16 @@ extern int rmc_process_timeout(rmc_context_t* context);
 // TCP accept was processed.
 #define RMC_READ_ACCEPT 6
 
+// TCP was reset
+#define RMC_READ_DISCONNECT 7
 
-extern int rmc_read(rmc_context_t* context, rmc_connection_index_t rmc_index, uint8_t* res);
-extern int rmc_write(rmc_context_t* context, rmc_connection_index_t rmc_index);
+
+extern int rmc_read(rmc_context_t* context, rmc_connection_index_t connection_index, uint8_t* res);
+extern int rmc_write(rmc_context_t* context, rmc_connection_index_t connection_index);
 extern int rmc_queue_packet(rmc_context_t* context, void* payload, payload_len_t payload_len);
 extern int rmc_get_poll_size(rmc_context_t* context, int *result);
 extern int rmc_get_poll_vector(rmc_context_t* context, rmc_connection_t* result, int* len);
-extern int rmc_get_poll(rmc_context_t* context, int rmc_index, rmc_connection_t* result);
+extern int rmc_get_poll(rmc_context_t* context, int connection_index, rmc_connection_t* result);
 extern int rmc_get_ready_packet_count(rmc_context_t* context);
 extern sub_packet_t* rmc_get_next_ready_packet(rmc_context_t* context);
 
@@ -368,8 +371,9 @@ extern int rmc_connect_tcp_by_host(rmc_context_t* ctx,
 extern int rmc_process_accept(rmc_context_t* ctx,
                               rmc_connection_index_t* result_index);
 
-extern int rmc_close_tcp(rmc_context_t* ctx, rmc_connection_index_t s_ind);
+extern int rmc_close_connection(rmc_context_t* ctx, rmc_connection_index_t s_ind);
 extern int rmc_proto_ack(rmc_context_t* ctx, sub_packet_t* pack);
 
 extern int rmc_complete_connect(rmc_context_t* ctx, rmc_connection_t* sock);
+extern rmc_connection_index_t rmc_sub_packet_connection(sub_packet_t* pack);
 #endif // __RMC_PROTO_H__

@@ -166,7 +166,10 @@ char* _read_res_string(uint8_t res)
         return "tcp";
         
     case RMC_READ_ACCEPT:
-        return "accpept";
+        return "accept";
+        
+    case RMC_READ_DISCONNECT:
+        return "disconnect";
 
     default:
         return "[unknown]";
@@ -218,7 +221,7 @@ int process_events(rmc_context_t* ctx, int epollfd, usec_timestamp_t timeout, in
         // Figure out what to do.
         if (events[nfds].events & EPOLLHUP) {
             _test("rmc_proto_test[%d.%d] process_events():rmc_close_tcp(): %s\n",
-                  major, 11, rmc_close_tcp(ctx, c_ind));
+                  major, 11, rmc_close_connection(ctx, c_ind));
             continue;
         }
 

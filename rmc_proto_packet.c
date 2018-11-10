@@ -76,3 +76,14 @@ int rmc_packet_dispatched(rmc_context_t* ctx, sub_packet_t* pack)
     
     sub_packet_dispatched(pack);
 }
+
+rmc_connection_index_t rmc_sub_packet_connection(sub_packet_t* pack)
+{
+    rmc_connection_t* sock = 0;
+    if (!pack)
+        return 0;
+
+    sock = (rmc_connection_t*) sub_packet_user_data(pack).ptr;
+    return sock->connection_index;
+}
+

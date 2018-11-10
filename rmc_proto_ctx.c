@@ -31,7 +31,7 @@ static void _reset_connection(rmc_context_t* ctx, int index)
     rmc_connection_t* sock = &ctx->connections[index];
 
     sock->action = 0;
-    sock->rmc_index = index;
+    sock->connection_index = index;
     sock->descriptor = -1;
     sock->owner = ctx;
     sock->mode = RMC_CONNECTION_MODE_UNUSED;

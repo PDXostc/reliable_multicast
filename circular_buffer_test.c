@@ -189,7 +189,7 @@ void test_circular_buffer(void)
     uint8_t* seg2 = 0;
     uint32_t seg2_len = 0;
     uint32_t len = 0;
-
+    uint8_t buf2[0xFFC4];
     circ_buf_init(&cb, buf1, sizeof(buf1));
 
 
@@ -368,4 +368,36 @@ void test_circular_buffer(void)
     write_data(&cb, 36, "CD", 2, 1);
     read_data(&cb, 37, "CD");
     check_integrity(&cb, 38, 4, 0);
+
+    // Bug found during higher-level testing
+    circ_buf_init(&cb, buf2, sizeof(buf2));
+    
+    res = circ_buf_alloc(&cb, circ_buf_available(&cb), &seg1, &seg1_len, &seg2, &seg2_len);
+    if (res) {
+        printf("circular buffer test 32.1: Expected OK. Got %s\n", strerror(res));
+        exit(255);
+    }
+    circ_buf_trim(&cb, 9);
+
+    res = circ_buf_alloc(&cb, circ_buf_available(&cb), &seg1, &seg1_len, &seg2, &seg2_len);
+    if (res) {
+        printf("circular buffer test 32.2: Expected OK. Got %s\n", strerror(res));
+        exit(255);
+    }
+    circ_buf_trim(&cb, 9);
+
+    res = circ_buf_alloc(&cb, circ_buf_available(&cb), &seg1, &seg1_len, &seg2, &seg2_len);
+    if (res) {
+        printf("circular buffer test 32.3: Expected OK. Got %s\n", strerror(res));
+        exit(255);
+    }
+    circ_buf_trim(&cb, 9);
+
+    res = circ_buf_alloc(&cb, circ_buf_available(&cb), &seg1, &seg1_len, &seg2, &seg2_len);
+    if (res) {
+        printf("circular buffer test 32.4: Expected OK. Got %s\n", strerror(res));
+        exit(255);
+    }
+    circ_buf_trim(&cb, 9);
+
 }

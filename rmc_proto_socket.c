@@ -23,6 +23,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <assert.h>
+#include <netinet/tcp.h>
 
 // =============
 // SOCKET SLOT MANAGEMENT
@@ -63,7 +64,7 @@ static void _reset_max_connection_ind(rmc_context_t* ctx)
 void rmc_reset_connection(rmc_connection_t* sock, int index)
 {
     sock->action = 0;
-    sock->rmc_index = index;
+    sock->connection_index = index;
     sock->descriptor = -1;
     sock->mode = RMC_CONNECTION_MODE_UNUSED;
     circ_buf_init(&sock->read_buf, sock->read_buf_data, sizeof(sock->read_buf_data));
@@ -78,6 +79,7 @@ int rmc_complete_connect(rmc_context_t* ctx, rmc_connection_t* sock)
     rmc_poll_action_t old_action = 0;
     int sock_err = 0;
     socklen_t len = sizeof(sock_err);
+    int tr = 1;
     if (!ctx || !sock)
         return EINVAL;
     
@@ -88,32 +90,38 @@ int rmc_complete_connect(rmc_context_t* ctx, rmc_connection_t* sock)
                    &sock_err,
                    &len) == -1) {
         printf("rmc_complete_connect(): ind[%d] addr[%s:%d]: getsockopt(): %s\n",
-               sock->rmc_index,
+               sock->connection_index,
                inet_ntoa( (struct in_addr) {
                        .s_addr = htonl(sock->remote_address)
                            }),
                sock->remote_port,
                strerror(errno));
         sock_err = errno; // Save it.
-        rmc_close_tcp(ctx, sock->rmc_index);
+        rmc_close_connection(ctx, sock->connection_index);
         return sock_err;
     }
 
     printf("rmc_complete_connect(): ind[%d] addr[%s:%d]: %s\n",
-           sock->rmc_index,
-           inet_ntoa( (struct in_addr) {
-                   .s_addr = htonl(sock->remote_address)
-                       }),
+           sock->connection_index,
+           inet_ntoa( (struct in_addr) {.s_addr = htonl(sock->remote_address) }),
            sock->remote_port,
            strerror(sock_err));
+
     if (sock_err != 0) {
         if (*ctx->poll_remove)
-            (*ctx->poll_remove)(ctx, sock->descriptor, sock->rmc_index);
+            (*ctx->poll_remove)(ctx, sock->descriptor, sock->connection_index);
 
-        rmc_close_tcp(ctx, sock->rmc_index);
+        rmc_close_connection(ctx, sock->connection_index);
         return sock_err;
     }
     
+    // Disable Nagle algorithm since latency is of essence when we send
+    // out acks.
+    if (setsockopt( sock->descriptor, IPPROTO_TCP, TCP_NODELAY, (void *)&tr, sizeof(tr))) {
+        sock_err = errno;
+        rmc_close_connection(ctx, sock->connection_index);
+        return sock_err;
+    }
 
     // We are subscribing to data from the publisher, which
     // will resend failed multicast packets via tcp
@@ -127,7 +135,7 @@ int rmc_complete_connect(rmc_context_t* ctx, rmc_connection_t* sock)
 
     // We start off in reading mode
     if (ctx->poll_modify)
-        (*ctx->poll_modify)(ctx, sock->descriptor, sock->rmc_index, old_action, sock->action);
+        (*ctx->poll_modify)(ctx, sock->descriptor, sock->connection_index, old_action, sock->action);
 
     return 0;
 }
@@ -270,7 +278,7 @@ int rmc_process_accept(rmc_context_t* ctx,
 
 
 
-int rmc_close_tcp(rmc_context_t* ctx, rmc_connection_index_t s_ind)
+int rmc_close_connection(rmc_context_t* ctx, rmc_connection_index_t s_ind)
 {
     rmc_connection_t* sock = 0;
     

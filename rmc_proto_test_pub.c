@@ -66,7 +66,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
         { "p1", 2, 0 },
         { "p2", 3, 0 },
         { "p3", 4, 0 },
-        { "exit", 5, 0 },
+        { "exit", 5, 1000 }, // Wait for 1000 msec until exiting.
     };
 
 
@@ -104,19 +104,12 @@ void test_rmc_proto_pub(char* mcast_group_addr,
         
         // Process events until it is time to queue and send the next
         // frame (or quit).
-        printf("tout[%lu]\n", wait_until - now);
         while(now <= wait_until) {
             t_out = (wait_until - now);
             process_events(ctx, epollfd, t_out, 2, &ind);
             now = rmc_usec_monotonic_timestamp();
         }
     }
-
-    while(countdown--) {
-        printf("tick[%d]\n", countdown);
-        process_events(ctx, epollfd, 1000000, 2, &ind);
-    }
-    puts("Done");
 }
 
 

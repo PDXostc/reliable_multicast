@@ -128,10 +128,9 @@ static int _process_multicast_write(rmc_context_t* ctx)
     // Mark all packages in the multicast packet we just
     // sent in the multicast message as sent.
     // pub_packet_sent will call free_o
-    while(pub_packet_list_pop_head(&snd_list, &pack)) {
-        printf("inflight[%lu]\n", pack->pid);
+    while(pub_packet_list_pop_head(&snd_list, &pack)) 
         pub_packet_sent(pctx, pack, ts);
-    }
+
 
 //    extern void test_print_pub_context(pub_context_t* ctx);
 //    test_print_pub_context(&ctx->pub_ctx);
@@ -319,7 +318,7 @@ int rmc_proto_ack(rmc_context_t* ctx, sub_packet_t* pack)
     if (ctx->poll_modify)
         (*ctx->poll_modify)(ctx,
                             sock->descriptor,
-                            sock->rmc_index,
+                            sock->connection_index,
                             old_action,
                             sock->action);
     
