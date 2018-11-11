@@ -349,8 +349,6 @@ extern int rmc_get_poll(rmc_context_t* context, int connection_index, rmc_connec
 extern int rmc_get_dispatch_ready_count(rmc_context_t* context);
 extern sub_packet_t* rmc_get_next_dispatch_ready(rmc_context_t* context);
 
-// CALLER STILL HAS TO FREE packet->payload!
-extern int rmc_packet_dispatched(rmc_context_t* context, sub_packet_t* packet);
 
 // FIXME: MOVE TO INTERNAL HEADER FILE
 extern void rmc_reset_connection(rmc_connection_t*conn, int index);
@@ -369,7 +367,10 @@ extern int rmc_process_accept(rmc_context_t* ctx,
                               rmc_connection_index_t* result_index);
 
 extern int rmc_close_connection(rmc_context_t* ctx, rmc_connection_index_t s_ind);
-extern int rmc_proto_ack(rmc_context_t* ctx, sub_packet_t* pack);
+extern int rmc_packet_dispatched(rmc_context_t* context, sub_packet_t* packet);
+
+// CALLER STILL HAS TO FREE pack->payload!
+extern int rmc_proto_acknowledged(rmc_context_t* ctx, sub_packet_t* pack);
 
 extern int rmc_complete_connect(rmc_context_t* ctx, rmc_connection_t*conn);
 extern rmc_connection_index_t rmc_sub_packet_connection(sub_packet_t* pack);

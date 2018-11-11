@@ -5,24 +5,74 @@
 //
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
-
+// rmc_sub.h - Handle packets subscribed to.
+//  This file contains data structures and functions to handle incoming packets
+//  sent by one or more publishers.
+//  The functions in here are network agnostic and only deals with
+//  driving packet meta-data and payload through their maturation
+//  process described below.
+//
 #ifndef __REL_MCAST_SUB_H__
 #define __REL_MCAST_SUB_H__
 #include "rmc_common.h"
 #include "rmc_list.h"
 #include "interval.h"
 
+
 //
-// A packet that is either waiting to be sent,
-// or has been sent and is collecting acks from all subscribers.
+// Packet has been received via multicast or tcp.
+// Packet can be in one of the following queues.
+//
+// publisher->received
+//   Packet has been received but cannot be processed due to missing packets
+//   with lower pids, forming holes in the receive stream.
+//
+// publisher->dispatch_ready.
+//    Packet is ready to be procesed by the caller through sub_get_next_dispatch_ready()
+//    calls. 
+//
+// publisher->ack_ready
+//    The packet has been dispatched and is ready to be acknowledged back to the
+//    the publisner.
+//
+//
+// Call sequence to propagate packet is:
+//
+// sub_packet_received()
+//   Packet has been received from network and is pending processing.
+//
+// sub_process_received_packets()
+//   Move all consequtive packets, ready to be dispatched, from received to dispatch_ready queue.
+//
+// sub_packet_dispatched()
+//   Packet has been processed by caller. Move from dispatch_ready to ack_ready queue.
+//
+// sub_packet_acknowledged()
+//   Packet has been acknowledged to publisher and can be freed.
+//   **Please note that the caller still has to free packet->payload**
 //
 typedef struct sub_packet {
     struct _sub_packet_node* owner_node;   // Parent node in 'received' or 'ready' of sub_publisher_t
     struct sub_publisher* publisher;   // Publisher that sent this packet.
+
+    // Time stamp when packet was placed in received queue. Used
+    // to calculate when we need to ack it.
+    usec_timestamp_t received_ts; 
+
+    // Packet ID as received from network.
     packet_id_t pid;
-    void *payload;              // Payload provided by pub_queue_packet()
-    payload_len_t payload_len;  // Payload length provided by pub_queue_packet()
-    user_data_t pkg_user_data;      // Provided by sub_packet_received()
+
+    // Payload data allocation is done by caller and provided via
+    // rmc_packet_received() call.
+    // Caller needs to free payload once sub_packet_acknowledged() has
+    // been called.
+    void *payload; 
+    // Payload length provided by pub_queue_packet()
+    payload_len_t payload_len;  
+
+    // Provided by sub_packet_received()
+    // Retrieved by sub_packet_user_data()
+    user_data_t pkg_user_data;   
 } sub_packet_t;
 
 
@@ -30,6 +80,10 @@ RMC_LIST(sub_packet_list, sub_packet_node, sub_packet_t*)
 typedef sub_packet_list sub_packet_list_t;
 typedef sub_packet_node sub_packet_node_t;
 
+// A publisher is a feed from a single packet publisher that
+// is being processed. It contains the state necessary to drive
+// packets toward the cycle described in sub_packet_t aboce.
+//  
 typedef struct sub_publisher {
     struct sub_context* owner;         // Owning context.
     packet_id_t max_pid_ready;         // Highest pid that is ready to be dispatched.
@@ -44,6 +98,8 @@ RMC_LIST(sub_publisher_list, sub_publisher_node, sub_publisher_t*)
 typedef sub_publisher_list sub_publisher_list_t;
 typedef sub_publisher_node sub_publisher_node_t;
 
+// A single subscriber context that collects the feeds
+// of multiple publishers into a single feed.
 typedef struct sub_context {
     sub_publisher_list_t publishers; // of sub_publisher_t for all publishers we are subscribing to.
 } sub_context_t; 
@@ -57,6 +113,7 @@ extern int sub_packet_received(sub_publisher_t* pub,
                                packet_id_t pid,
                                void* payload,
                                payload_len_t payload_len,
+                               usec_timestamp_t current_ts,
                                user_data_t pkg_user_data);
 
 // Go through all received packets and move those that are ready to
@@ -75,8 +132,12 @@ extern void sub_remove_publisher(sub_publisher_t*,
 extern sub_packet_t* sub_get_next_dispatch_ready(sub_context_t* ctx);
 extern int sub_get_dispatch_ready_count(sub_context_t* ctx);
 extern void sub_packet_dispatched(sub_packet_t* pack);
-extern sub_packet_t* sub_get_next_ack_ready(sub_context_t* ctx);
-extern int sub_get_dispatch_ack_count(sub_context_t* ctx);
+
+// Caller needs to free pack->payload once this call returns
+void sub_get_timed_out_packets(sub_context_t* ctx,
+                               usec_timestamp_t timeout_ts,
+                               sub_packet_list_t* result);
+
 extern void sub_packet_acknowledged(sub_packet_t* pack);
 
 extern  user_data_t sub_packet_user_data(sub_packet_t* pack);

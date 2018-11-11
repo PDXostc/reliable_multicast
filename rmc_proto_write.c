@@ -231,6 +231,11 @@ int rmc_write(rmc_context_t* ctx, rmc_connection_index_t s_ind)
         return 0;
     }
 
+    // Take all packets that are ready for 
+//    if (conn->mode == RMC_CONNECTION_MODE_SUBSCRIBER)
+//        process_ack_ready_packets(ctx);
+#warning Collect, interval, and ack/free all packets transmitted.
+
     old_action = ctx->connections[s_ind].action;
 
     // Do we have any data to write?

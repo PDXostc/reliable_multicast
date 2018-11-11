@@ -141,11 +141,36 @@ int rmc_proto_ack(rmc_context_t* ctx, sub_packet_t* pack)
 int rmc_packet_dispatched(rmc_context_t* ctx, sub_packet_t* pack)
 {
     rmc_connection_t* conn = sub_packet_user_data(pack).ptr;
+    uint16_t old_action = 0;
 
     if (!conn)
         return EINVAL;
     
     sub_packet_dispatched(pack);
+
+    // If this is the first packet that enters the ack-ready queue,
+    // then we need to enable write on the tcp socket to the publisher,
+    // allowing us to harvest all pending acks and sending them over
+    if (sub_get_ack_ready_count(&ctx->sub_ctx) == 1 &&
+        ctx->poll_modify) {
+        old_action = conn->action;
+        conn->action |= RMC_POLLWRITE;
+        (*ctx->poll_modify)(ctx,
+                            conn->descriptor,
+                            conn->connection_index,
+                            old_action,
+                            conn->action);
+    }
+}
+
+int rmc_packet_acknowledged(rmc_context_t* ctx, sub_packet_t* pack)
+{
+    rmc_connection_t* conn = sub_packet_user_data(pack).ptr;
+
+    if (!conn)
+        return EINVAL;
+    
+    sub_packet_acknowledged(pack);
 }
 
 rmc_connection_index_t rmc_sub_packet_connection(sub_packet_t* pack)
@@ -155,6 +180,6 @@ rmc_connection_index_t rmc_sub_packet_connection(sub_packet_t* pack)
         return 0;
 
     conn = (rmc_connection_t*) sub_packet_user_data(pack).ptr;
+
     return conn->connection_index;
 }
-

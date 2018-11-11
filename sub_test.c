@@ -106,13 +106,14 @@ static void test_sequence(char* test, sub_packet_list_t* list, packet_id_t start
 }
 
 static void add_received_packets(sub_publisher_t* pub,
+                                 usec_timestamp_t ts_current,
                                  ...)
 {
     va_list ap;
     packet_id_t start;
     packet_id_t stop;
 
-    va_start(ap, pub);
+    va_start(ap, ts_current);
 
     start = va_arg(ap, packet_id_t);
     stop = va_arg(ap, packet_id_t);
@@ -122,7 +123,7 @@ static void add_received_packets(sub_publisher_t* pub,
 
         for(pid = start; pid != stop + 1; ++pid) {
             sprintf(buf, "%lu", pid);
-            sub_packet_received(pub, pid, buf, strlen(buf)+1, user_data_nil());
+            sub_packet_received(pub, pid, buf, strlen(buf)+1, ts_current, user_data_nil());
         }
 
         start = va_arg(ap, packet_id_t);
@@ -223,7 +224,7 @@ void test_sub(void)
     // Basic processing of packages
     //--------
 
-    add_received_packets(&pub1,
+    add_received_packets(&pub1, 0,
                          1, 5,
                          0, 0);
 
@@ -342,7 +343,7 @@ void test_sub(void)
     //--------
 
     // Middle stream out of order
-    add_received_packets(&pub1,
+    add_received_packets(&pub1, 0,
                          1, 1,
                          3, 3,
                          2, 2,
@@ -358,7 +359,7 @@ void test_sub(void)
     reset_publisher(&ctx, &pub1);
 
     // Start out-of-order packages
-    add_received_packets(&pub1,
+    add_received_packets(&pub1, 0,
                          2, 2,
                          1, 1,
                          3, 3,
@@ -374,7 +375,7 @@ void test_sub(void)
     reset_publisher(&ctx, &pub1);
 
     // End out-of-order packages
-    add_received_packets(&pub1,
+    add_received_packets(&pub1, 0,
                          1, 1,
                          2, 2,
                          4, 4,
@@ -394,7 +395,7 @@ void test_sub(void)
     // Test single missing packages.
     //--------
 
-    add_received_packets(&pub1,
+    add_received_packets(&pub1, 0,
                          1, 2,
                          // 3-3
                          4, 5,
@@ -412,7 +413,7 @@ void test_sub(void)
     // 
     reset_publisher(&ctx, &pub1);
 
-    add_received_packets(&pub1,
+    add_received_packets(&pub1, 0,
                          1, 2,
                          // 3-5
                          6, 7,
@@ -434,7 +435,7 @@ void test_sub(void)
 
     reset_publisher(&ctx, &pub1);
 
-    add_received_packets(&pub1,
+    add_received_packets(&pub1, 0,
                          1, 2,
                          // 3-5
                          6, 7,
@@ -469,7 +470,7 @@ void test_sub(void)
     //
     reset_publisher(&ctx, &pub1);
 
-    add_received_packets(&pub1,
+    add_received_packets(&pub1, 0,
                          100, 101,
                          // 102-102
                          103, 104,
@@ -493,7 +494,7 @@ void test_sub(void)
     // 
     reset_publisher(&ctx, &pub1);
 
-    add_received_packets(&pub1,
+    add_received_packets(&pub1, 0,
                          1, 2,
                          // 3-5
                          6, 7,
@@ -524,7 +525,7 @@ void test_sub(void)
                        0,0);
 
     // Insert one missing packet. Still leaving a hole at 3 and 5
-    add_received_packets(&pub1,
+    add_received_packets(&pub1, 0,
                          4,4,
                          0,0);
 
@@ -546,7 +547,7 @@ void test_sub(void)
                        0,0);
     
     // Insert packet #3, which should be moved immedately over to the ready queue
-    add_received_packets(&pub1,
+    add_received_packets(&pub1, 0,
                          3,3,
                          0,0);
 
@@ -601,7 +602,7 @@ void test_sub(void)
 
     // Insert packet 4, which should
     // enable 4-7 to be moved to ready queue
-    add_received_packets(&pub1,
+    add_received_packets(&pub1, 0,
                          5,5,
                          0,0);
 
@@ -623,7 +624,7 @@ void test_sub(void)
                        0,0);
 
     // Plug the 11-13 and 15-10 hole
-    add_received_packets(&pub1,
+    add_received_packets(&pub1, 0,
                          11,13,
                          16,19,
                          0,0);
@@ -649,7 +650,7 @@ void test_sub(void)
     // Plug the 8-9 hole, which should
     // enable all pid, 8-21, to be moved
     // to ready
-    add_received_packets(&pub1,
+    add_received_packets(&pub1, 0,
                          8,9,
                          0,0);
     
@@ -678,7 +679,7 @@ void test_sub(void)
 
     reset_publisher(&ctx, &pub1);
 
-    add_received_packets(&pub1,
+    add_received_packets(&pub1, 0,
                          1, 2,
                          // 3-5
                          6, 7,
@@ -707,7 +708,7 @@ void test_sub(void)
     }
     
     // Plug the 3-5 hole
-    add_received_packets(&pub1,
+    add_received_packets(&pub1, 0,
                          3, 5,
                          0, 0);
 
@@ -760,7 +761,7 @@ void test_sub(void)
         exit(255);
     }
     reset_publisher(&ctx, &pub1);
-    add_received_packets(&pub1,
+    add_received_packets(&pub1, 0,
                          2, 2,
                          0,0);
     
@@ -778,7 +779,7 @@ void test_sub(void)
         exit(255);
     }
 
-    add_received_packets(&pub1,
+    add_received_packets(&pub1, 0,
                          3, 3,
                          0, 0);
     

@@ -66,6 +66,7 @@ static int _decode_multicast(rmc_context_t* ctx,
     payload_len_t len = (payload_len_t) packet_len;
     uint8_t* payload = 0;
     sub_publisher_t* pub = &conn->pubsub.publisher;
+    usec_timestamp_t now = rmc_usec_monotonic_timestamp();
 
     // Traverse the received datagram and extract all packets
     puts("_decode_multicast()");
@@ -97,7 +98,9 @@ static int _decode_multicast(rmc_context_t* ctx,
         packet += cmd_pack->payload_len;
         len -= sizeof(cmd_packet_header_t) + cmd_pack->payload_len;
 
-        sub_packet_received(pub, cmd_pack->pid,payload, cmd_pack->payload_len, user_data_ptr(conn));
+        sub_packet_received(pub,
+                            cmd_pack->pid,payload, cmd_pack->payload_len,
+                            now, user_data_ptr(conn));
     }
 
     // Process received packages, moving consectutive ones

@@ -17,9 +17,6 @@ static void process_incoming_data(rmc_context_t* ctx, sub_packet_t* pack, rmc_te
         exit(255);
     }
 
-    // Send an ack back to the publisher
-    rmc_proto_ack(ctx, pack);
-
     if (strcmp((char*) pack->payload, td->payload)) {
         printf("rmc_proto_test_sub[3.3] ind[%d] pid[%lu] incoming data[%s] differs from expected [%s]\n",
                ind, pack->pid, (char*) pack->payload, td->payload);
