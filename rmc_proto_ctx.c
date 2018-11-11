@@ -33,7 +33,6 @@ static void _reset_connection(rmc_context_t* ctx, int index)
     conn->action = 0;
     conn->connection_index = index;
     conn->descriptor = -1;
-    conn->owner = ctx;
     conn->mode = RMC_CONNECTION_MODE_UNUSED;
     circ_buf_init(&conn->read_buf, conn->read_buf_data, sizeof(conn->read_buf_data));
     circ_buf_init(&conn->write_buf, conn->write_buf_data, sizeof(conn->write_buf_data));

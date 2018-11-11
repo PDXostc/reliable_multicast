@@ -57,14 +57,14 @@ int rmc_queue_packet(rmc_context_t* ctx,
 }
 
 
-int rmc_get_ready_packet_count(rmc_context_t* ctx)
+int rmc_get_dispatch_ready_count(rmc_context_t* ctx)
 {
-    return sub_get_ready_packet_count(&ctx->sub_ctx);
+    return sub_get_dispatch_ready_count(&ctx->sub_ctx);
 }
 
-sub_packet_t* rmc_get_next_ready_packet(rmc_context_t* ctx)
+sub_packet_t* rmc_get_next_dispatch_ready(rmc_context_t* ctx)
 {
-    return sub_get_next_ready_packet(&ctx->sub_ctx);
+    return sub_get_next_dispatch_ready(&ctx->sub_ctx);
 }
 
 // Called by user to ack a packet.

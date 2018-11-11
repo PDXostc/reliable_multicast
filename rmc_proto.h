@@ -130,9 +130,6 @@ typedef struct rmc_connection {
         pub_subscriber_t subscriber;
         sub_publisher_t publisher;
     } pubsub;
-
-    // Owning context
-    struct rmc_context* owner;
 } rmc_connection_t;
 
 
@@ -349,14 +346,14 @@ extern int rmc_queue_packet(rmc_context_t* context, void* payload, payload_len_t
 extern int rmc_get_poll_size(rmc_context_t* context, int *result);
 extern int rmc_get_poll_vector(rmc_context_t* context, rmc_connection_t* result, int* len);
 extern int rmc_get_poll(rmc_context_t* context, int connection_index, rmc_connection_t* result);
-extern int rmc_get_ready_packet_count(rmc_context_t* context);
-extern sub_packet_t* rmc_get_next_ready_packet(rmc_context_t* context);
+extern int rmc_get_dispatch_ready_count(rmc_context_t* context);
+extern sub_packet_t* rmc_get_next_dispatch_ready(rmc_context_t* context);
 
 // CALLER STILL HAS TO FREE packet->payload!
 extern int rmc_packet_dispatched(rmc_context_t* context, sub_packet_t* packet);
 
 // FIXME: MOVE TO INTERNAL HEADER FILE
-extern void rmc_reset_connection(rmc_connection_t* sock, int index);
+extern void rmc_reset_connection(rmc_connection_t*conn, int index);
 
 extern int rmc_connect_tcp_by_address(rmc_context_t* ctx,
                                       in_addr_t address,
@@ -374,6 +371,6 @@ extern int rmc_process_accept(rmc_context_t* ctx,
 extern int rmc_close_connection(rmc_context_t* ctx, rmc_connection_index_t s_ind);
 extern int rmc_proto_ack(rmc_context_t* ctx, sub_packet_t* pack);
 
-extern int rmc_complete_connect(rmc_context_t* ctx, rmc_connection_t* sock);
+extern int rmc_complete_connect(rmc_context_t* ctx, rmc_connection_t*conn);
 extern rmc_connection_index_t rmc_sub_packet_connection(sub_packet_t* pack);
 #endif // __RMC_PROTO_H__

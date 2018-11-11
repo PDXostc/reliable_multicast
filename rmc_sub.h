@@ -31,11 +31,12 @@ typedef sub_packet_list sub_packet_list_t;
 typedef sub_packet_node sub_packet_node_t;
 
 typedef struct sub_publisher {
-    struct sub_context* owner;      // Owning context.
-    packet_id_t max_pid_ready;      // Highest pid that is ready to be dispatched.
-    packet_id_t max_pid_received;   // Maximum PID received.
-    sub_packet_list_t received;     // Packets received but need additional packets. 
-    sub_packet_list_t ready;        // Packets ready to be dispatched.
+    struct sub_context* owner;         // Owning context.
+    packet_id_t max_pid_ready;         // Highest pid that is ready to be dispatched.
+    packet_id_t max_pid_received;      // Maximum PID received.
+    sub_packet_list_t received;        // Packets received but need additional packets. 
+    sub_packet_list_t dispatch_ready;  // Packets ready to be dispatched.
+    sub_packet_list_t ack_ready;       // Packets ready to be dispatched.
 } sub_publisher_t; 
 
 
@@ -63,16 +64,20 @@ extern int sub_packet_received(sub_publisher_t* pub,
 // Should be called after one or more calls to sub_receive_packet()
 extern void sub_process_received_packets(sub_publisher_t* pub);
 
-extern sub_packet_t* sub_next_ready_packet(sub_publisher_t* ctx);
-extern void sub_packet_dispatched(sub_packet_t* pack);
+extern sub_packet_t* _sub_next_dispatch_ready(sub_publisher_t* ctx);
+extern sub_packet_t* _sub_next_ack_ready(sub_publisher_t* ctx);
 extern void sub_get_missing_packets(sub_publisher_t* sub, intv_list_t* res);
 extern void sub_init_publisher(sub_publisher_t* pub, sub_context_t* ctx);
 extern sub_publisher_t* sub_find_publisher(sub_context_t* ctx, void* address, int address_len);
 extern void sub_remove_publisher(sub_publisher_t*,
                                  void (*)(void*, payload_len_t, user_data_t));;
 
-extern sub_packet_t* sub_get_next_ready_packet(sub_context_t* ctx);
-extern int sub_get_ready_packet_count(sub_context_t* ctx);
+extern sub_packet_t* sub_get_next_dispatch_ready(sub_context_t* ctx);
+extern int sub_get_dispatch_ready_count(sub_context_t* ctx);
+extern void sub_packet_dispatched(sub_packet_t* pack);
+extern sub_packet_t* sub_get_next_ack_ready(sub_context_t* ctx);
+extern int sub_get_dispatch_ack_count(sub_context_t* ctx);
+extern void sub_packet_acknowledged(sub_packet_t* pack);
 
 extern  user_data_t sub_packet_user_data(sub_packet_t* pack);
 

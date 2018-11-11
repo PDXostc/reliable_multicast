@@ -109,7 +109,7 @@ void sub_process_received_packets(sub_publisher_t* pub)
         // This nodeet can be moved over to the ready queue
         // This queue is sorted ascending pid porder
         sub_packet_list_unlink(node);
-        sub_packet_list_insert_sorted_node_rev(&pub->ready,
+        sub_packet_list_insert_sorted_node_rev(&pub->dispatch_ready,
                                                  node,
                                                  lambda(int, (sub_packet_t* n_dt, sub_packet_t* o_dt) {
                                                          return (n_dt->pid > o_dt->pid)?1:
@@ -130,17 +130,52 @@ void sub_process_received_packets(sub_publisher_t* pub)
 }
     
 
-sub_packet_t* sub_next_ready_packet(sub_publisher_t* pub)
+sub_packet_t* _sub_next_dispatch_ready(sub_publisher_t* pub)
 {
     sub_packet_node_t* node = 0;
     
     assert(pub);
-    node = sub_packet_list_head(&pub->ready);
+    node = sub_packet_list_head(&pub->dispatch_ready);
     return node?node->data:0;
 }
 
 
+
+sub_packet_t* _sub_next_ack_ready(sub_publisher_t* pub)
+{
+    sub_packet_node_t* node = 0;
+    
+    assert(pub);
+    node = sub_packet_list_head(&pub->ack_ready);
+    return node?node->data:0;
+}
+
+
+// Move from dispatch_ready to ack_ready
 void sub_packet_dispatched(sub_packet_t* pack)
+{
+    sub_packet_node_t* node = 0;
+
+    assert(pack);
+    assert(pack->owner_node);
+    assert(pack->publisher);
+
+    // Unlink from ready list. 
+    node = pack->owner_node;
+    sub_packet_list_unlink(node);
+    sub_packet_list_insert_sorted_node_rev(&pack->publisher->ack_ready,
+                                           node,
+                                           lambda(int, (sub_packet_t* n_dt, sub_packet_t* o_dt) {
+                                                   return (n_dt->pid > o_dt->pid)?1:
+                                                       ((n_dt->pid < o_dt->pid)?-1:
+                                                        0);
+                                               }
+                                               ));
+}
+
+
+// Packet ack has been sent. Delete.
+void sub_packet_acknowledged(sub_packet_t* pack)
 {
     sub_packet_node_t* node = 0;
 
@@ -180,7 +215,7 @@ void sub_get_missing_packets(sub_publisher_t* pub, intv_list_t* res)
     //
     // Example:
     //
-    // pub->ready
+    // pub->dispatch_ready
     // pid 1
     // pid 2 <- pub->max_pid_ready
     // 
@@ -244,7 +279,8 @@ void sub_init_publisher(sub_publisher_t* pub, sub_context_t* ctx)
     pub->max_pid_received = 0;
     pub->max_pid_ready = 0;
     sub_packet_list_init(&pub->received, 0, 0, 0);
-    sub_packet_list_init(&pub->ready, 0, 0, 0);
+    sub_packet_list_init(&pub->dispatch_ready, 0, 0, 0);
+    sub_packet_list_init(&pub->ack_ready, 0, 0, 0);
     sub_publisher_list_push_head(&ctx->publishers, pub);
 
     return;
@@ -281,7 +317,14 @@ void sub_remove_publisher(sub_publisher_t* pub,
         _free_pending_packet(pack);
     }
 
-    while(sub_packet_list_pop_head(&pub->ready, &pack)) {
+    while(sub_packet_list_pop_head(&pub->dispatch_ready, &pack)) {
+        if (free_cb)
+            (*free_cb)(pack->payload, pack->payload_len, pack->pkg_user_data);
+
+        _free_pending_packet(pack);
+    }
+
+    while(sub_packet_list_pop_head(&pub->ack_ready, &pack)) {
         if (free_cb)
             (*free_cb)(pack->payload, pack->payload_len, pack->pkg_user_data);
 
@@ -299,12 +342,15 @@ void sub_init_context(sub_context_t* ctx)
 }
 
 
-int sub_get_ready_packet_count(sub_context_t* ctx)
+int sub_get_dispatch_ready_count(sub_context_t* ctx)
 {
     int res = 0;
+
+    // Iterate across all publishers and sum up all packets ready to
+    // be dispatched.
     sub_publisher_list_for_each(&ctx->publishers,
                                 lambda(uint8_t, (sub_publisher_node_t* pub_node, void* res) {
-                                        *((int*) res) += sub_packet_list_size(&pub_node->data->ready);
+                                        *((int*) res) += sub_packet_list_size(&pub_node->data->dispatch_ready);
                                         return 1;
                                     }),
                                 (void*) &res);
@@ -312,12 +358,14 @@ int sub_get_ready_packet_count(sub_context_t* ctx)
 }
 
 
-sub_packet_t* sub_get_next_ready_packet(sub_context_t* ctx)
+sub_packet_t* sub_get_next_dispatch_ready(sub_context_t* ctx)
 {
     sub_publisher_node_t* node = sub_publisher_list_head(&ctx->publishers);
 
+    // Iterate across all publishers to find one with packets ready to
+    // be dispatched.
     while(node) {
-        sub_packet_t* res = sub_next_ready_packet(node->data);
+        sub_packet_t* res = _sub_next_dispatch_ready(node->data);
         if (res) 
             return res;
 
@@ -326,6 +374,38 @@ sub_packet_t* sub_get_next_ready_packet(sub_context_t* ctx)
 
     return 0;
 }
+
+int sub_get_ack_ready_count(sub_context_t* ctx)
+{
+    int res = 0;
+
+    // Iterate across all publishers and sum up all packets ready to
+    // be acknowledged.
+    sub_publisher_list_for_each(&ctx->publishers,
+                                lambda(uint8_t, (sub_publisher_node_t* pub_node, void* res) {
+                                        *((int*) res) += sub_packet_list_size(&pub_node->data->ack_ready);
+                                        return 1;
+                                    }),
+                                (void*) &res);
+    return res;
+}
+
+
+sub_packet_t* sub_get_next_ack_ready(sub_context_t* ctx)
+{
+    sub_publisher_node_t* node = sub_publisher_list_head(&ctx->publishers);
+
+    while(node) {
+        sub_packet_t* res = _sub_next_ack_ready(node->data);
+        if (res) 
+            return res;
+
+        node = sub_publisher_list_next(node);
+    }
+
+    return 0;
+}
+
 
 inline user_data_t sub_packet_user_data(sub_packet_t* pack)
 {

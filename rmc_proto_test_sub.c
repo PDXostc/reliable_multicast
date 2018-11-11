@@ -105,7 +105,7 @@ void test_rmc_proto_sub(char* mcast_group_addr,
     while(ind < sizeof(td) / sizeof(td[0])) {
         sub_packet_t* pack = 0;
         process_events(ctx, epollfd, -1, 3, &ind);
-        pack = rmc_get_next_ready_packet(ctx);
+        pack = rmc_get_next_dispatch_ready(ctx);
         if (!pack) {
             continue;
         }
