@@ -409,14 +409,14 @@ static void _sub_get_timed_out_pub_packets(sub_publisher_t* pub,
 {
     // Traverse all ack_ready packets for publisher and add those
     // older than timeout_ts to result.
-    sub_packet_list_for_each_rev(&pub->ack_ready,
-                                 // For each packet, check if their oldest inflight packet has a sent_ts
-                                 // timestamp older than max_age. If so, add it to result.
-                                 lambda(uint8_t, (sub_packet_node_t* pnode, void* udata) {
-                                         if (pnode->data->received_ts <= timeout_ts)
-                                             sub_packet_list_push_tail(result, pnode->data);
-                                         return 1;
-                                     }), 0);
+    sub_packet_list_for_each(&pub->ack_ready,
+                             // For each packet, check if their oldest inflight packet has a sent_ts
+                             // timestamp older than max_age. If so, add it to result.
+                             lambda(uint8_t, (sub_packet_node_t* pnode, void* udata) {
+                                     if (pnode->data->received_ts <= timeout_ts)
+                                         sub_packet_list_push_tail(result, pnode->data);
+                                     return 1;
+                                 }), 0);
 
 }
 
@@ -437,6 +437,5 @@ void sub_get_timed_out_packets(sub_context_t* ctx,
                                         return 1;
                                     }), 0);
 }
-
 
 

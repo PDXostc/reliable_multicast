@@ -17,10 +17,11 @@ static uint8_t _test_print_pending(sub_packet_node_t* node, void* dt)
     sub_packet_t* pack = (sub_packet_t*) node->data;
     int indent = (int) (uint64_t) dt;
 
-    printf("%*cPending Packet  %p\n", indent*2, ' ', pack);
+    printf("%*cPacket          %p\n", indent*2, ' ', pack);
     printf("%*c  PID             %lu\n", indent*2, ' ', pack->pid);
     printf("%*c  Parent node     %p\n", indent*2, ' ', pack->owner_node);
     printf("%*c  Payload Length  %d\n", indent*2, ' ', pack->payload_len);
+    printf("%*c  Received time   %lu\n", indent*2, ' ', pack->received_ts);
     putchar('\n');
     return 1;
 }
@@ -210,10 +211,12 @@ void test_sub(void)
     intv_list_t holes;
     sub_packet_node_t* node = 0;
     packet_interval_t intv = { .first_pid =0, .last_pid = 0};
+    sub_packet_list_t lst;
 
     sub_init_context(&ctx);
     intv_list_init(&holes, 0, 0, 0);
 
+    
     sub_init_publisher(&pub1, &ctx);
     sub_init_publisher(&pub2, &ctx);
     sub_init_publisher(&pub3, &ctx);
@@ -760,13 +763,14 @@ void test_sub(void)
         printf("sub_test: failed  6.7 Failed dup packet detection.\n");
         exit(255);
     }
+
+    // Failure case detected during higher-level debugging
+    // If we start with a pid different than 1, we fail
     reset_publisher(&ctx, &pub1);
     add_received_packets(&pub1, 0,
                          2, 2,
                          0,0);
     
-    // Failure case detected during higher-level debugging
-    // If we start with a pid different than 1, we fail
     sub_process_received_packets(&pub1);
 
     if (sub_packet_list_size(&pub1.received) != 0) {
@@ -795,6 +799,60 @@ void test_sub(void)
         printf("sub_test: failed  7.3 Wanted 2.\n");
         exit(255);
     }
+
+    // 
+    // Test functionality to harvest packets that are ready to be acknowledged.
+    //
+    reset_publisher(&ctx, &pub1);
+    add_received_packets(&pub1, 100,
+                         1, 2,
+                         0, 0);
+
+    add_received_packets(&pub1, 200,
+                         3, 4,
+                         0, 0);
+
+    add_received_packets(&pub1, 300,
+                         5, 6,
+                         0, 0);
+
+    sub_process_received_packets(&pub1);
+    
+    // Dispatch all packets, moving them to the ack queue.
+    pack = _sub_next_dispatch_ready(&pub1);
+    sub_packet_dispatched(pack);
+    
+    pack = _sub_next_dispatch_ready(&pub1);
+    sub_packet_dispatched(pack);
+    
+    pack = _sub_next_dispatch_ready(&pub1);
+    sub_packet_dispatched(pack);
+    
+    pack = _sub_next_dispatch_ready(&pub1);
+    sub_packet_dispatched(pack);
+    
+    pack = _sub_next_dispatch_ready(&pub1);
+    sub_packet_dispatched(pack);
+
+    pack = _sub_next_dispatch_ready(&pub1);
+    sub_packet_dispatched(pack);
+    
+    sub_packet_list_init(&lst, 0, 0, 0);
+
+    // Grab all older than 100.
+    sub_get_timed_out_packets(&ctx, 100, &lst);
+
+    test_sequence("8.1", &lst, 1, 2);
+
+    // Grab all older than 200.
+    sub_packet_list_empty(&lst);
+    sub_get_timed_out_packets(&ctx, 200, &lst);
+    test_sequence("8.2", &lst, 1, 4);
+
+    // Grab all older than 300.
+    sub_packet_list_empty(&lst);
+    sub_get_timed_out_packets(&ctx, 300, &lst);
+    test_sequence("8.3", &lst, 1, 4);
 }
 
 
