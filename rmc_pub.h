@@ -23,7 +23,7 @@ typedef struct pub_packet {
     // ref_count == 0 -> The packet has not yet been sent.
     // ref_count > 0  -> The packet has been sent and can be found
     //                   in 'ref_count' subscriber::inflight_packets
-    //                   lists.
+   //                   lists.
     uint32_t ref_count;
 
     // Back pointer to pub_context::queued or pub_context::pending, depending
@@ -138,10 +138,11 @@ extern void pub_get_timed_out_packets(pub_subscriber_t* sub,
                                       usec_timestamp_t timeout_ts,
                                       pub_packet_list_t* result);
 
-// Find the subscriber with the oldest inflight packet that is awaiting an ack.
-extern void pub_get_oldest_subscriber(pub_context_t* ctx,
-                                      pub_subscriber_t** subscriber,
-                                      pub_packet_t** packet);
+// Find the packet, and its subscriber, with the oldest inflight
+// packet that is awaiting an ack.
+extern void pub_get_oldest_unackowledged_packet(pub_context_t* ctx,
+                                                pub_subscriber_t** subscriber,
+                                                pub_packet_t** packet);
 
 extern user_data_t pub_user_data(pub_context_t* ctx);
 

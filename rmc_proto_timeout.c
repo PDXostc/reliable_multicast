@@ -167,8 +167,9 @@ int rmc_get_next_timeout(rmc_context_t* ctx, usec_timestamp_t* result)
     if (!ctx || !result)
         return EINVAL;
     
-    // Query the publisher for all 
-    pub_get_oldest_subscriber(&ctx->pub_ctx, &sub, &pack);
+    // Get the oldest packet, and its subscriber, with the
+    // oldest pending ack that we haven't seen yet.
+    pub_get_oldest_unackowledged_packet(&ctx->pub_ctx, &sub, &pack);
 
     // If no subscriber has inflight packets, then set result to -1.
     if (!sub) {

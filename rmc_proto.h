@@ -54,6 +54,7 @@ typedef struct cmd_packet_header {
 #define RMC_MAX_CONNECTIONS 16
 #define RMC_LISTEN_SOCKET_BACKLOG 5
 #define RMC_DEFAULT_PACKET_TIMEOUT 5000000
+#define RMC_DEFAULT_ACK_TIMEOUT 50000 // 50 msec.
 
 #define RMC_POLLREAD 0x01
 #define RMC_POLLWRITE 0x02
@@ -164,8 +165,14 @@ typedef struct rmc_context {
     // looped back multicast messages.
     rmc_context_id_t context_id; 
 
-    // When we start sending packets via TCP.
+    // As a publisher, whendo we start re-sending packets via TCP
+    // since they weren't acked when we sent them out via multicast
     uint32_t resend_timeout;
+
+    // As a subscriber, how long can we sit on acknowledgements to be
+    // sent back to the publisher before we pack them all up
+    // and burst them back via tcp.
+    uint32_t ack_timeout;
 
     // When we want to know if a connection can be written to or read from
     void (*poll_add)(struct rmc_context* context,

@@ -139,17 +139,17 @@ void pub_packet_sent(pub_context_t* ctx,
     // Sorted on ascending pid.
     //
     pub_packet_list_insert_sorted_node(&ctx->inflight,
-                                 ppack->parent_node,
-                                 lambda(int, (pub_packet_t* n_dt, pub_packet_t* o_dt) {
-                                         if (n_dt->pid > o_dt->pid)
-                                             return 1;
+                                       ppack->parent_node,
+                                       lambda(int, (pub_packet_t* n_dt, pub_packet_t* o_dt) {
+                                               if (n_dt->pid > o_dt->pid)
+                                                   return 1;
 
-                                         if (n_dt->pid < o_dt->pid)
-                                             return -1;
+                                               if (n_dt->pid < o_dt->pid)
+                                                   return -1;
 
-                                         return 0;
-                                }
-                                ));
+                                               return 0;
+                                           }
+                                           ));
 
     // Traverse all subscribers and insert ppack into their
     // inflight list.
@@ -273,7 +273,7 @@ void pub_get_timed_out_packets(pub_subscriber_t* sub,
 }
 
 
-void pub_get_oldest_subscriber(pub_context_t* ctx, pub_subscriber_t** subscriber, pub_packet_t** packet)
+void pub_get_oldest_unackowledged_packet(pub_context_t* ctx, pub_subscriber_t** subscriber, pub_packet_t** packet)
 {
     usec_timestamp_t oldest = 0;
 

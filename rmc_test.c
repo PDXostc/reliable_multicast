@@ -123,8 +123,10 @@ int main(int argc, char* argv[])
         test_rmc_proto_sub(mcast_group_addr, mcast_if_addr, listen_if_addr, mcast_port, listen_port + 1);
         exit(0);
     }
+
     // Wait for subscriber to come to life.
     usleep(100000);
+
     // Redirect stdout and stderr
     if (!(stdout = freopen("rmc_test_pub.log", "a", stdout))) {
         perror("stdout -> rmc_test_pub.log");

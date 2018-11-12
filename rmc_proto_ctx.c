@@ -130,6 +130,7 @@ int rmc_init_context(rmc_context_t* ctx,
 
     ctx->connection_count = 0;
     ctx->resend_timeout = RMC_DEFAULT_PACKET_TIMEOUT;
+    ctx->ack_timeout = RMC_DEFAULT_ACK_TIMEOUT;
     ctx->max_connection_ind = -1; // No connections in use
     srand(rmc_usec_monotonic_timestamp() & 0xFFFFFFFF);
     ctx->context_id = rand();

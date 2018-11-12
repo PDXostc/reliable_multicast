@@ -563,7 +563,7 @@ void test_pub(void)
     //
     // Test oldest inflight packets
     // 
-    pub_get_oldest_subscriber(&ctx, &sptr1, &pack);
+    pub_get_oldest_unackowledged_packet(&ctx, &sptr1, &pack);
 
     if (!sptr1) {
         printf("Failed pub test 15.1. Wanted oldest subscriber. Got nothing\n");
