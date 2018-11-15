@@ -58,6 +58,7 @@ static inline rmc_connection_t* _find_publisher_by_listen_address(rmc_context_t*
     return 0;
 }
 
+
 static int _decode_multicast(rmc_context_t* ctx,
                              uint8_t* packet,
                              ssize_t packet_len,
@@ -73,7 +74,8 @@ static int _decode_multicast(rmc_context_t* ctx,
     while(len) {
         cmd_packet_header_t* cmd_pack = (cmd_packet_header_t*) packet;
 
-        printf("Len[%d] Hdr Len[%lu] Payload Len[%d]\n", len, sizeof(cmd_packet_header_t), cmd_pack->payload_len);
+        printf("Len[%d] Hdr Len[%lu] Payload Len[%d] Payload[%s]\n",
+               len, sizeof(cmd_packet_header_t), cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
 
         // Check that we do not have a duplicate
         if (sub_packet_is_duplicate(pub, cmd_pack->pid)) {
@@ -109,6 +111,7 @@ static int _decode_multicast(rmc_context_t* ctx,
     return 0;
 }
 
+
 static int _process_multicast_read(rmc_context_t* ctx, uint8_t* read_res)
 {
     uint8_t buffer[RMC_MAX_PAYLOAD];
@@ -124,7 +127,7 @@ static int _process_multicast_read(rmc_context_t* ctx, uint8_t* read_res)
     multicast_header_t* mcast_hdr = (multicast_header_t*) data;
 
     if (read_res)
-        *read_res = RMC_READ_ERROR;
+        *read_res = RMC_ERROR;
 
     if (!ctx)
         return EINVAL;
@@ -194,8 +197,13 @@ static int _process_multicast_read(rmc_context_t* ctx, uint8_t* read_res)
     if (!conn) {
         // Add an outbound tcp connection to the publisher.
         res = rmc_connect_tcp_by_address(ctx, mcast_hdr->listen_ip, mcast_hdr->listen_port, &sock_ind);
-        if (read_res)
-            *read_res = RMC_READ_MULTICAST_NEW;
+
+        if (read_res) {
+            if (res)
+                *read_res = RMC_ERROR;
+            else
+                *read_res = RMC_READ_MULTICAST_NOT_READY;
+        }
         goto rearm;
     }
 
@@ -304,7 +312,7 @@ static int _process_tcp_read(rmc_context_t* ctx,
 
     if (res) {
         if (read_res)
-            *read_res = RMC_READ_ERROR;
+            *read_res = RMC_ERROR;
         return res;
     }
     
@@ -374,7 +382,7 @@ int _tcp_read(rmc_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* read_re
 
     if (!seg1_len) {
         if (read_res)
-            *read_res = RMC_READ_ERROR;
+            *read_res = RMC_ERROR;
         return ENOMEM;
     }
 
@@ -405,7 +413,7 @@ int _tcp_read(rmc_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* read_re
     
 }
 
-int rmc_read(rmc_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* read_res)
+int rmc_read(rmc_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* op_res)
 {
     int res = 0;
 
@@ -413,18 +421,18 @@ int rmc_read(rmc_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* read_res
         return EINVAL;
 
     if (s_ind == RMC_MULTICAST_RECV_INDEX) 
-        return _process_multicast_read(ctx, read_res);
+        return _process_multicast_read(ctx, op_res);
 
 
     if (s_ind == RMC_LISTEN_INDEX)  {
 
         res = rmc_process_accept(ctx, &s_ind);
 
-        if (res && read_res)
-            *read_res = RMC_READ_ERROR;
+        if (res && op_res)
+            *op_res = RMC_ERROR;
 
-        if (!res && read_res)
-            *read_res = RMC_READ_ACCEPT;
+        if (!res && op_res)
+            *op_res = RMC_READ_ACCEPT;
 
         return res;
     }
@@ -432,18 +440,18 @@ int rmc_read(rmc_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* read_res
             
     // Is c_ind within our connection vector?
     if (s_ind >= RMC_MAX_CONNECTIONS) {
-        if (read_res) 
-            *read_res = RMC_READ_ERROR;
+        if (op_res) 
+            *op_res = RMC_ERROR;
         return EINVAL;
     }
 
     if (ctx->connections[s_ind].descriptor == -1) {
-        if (read_res) 
-            *read_res = RMC_READ_ERROR;
+        if (op_res) 
+            *op_res = RMC_ERROR;
         return ENOTCONN;
     }
 
-    res = _tcp_read(ctx, s_ind, read_res);
+    res = _tcp_read(ctx, s_ind, op_res);
 
     if (res == EPIPE) {
         rmc_close_connection(ctx, s_ind);
