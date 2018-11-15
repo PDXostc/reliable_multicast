@@ -320,7 +320,7 @@ extern int rmc_process_timeout(rmc_context_t* context);
 // If a valid pointer, res will be set to:
 
 // An error occurred, check return value
-#define RMC_READ_ERROR 0
+#define RMC_ERROR 0
 
 // Multicast package was received
 #define RMC_READ_MULTICAST 1
@@ -346,9 +346,18 @@ extern int rmc_process_timeout(rmc_context_t* context);
 // TCP was reset
 #define RMC_READ_DISCONNECT 7
 
+// Multicast packlet was written
+#define RMC_WRITE_MULTICAST 8
 
-extern int rmc_read(rmc_context_t* context, rmc_connection_index_t connection_index, uint8_t* res);
-extern int rmc_write(rmc_context_t* context, rmc_connection_index_t connection_index);
+// An outbound tcp connection, initated byt rmc_connect_tcp_by_address()
+// Was completed.
+#define RMC_COMPLETE_CONNECTION 9
+
+// Data was sent on TCP connection.
+#define RMC_WRITE_TCP 10
+ 
+extern int rmc_read(rmc_context_t* context, rmc_connection_index_t connection_index, uint8_t* op_res);
+extern int rmc_write(rmc_context_t* context, rmc_connection_index_t connection_index, uint8_t* op_res);
 extern int rmc_queue_packet(rmc_context_t* context, void* payload, payload_len_t payload_len);
 extern int rmc_get_poll_size(rmc_context_t* context, int *result);
 extern int rmc_get_poll_vector(rmc_context_t* context, rmc_connection_t* result, int* len);
