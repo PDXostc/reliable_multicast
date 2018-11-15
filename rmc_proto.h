@@ -369,25 +369,25 @@ extern sub_packet_t* rmc_get_next_dispatch_ready(rmc_context_t* context);
 // FIXME: MOVE TO INTERNAL HEADER FILE
 extern void rmc_reset_connection(rmc_connection_t*conn, int index);
 
-extern int rmc_connect_tcp_by_address(rmc_context_t* ctx,
+extern int rmc_connect_tcp_by_address(rmc_context_t* context,
                                       in_addr_t address,
                                       in_port_t port,
                                       rmc_connection_index_t* result_index);
 
-extern int rmc_connect_tcp_by_host(rmc_context_t* ctx,
+extern int rmc_connect_tcp_by_host(rmc_context_t* context,
                                    char* server_addr,
                                    in_port_t port,
                                    rmc_connection_index_t* result_index);
 
-extern int rmc_process_accept(rmc_context_t* ctx,
+extern int rmc_process_accept(rmc_context_t* context,
                               rmc_connection_index_t* result_index);
 
-extern int rmc_close_connection(rmc_context_t* ctx, rmc_connection_index_t s_ind);
+extern int rmc_close_connection(rmc_context_t* context, rmc_connection_index_t s_ind);
 extern int rmc_packet_dispatched(rmc_context_t* context, sub_packet_t* packet);
 
 // CALLER STILL HAS TO FREE pack->payload!
-extern int rmc_proto_acknowledged(rmc_context_t* ctx, sub_packet_t* pack);
+extern int rmc_packet_acknowledged(rmc_context_t* context, sub_packet_t* packet);
 
-extern int rmc_complete_connect(rmc_context_t* ctx, rmc_connection_t*conn);
-extern rmc_connection_index_t rmc_sub_packet_connection(sub_packet_t* pack);
+extern int rmc_complete_connect(rmc_context_t* context, rmc_connection_t*conn);
+extern rmc_connection_index_t rmc_sub_packet_connection(sub_packet_t* packet);
 #endif // __RMC_PROTO_H__

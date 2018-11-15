@@ -44,9 +44,6 @@ static inline rmc_connection_t* _find_publisher_by_listen_address(rmc_context_t*
 
     while(ind <= ctx->max_connection_ind) {
         strcpy(have_addr_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->connections[ind].remote_address)}));
-        printf("_find_publisher_by_address() Want[%s:%d] Have[%s:%d]\n",
-               want_addr_str, port,
-               have_addr_str, ctx->connections[ind].remote_port);
 
         if (ctx->connections[ind].descriptor != -1 &&  
             listen_address == ctx->connections[ind].remote_address &&
@@ -70,11 +67,10 @@ static int _decode_multicast(rmc_context_t* ctx,
     usec_timestamp_t now = rmc_usec_monotonic_timestamp();
 
     // Traverse the received datagram and extract all packets
-    puts("_decode_multicast()");
     while(len) {
         cmd_packet_header_t* cmd_pack = (cmd_packet_header_t*) packet;
 
-        printf("Len[%d] Hdr Len[%lu] Payload Len[%d] Payload[%s]\n",
+        printf("_decode_multicast(): Len[%d] Hdr Len[%lu] Payload Len[%d] Payload[%s]\n",
                len, sizeof(cmd_packet_header_t), cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
 
         // Check that we do not have a duplicate

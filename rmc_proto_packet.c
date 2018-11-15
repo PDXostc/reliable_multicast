@@ -67,15 +67,34 @@ sub_packet_t* rmc_get_next_dispatch_ready(rmc_context_t* ctx)
     return sub_get_next_dispatch_ready(&ctx->sub_ctx);
 }
 
-// Called by user to ack a packet.
-int rmc_proto_ack(rmc_context_t* ctx, sub_packet_t* pack)
+
+int rmc_packet_dispatched(rmc_context_t* ctx, sub_packet_t* pack)
 {
+    rmc_connection_t* conn = sub_packet_user_data(pack).ptr;
+    uint16_t old_action = 0;
+
+    if (!conn)
+        return EINVAL;
+    
+    sub_packet_dispatched(pack);
+
+    // If this is the first packet that enters the ack-ready queue,
+    // then we need to setup a timeout for when we gather 
+    //
+//    if (sub_get_acknowledge_ready_count(&ctx->sub_ctx) != 0)
+//        ctx->next_send_ack = rmc_usec_monotonic_timestamp() + ctx->ack_timeout;
+           
+}
+
+
+int rmc_packet_acknowledged(rmc_context_t* ctx, sub_packet_t* pack)
+{
+    rmc_connection_t* conn = sub_packet_user_data(pack).ptr;
     ssize_t res = 0;
     uint8_t *seg1 = 0;
     uint32_t seg1_len = 0;
     uint8_t *seg2 = 0;
     uint32_t seg2_len = 0;
-    rmc_connection_t* conn = 0;
     cmd_ack_single_t ack = {
         .packet_id = pack->pid
     };
@@ -83,13 +102,15 @@ int rmc_proto_ack(rmc_context_t* ctx, sub_packet_t* pack)
     uint32_t old_in_use = 0;
     rmc_poll_action_t old_action = 0;
 
-    if (!ctx || !pack)
+    if (!conn || !ctx || !pack)
         return EINVAL;
+    
 
     conn = sub_packet_user_data(pack).ptr;
     if (conn->mode != RMC_CONNECTION_MODE_SUBSCRIBER)
         return EINVAL;
 
+    sub_packet_acknowledged(pack);
 
     available = circ_buf_available(&conn->write_buf);
     old_in_use = circ_buf_in_use(&conn->write_buf);
@@ -135,36 +156,6 @@ int rmc_proto_ack(rmc_context_t* ctx, sub_packet_t* pack)
                             old_action,
                             conn->action);
     
-}
-
-
-int rmc_packet_dispatched(rmc_context_t* ctx, sub_packet_t* pack)
-{
-    rmc_connection_t* conn = sub_packet_user_data(pack).ptr;
-    uint16_t old_action = 0;
-
-    if (!conn)
-        return EINVAL;
-    
-    sub_packet_dispatched(pack);
-
-    // If this is the first packet that enters the ack-ready queue,
-    // then we need to setup a timeout for when we gather 
-    //
-//    if (sub_get_acknowledge_ready_count(&ctx->sub_ctx) != 0)
-//        ctx->next_send_ack = rmc_usec_monotonic_timestamp() + ctx->ack_timeout;
-           
-}
-
-
-int rmc_packet_acknowledged(rmc_context_t* ctx, sub_packet_t* pack)
-{
-    rmc_connection_t* conn = sub_packet_user_data(pack).ptr;
-
-    if (!conn)
-        return EINVAL;
-    
-    sub_packet_acknowledged(pack);
 }
 
 
