@@ -144,14 +144,14 @@ void poll_remove(rmc_context_t* ctx,
 
 #define RMC_MIN(x,y) ((x)<(y)?(x):(y))
 
-char* _read_res_string(uint8_t res)
+char* _op_res_string(uint8_t res)
 {
     switch(res) {
-    case RMC_READ_ERROR:
+    case RMC_ERROR:
         return "error";
         
     case RMC_READ_MULTICAST:
-        return "multicast";
+        return "read multicast";
  
     case RMC_READ_MULTICAST_LOOPBACK:
         return "multicast loopback";
@@ -163,7 +163,7 @@ char* _read_res_string(uint8_t res)
         return "multicast not ready";
         
     case RMC_READ_TCP:
-        return "tcp";
+        return "read tcp";
         
     case RMC_READ_ACCEPT:
         return "accept";
@@ -171,18 +171,31 @@ char* _read_res_string(uint8_t res)
     case RMC_READ_DISCONNECT:
         return "disconnect";
 
+    case RMC_WRITE_MULTICAST:
+        return "write multicast";
+
+    case RMC_COMPLETE_CONNECTION:
+        return "complete connection";
+
+    case RMC_WRITE_TCP:
+        return "tcp write";
+
     default:
         return "[unknown]";
         
     }
 }
-int process_events(rmc_context_t* ctx, int epollfd, usec_timestamp_t timeout, int major, int* ind)
+
+
+int process_events(rmc_context_t* ctx, int epollfd, usec_timestamp_t timeout, int major, int* tick_ind)
 {
     struct epoll_event events[RMC_MAX_CONNECTIONS];
     char buf[16];
     usec_timestamp_t tout = timeout;
     int nfds = 0;
         
+    *tick_ind = 0;
+
     // Get the next timeout 
     // If we get ENODATA back, it means that we have no timeouts queued.
     rmc_get_next_timeout(ctx, &tout);
@@ -208,7 +221,7 @@ int process_events(rmc_context_t* ctx, int epollfd, usec_timestamp_t timeout, in
 
     while(nfds--) {
         int res = 0;
-        uint8_t read_res = 0;
+        uint8_t op_res = 0;
         rmc_connection_index_t c_ind = events[nfds].data.u32;
 
 //        printf("poll_wait(%s:%d)%s%s%s\n",
@@ -227,26 +240,32 @@ int process_events(rmc_context_t* ctx, int epollfd, usec_timestamp_t timeout, in
 
         if (events[nfds].events & EPOLLIN) {
             errno = 0;
-            res = rmc_read(ctx, c_ind, &read_res);
+            res = rmc_read(ctx, c_ind, &op_res);
             // Did we read a loopback message we sent ourselves?
-            printf("process_events(%s):%s\n", _read_res_string(read_res), strerror(errno));
+            printf("process_events(%s):%s\n", _op_res_string(op_res), strerror(res));
             if (res == ELOOP)
                 continue;       
 
             _test("rmc_proto_test[%d.%d] process_events():rmc_read(): %s\n", major, 1, res);
                 
             // If this was a connection call processed, we can continue.
-            if (read_res == RMC_READ_ACCEPT)
+            if (op_res == RMC_READ_ACCEPT)
                 continue;
 
-            if (read_res == RMC_READ_MULTICAST)
-                *ind++;
+            if (op_res == RMC_READ_MULTICAST)
+                *tick_ind = 1;
         }
 
-        if (events[nfds].events & EPOLLOUT) 
+        if (events[nfds].events & EPOLLOUT) {
             _test("rmc_proto_test[%d.%d] process_events():rmc_write(): %s\n",
                   major, 10,
-                  rmc_write(ctx, c_ind));
+                  rmc_write(ctx, c_ind, &op_res));
+
+            printf("op_res: %s\n", _op_res_string(op_res));
+
+            if (op_res == RMC_WRITE_MULTICAST)
+                *tick_ind = 1;
+        }
     }
     return 0;
 }
