@@ -185,6 +185,10 @@ int rmc_connect_tcp_by_address(rmc_context_t* ctx,
         return 0; // This is not an error, just a failed subscriber setup.
     }
     
+    // Nil out the in progress error.
+    res = (errno == EINPROGRESS)?0:errno;
+
+
     ctx->connections[c_ind].remote_address = address;
     ctx->connections[c_ind].remote_port = port;
 
@@ -201,7 +205,7 @@ int rmc_connect_tcp_by_address(rmc_context_t* ctx,
     if (result_index)
         *result_index = c_ind;
 
-    return 0;
+    return res;
 }
 
 
