@@ -149,23 +149,12 @@ int rmc_packet_dispatched(rmc_context_t* ctx, sub_packet_t* pack)
     sub_packet_dispatched(pack);
 
     // If this is the first packet that enters the ack-ready queue,
-    // then we need to enable write on the tcp socket to the publisher,
-    // allowing us to harvest all pending acks and sending them over
-
-#warning Replace with timeout -> collect -> send ack batch.
-
-    if (sub_get_ack_ready_count(&ctx->sub_ctx) == 1 &&
-        ctx->poll_modify) {
-        old_action = conn->action;
-        conn->action |= RMC_POLLWRITE;
-        (*ctx->poll_modify)(ctx,
-                            conn->descriptor,
-                            conn->connection_index,
-                            old_action,
-                            conn->action);
-    }
+    // then we need to setup a timeout for when we gather 
+    //
+//    if (sub_get_acknowledge_ready_count(&ctx->sub_ctx) != 0)
+//        ctx->next_send_ack = rmc_usec_monotonic_timestamp() + ctx->ack_timeout;
+           
 }
-
 
 
 int rmc_packet_acknowledged(rmc_context_t* ctx, sub_packet_t* pack)
@@ -177,6 +166,7 @@ int rmc_packet_acknowledged(rmc_context_t* ctx, sub_packet_t* pack)
     
     sub_packet_acknowledged(pack);
 }
+
 
 rmc_connection_index_t rmc_sub_packet_connection(sub_packet_t* pack)
 {
