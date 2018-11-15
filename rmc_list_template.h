@@ -239,6 +239,7 @@
     inline int LISTTYPE##_pop_head(LISTTYPE* list, DATATYPE* data)      \
     {                                                                   \
         assert(list);                                                   \
+        assert(data);                                                   \
                                                                         \
         if (!list->head)                                                \
             return 0;                                                   \
