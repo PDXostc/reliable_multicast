@@ -22,13 +22,14 @@ static void process_incoming_data(rmc_context_t* ctx, sub_packet_t* pack, rmc_te
                ind, pack->pid, (char*) pack->payload, td->payload);
         exit(255);
     }
+
     printf("rmc_proto_test_sub:process_incoming_data() ind[%d] pid[%lu] payload[%s]: ok\n",
            ind, pack->pid, (char*) pack->payload);
     
     if (!strcmp(pack->payload, "exit")) {
         puts("Got exit trigger from publisher");
         // Get the final ack out
-        rmc_write(ctx, rmc_sub_packet_connection(pack));
+        rmc_write(ctx, rmc_sub_packet_connection(pack), 0);
         exit(0);
     }
         
@@ -41,11 +42,8 @@ void* sub_alloc(payload_len_t payload_len,
 {
     puts("sub_alloc(): called");
 }
-    
-
 
 void test_rmc_proto_sub(char* mcast_group_addr,
-
                         char* mcast_if_addr,
                         char* listen_if_addr,
                         int mcast_port,
@@ -63,8 +61,8 @@ void test_rmc_proto_sub(char* mcast_group_addr,
     int mode = 0;
     int ind = 0;
     static rmc_test_data_t td[] = {
-        // First packet will be dropped since it is used to trigger a
-        // ack socket setup.
+        // First packet sent by publisher, 'ping', will be dropped
+        // since it is used to trigger a ack socket setup.
         { "p1", 2, 0 },
         { "p2", 3, 0 },
         { "p3", 4, 0 },
@@ -100,14 +98,15 @@ void test_rmc_proto_sub(char* mcast_group_addr,
 
 
     while(ind < sizeof(td) / sizeof(td[0])) {
+        int tick_ind = 0;
         sub_packet_t* pack = 0;
-        process_events(ctx, epollfd, -1, 3, &ind);
-        pack = rmc_get_next_dispatch_ready(ctx);
-        if (!pack) {
-            continue;
+        process_events(ctx, epollfd, -1, 3, &tick_ind);
+        // Process as many packets as possible.
+        while((pack = rmc_get_next_dispatch_ready(ctx))) {
+            process_incoming_data(ctx, pack, &td[ind], ind);
+            if (tick_ind)
+                ++ind;
         }
-        process_incoming_data(ctx, pack, &td[ind], ind);
-        ++ind;
     }
     puts("Done");
 }

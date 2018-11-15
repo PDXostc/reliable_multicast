@@ -89,8 +89,6 @@ typedef struct sub_publisher {
     packet_id_t max_pid_ready;         // Highest pid that is ready to be dispatched.
     packet_id_t max_pid_received;      // Maximum PID received.
     sub_packet_list_t received;        // Packets received but need additional packets. 
-    sub_packet_list_t dispatch_ready;  // Packets ready to be dispatched.
-    sub_packet_list_t ack_ready;       // Packets ready to be dispatched.
 } sub_publisher_t; 
 
 
@@ -100,8 +98,21 @@ typedef sub_publisher_node sub_publisher_node_t;
 
 // A single subscriber context that collects the feeds
 // of multiple publishers into a single feed.
+// We move packdets that have been processed by sub_process_received_packets()
+// int dispatch_ready and ack_ready on a context level instead of a per-publisher level
+// since they can all be treated as a single pool of actionablke packets at this point.
+//
+// The packets in disaptch_ready are dropped in at the tail of the list, ensuring
+// that all packets from a single publisher are sorted on their publisher-specific ascending
+// pid.
+//
+// The packets in ack_ready are sorted on received_time, allowig for quick retrieval based
+// on when it is time to acknowledge them.
+//
 typedef struct sub_context {
     sub_publisher_list_t publishers; // of sub_publisher_t for all publishers we are subscribing to.
+    sub_packet_list_t dispatch_ready;  // Packets ready to be dispatched.
+    sub_packet_list_t ack_ready;       // Packets ready to be acknowledged.
 } sub_context_t; 
 
 extern void sub_init_context(sub_context_t* ctx);
@@ -121,8 +132,6 @@ extern int sub_packet_received(sub_publisher_t* pub,
 // Should be called after one or more calls to sub_receive_packet()
 extern void sub_process_received_packets(sub_publisher_t* pub);
 
-extern sub_packet_t* _sub_next_dispatch_ready(sub_publisher_t* ctx);
-extern sub_packet_t* _sub_next_ack_ready(sub_publisher_t* ctx);
 extern void sub_get_missing_packets(sub_publisher_t* sub, intv_list_t* res);
 extern void sub_init_publisher(sub_publisher_t* pub, sub_context_t* ctx);
 extern sub_publisher_t* sub_find_publisher(sub_context_t* ctx, void* address, int address_len);
@@ -138,6 +147,9 @@ void sub_get_timed_out_packets(sub_context_t* ctx,
                                usec_timestamp_t timeout_ts,
                                sub_packet_list_t* result);
 
+
+extern int sub_get_acknowledge_ready_count(sub_context_t* ctx);
+extern sub_packet_t* sub_get_next_acknowledge_ready(sub_context_t* ctx);
 extern void sub_packet_acknowledged(sub_packet_t* pack);
 
 extern  user_data_t sub_packet_user_data(sub_packet_t* pack);

@@ -108,49 +108,19 @@ void sub_process_received_packets(sub_publisher_t* pub)
         if (pub->max_pid_ready &&
             node->data->pid != pub->max_pid_ready + 1)
             break;
-        // This nodeet can be moved over to the ready queue
-        // This queue is sorted ascending pid porder
+
+        // Drop the packet in at the tail of the context-level dispatch_ready queue.
+        // Since the pub->received() queue we get the pacekts from is pre-sorted on pid,
+        // we will guarantee that packets in dispatch_ready will be sorted on an ascending pid.
         sub_packet_list_unlink(node);
-        sub_packet_list_insert_sorted_node_rev(&pub->dispatch_ready,
-                                                 node,
-                                                 lambda(int, (sub_packet_t* n_dt, sub_packet_t* o_dt) {
-                                                         return (n_dt->pid > o_dt->pid)?1:
-                                                             ((n_dt->pid < o_dt->pid)?-1:
-                                                              0);
-                                                     }
-                                                     ));
+        sub_packet_list_push_tail_node(&pub->owner->dispatch_ready, node);
         node = sub_packet_list_head(&pub->received);
         pub->max_pid_ready++;
     }
-
-    // If we moved all received packets over to the ready list,
-    // then no new holes are found.
-    if (!node) 
-        return;
-
-    
 }
     
 
-sub_packet_t* _sub_next_dispatch_ready(sub_publisher_t* pub)
-{
-    sub_packet_node_t* node = 0;
-    
-    assert(pub);
-    node = sub_packet_list_head(&pub->dispatch_ready);
-    return node?node->data:0;
-}
 
-
-
-sub_packet_t* _sub_next_ack_ready(sub_publisher_t* pub)
-{
-    sub_packet_node_t* node = 0;
-    
-    assert(pub);
-    node = sub_packet_list_head(&pub->ack_ready);
-    return node?node->data:0;
-}
 
 
 // Should be called after sub_process_received_packets() and before
@@ -236,6 +206,12 @@ void sub_get_missing_packets(sub_publisher_t* pub, intv_list_t* res)
 }
 
 
+void sub_init_context(sub_context_t* ctx)
+{
+    sub_publisher_list_init(&ctx->publishers, 0, 0, 0);
+    sub_packet_list_init(&ctx->dispatch_ready, 0, 0, 0);
+    sub_packet_list_init(&ctx->ack_ready, 0, 0, 0);
+}
 
 
 void sub_init_publisher(sub_publisher_t* pub, sub_context_t* ctx)
@@ -244,8 +220,6 @@ void sub_init_publisher(sub_publisher_t* pub, sub_context_t* ctx)
     pub->max_pid_received = 0;
     pub->max_pid_ready = 0;
     sub_packet_list_init(&pub->received, 0, 0, 0);
-    sub_packet_list_init(&pub->dispatch_ready, 0, 0, 0);
-    sub_packet_list_init(&pub->ack_ready, 0, 0, 0);
     sub_publisher_list_push_head(&ctx->publishers, pub);
 
     return;
@@ -253,7 +227,7 @@ void sub_init_publisher(sub_publisher_t* pub, sub_context_t* ctx)
 
 
 void sub_remove_publisher(sub_publisher_t* pub,
-                          void (*free_cb)(void*, payload_len_t, user_data_t))
+                          void (*free_payload_cb)(void*, payload_len_t, user_data_t))
 {
     sub_context_t* ctx = 0;
     sub_publisher_node_t* pub_node = 0;
@@ -273,86 +247,37 @@ void sub_remove_publisher(sub_publisher_t* pub,
                                                         return dt1 == dt2;
                                                     }));
     assert(pub_node);
-    sub_publisher_list_delete(pub_node);
-
-    // Go through each list and wipe them.
+    // Go through all received packets and wipe them.
+    // Do a callback to free the payload, if specified.
     while(sub_packet_list_pop_head(&pub->received, &pack)) {
-        if (free_cb)
-            (*free_cb)(pack->payload, pack->payload_len, pack->pkg_user_data);
+        if (free_payload_cb)
+            (*free_payload_cb)(pack->payload, pack->payload_len, pack->pkg_user_data);
         _free_pending_packet(pack);
     }
 
-    while(sub_packet_list_pop_head(&pub->dispatch_ready, &pack)) {
-        if (free_cb)
-            (*free_cb)(pack->payload, pack->payload_len, pack->pkg_user_data);
-
-        _free_pending_packet(pack);
-    }
-
-    while(sub_packet_list_pop_head(&pub->ack_ready, &pack)) {
-        if (free_cb)
-            (*free_cb)(pack->payload, pack->payload_len, pack->pkg_user_data);
-
-        _free_pending_packet(pack);
-    }
-
+    sub_publisher_list_delete(pub_node);
     return;
 }
 
 
 
-void sub_init_context(sub_context_t* ctx)
-{
-    sub_publisher_list_init(&ctx->publishers, 0, 0, 0);
-}
-
 
 int sub_get_dispatch_ready_count(sub_context_t* ctx)
 {
-    int res = 0;
-
-    // Iterate across all publishers and sum up all packets ready to
-    // be dispatched.
-    sub_publisher_list_for_each(&ctx->publishers,
-                                lambda(uint8_t, (sub_publisher_node_t* pub_node, void* res) {
-                                        *((int*) res) += sub_packet_list_size(&pub_node->data->dispatch_ready);
-                                        return 1;
-                                    }),
-                                (void*) &res);
-    return res;
+    assert(ctx);
+    return sub_packet_list_size(&ctx->dispatch_ready);
 }
 
 
 sub_packet_t* sub_get_next_dispatch_ready(sub_context_t* ctx)
 {
-    sub_publisher_node_t* node = sub_publisher_list_head(&ctx->publishers);
+    assert(ctx);
+    
+    if (!sub_packet_list_size(&ctx->dispatch_ready))
+        return 0;
 
-    // Iterate across all publishers to find one with packets ready to
-    // be dispatched.
-    while(node) {
-        sub_packet_t* res = _sub_next_dispatch_ready(node->data);
-        if (res) 
-            return res;
 
-        node = sub_publisher_list_next(node);
-    }
-
-    return 0;
-}
-
-int sub_get_ack_ready_count(sub_context_t* ctx)
-{
-    int res = 0;
-
-    // Iterate across all publishers and sum up all packets ready to
-    // be acknowledged.
-    sub_publisher_list_for_each(&ctx->publishers,
-                                lambda(uint8_t, (sub_publisher_node_t* pub_node, void* res) {
-                                        *((int*) res) += sub_packet_list_size(&pub_node->data->ack_ready);
-                                        return 1;
-                                    }),
-                                (void*) &res);
-    return res;
+    return sub_packet_list_head(&ctx->dispatch_ready)->data;
 }
 
 
@@ -364,20 +289,42 @@ void sub_packet_dispatched(sub_packet_t* pack)
     assert(pack);
     assert(pack->owner_node);
     assert(pack->publisher);
+    assert(pack->publisher->owner);
 
-    // Unlink from ready list. 
+    // Unlink from context ready list. 
     node = pack->owner_node;
     sub_packet_list_unlink(node);
-    sub_packet_list_insert_sorted_node_rev(&pack->publisher->ack_ready,
+
+    // Insert into context's ack ready queue.
+    // Sort on timeout, allowing us to quickly retrieve packets
+    // that we need to ack.
+    sub_packet_list_insert_sorted_node_rev(&pack->publisher->owner->ack_ready,
                                            node,
                                            lambda(int, (sub_packet_t* n_dt, sub_packet_t* o_dt) {
-                                                   return (n_dt->pid > o_dt->pid)?1:
-                                                       ((n_dt->pid < o_dt->pid)?-1:
+                                                   return (n_dt->received_ts > o_dt->received_ts)?1:
+                                                       ((n_dt->received_ts < o_dt->received_ts)?-1:
                                                         0);
                                                }
                                                ));
 }
 
+
+int sub_get_acknowledge_ready_count(sub_context_t* ctx)
+{
+    assert(ctx);
+    return sub_packet_list_size(&ctx->ack_ready);
+}
+
+
+sub_packet_t* sub_get_next_acknowledge_ready(sub_context_t* ctx)
+{
+    assert(ctx);
+    
+    if (!sub_packet_list_size(&ctx->ack_ready))
+        return 0;
+
+    return sub_packet_list_head(&ctx->ack_ready)->data;
+}
 
 // Packet ack has been sent. Delete.
 // pack->payload has to be freed by caller.
@@ -402,25 +349,6 @@ inline user_data_t sub_packet_user_data(sub_packet_t* pack)
 
 
 
-// Grab all packets that were received before timeout_ts
-// from the given publisher
-static void _sub_get_timed_out_pub_packets(sub_publisher_t* pub,
-                                           usec_timestamp_t timeout_ts,
-                                           sub_packet_list_t* result)
-{
-    // Traverse all ack_ready packets for publisher and add those
-    // older than timeout_ts to result.
-    sub_packet_list_for_each(&pub->ack_ready,
-                             // For each packet, check if their oldest inflight packet has a sent_ts
-                             // timestamp older than max_age. If so, add it to result.
-                             lambda(uint8_t, (sub_packet_node_t* pnode, void* udata) {
-                                     if (pnode->data->received_ts <= timeout_ts)
-                                         sub_packet_list_push_tail(result, pnode->data);
-                                     return 1;
-                                 }), 0);
-
-}
-
 
 // Grab all packets that were received before timeout_ts
 // from all publishers
@@ -431,12 +359,17 @@ void sub_get_timed_out_packets(sub_context_t* ctx,
     assert(ctx);
     assert(result);
     
-    // Traverse all publishers and harvest their timed out ack_ready packets
-    sub_publisher_list_for_each(&ctx->publishers,
-                                lambda(uint8_t, (sub_publisher_node_t* pnode, void* udata) {
-                                        _sub_get_timed_out_pub_packets(pnode->data, timeout_ts, result);
-                                        return 1;
-                                    }), 0);
+    // Traverse all ack ready packets, head-to-tail, adding all packets
+    // to result until we find those with a received timestamp younger than timeout_ts.
+    sub_packet_list_for_each(&ctx->ack_ready,
+                             // For each packet, check if their oldest inflight packet has a sent_ts
+                             // timestamp older than max_age. If so, add it to result.
+                             lambda(uint8_t, (sub_packet_node_t* pnode, void* udata) {
+                                     if (pnode->data->received_ts <= timeout_ts) {
+                                         sub_packet_list_push_tail(result, pnode->data);
+                                         return 1;
+                                     }
+                                     return 0;
+                                 }), 0);
 }
-
 

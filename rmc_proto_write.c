@@ -6,7 +6,6 @@
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
 
-
 #define _GNU_SOURCE
 #include "rmc_proto.h"
 #include <string.h>
@@ -92,7 +91,6 @@ static int _process_multicast_write(rmc_context_t* ctx)
         packet_ptr += pack->payload_len;
 
         mcast_hdr->payload_len += sizeof(cmd_packet_header_t) + pack->payload_len;
-
         pub_packet_list_push_head(&snd_list, pack);
 
         printf(" pid[%lu]\n", pack->pid);
@@ -200,7 +198,7 @@ static int _process_tcp_write(rmc_context_t* ctx, rmc_connection_t* conn, uint32
     return 0;
 }
 
-int rmc_write(rmc_context_t* ctx, rmc_connection_index_t s_ind)
+int rmc_write(rmc_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* op_res)
 {
     int res = 0;
     int rearm_write = 0;
@@ -210,23 +208,33 @@ int rmc_write(rmc_context_t* ctx, rmc_connection_index_t s_ind)
     rmc_connection_t* conn = 0;
     assert(ctx);
 
-
     if (s_ind == RMC_MULTICAST_SEND_INDEX) {
+        if (op_res)
+            *op_res = RMC_WRITE_MULTICAST;
         return _process_multicast_write(ctx);
     }
 
     // Is s_ind within our connection vector?
-    if (s_ind >= RMC_MAX_CONNECTIONS)
+    if (s_ind >= RMC_MAX_CONNECTIONS) {
+        if (op_res)
+            *op_res = RMC_ERROR;
+
         return EINVAL;
+    }
 
     conn = &ctx->connections[s_ind];
 
-    if (conn->descriptor == -1)
-        return ENOTCONN;
+    if (conn->descriptor == -1) {
+        if (op_res)
+            *op_res = RMC_ERROR;
 
+        return ENOTCONN;
+    }
 
     // Is this socket in the process of being connected
     if (conn->mode == RMC_CONNECTION_MODE_CONNECTING) {
+        if (op_res)
+            *op_res = RMC_COMPLETE_CONNECTION;
         rmc_complete_connect(ctx, conn);
         return 0;
     }
@@ -239,9 +247,16 @@ int rmc_write(rmc_context_t* ctx, rmc_connection_index_t s_ind)
     old_action = ctx->connections[s_ind].action;
 
     // Do we have any data to write?
-    if (circ_buf_in_use(&ctx->connections[s_ind].write_buf) == 0) 
-        return ENODATA;
+    if (circ_buf_in_use(&ctx->connections[s_ind].write_buf) == 0) {
+        if (op_res)
+            *op_res = RMC_ERROR;
 
+        return ENODATA;
+    }
+
+    if (op_res)
+        *op_res = RMC_WRITE_TCP;
+    
     res = _process_tcp_write(ctx, &ctx->connections[s_ind], &bytes_left_after);
     
     if (bytes_left_after == 0) 
@@ -256,6 +271,9 @@ int rmc_write(rmc_context_t* ctx, rmc_connection_index_t s_ind)
                             old_action,
                             ctx->connections[s_ind].action);
 
+    // Did we encounter an error.
+    if (res && op_res)
+        *op_res = RMC_ERROR;
+        
     return res;
 }
-

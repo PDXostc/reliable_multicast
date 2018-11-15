@@ -119,6 +119,8 @@ int main(int argc, char* argv[])
             perror("stdout -> rmc_test_sub.log");
             exit(1);
         }
+        setlinebuf(stdout);
+        setlinebuf(stderr);
         puts("\n\n\n\n\n\n\n\nSUBSCRIBER\n");
         test_rmc_proto_sub(mcast_group_addr, mcast_if_addr, listen_if_addr, mcast_port, listen_port + 1);
         exit(0);
@@ -136,6 +138,8 @@ int main(int argc, char* argv[])
         perror("stdout -> rmc_test_pub.log");
         exit(1);
     }
+    setlinebuf(stdout);
+    setlinebuf(stderr);
     puts("\n\n\n\n\n\n\n\nPUBLISHER\n");
     test_rmc_proto_pub(mcast_group_addr, mcast_if_addr, listen_if_addr, mcast_port, listen_port);
     waitpid(ch_pid, 0, 0);

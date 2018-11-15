@@ -55,18 +55,6 @@ static uint8_t _test_print_publisher(sub_publisher_node_t* node, void* dt)
     } else
         printf("%*cReceived packets: [None]\n", indent*2, ' ');
 
-    if (sub_packet_list_size(&pub->dispatch_ready) > 0) {
-        printf("%*cDispatch-ready packets:\n", indent*3, ' ');
-        sub_packet_list_for_each(&pub->dispatch_ready, _test_print_pending, (void*) ((uint64_t)indent + 2));
-    } else
-        printf("%*cDispatch-ready packets: [None]\n", indent*2, ' ');
-
-    if (sub_packet_list_size(&pub->ack_ready) > 0) {
-        printf("%*cAcknowledge-ready packets:\n", indent*3, ' ');
-        sub_packet_list_for_each(&pub->ack_ready, _test_print_pending, (void*) ((uint64_t)indent + 2));
-    } else
-        printf("%*cAckonwledge-ready packets: [None]\n", indent*2, ' ');
-
     putchar('\n');
         
     return 1;
@@ -75,6 +63,18 @@ static uint8_t _test_print_publisher(sub_publisher_node_t* node, void* dt)
 void test_print_sub_context(sub_context_t* ctx)
 {
     printf("Context           %p\n", ctx);
+    if (sub_packet_list_size(&ctx->dispatch_ready) > 0) {
+        printf("Dispatch-ready packets:\n");
+        sub_packet_list_for_each(&ctx->dispatch_ready, _test_print_pending, (void*) ((uint64_t) 1));
+    } else
+        printf("Dispatch-ready packets: [None]\n");
+
+    if (sub_packet_list_size(&ctx->ack_ready) > 0) {
+        printf("Acknowledge-ready packets:\n");
+        sub_packet_list_for_each(&ctx->ack_ready, _test_print_pending, (void*) ((uint64_t) 1));
+    } else
+        printf("Ackonwledge-ready packets: [None]\n");
+
 
     if (sub_publisher_list_size(&ctx->publishers) > 0) {
         printf("\nPublishers:\n");
@@ -183,22 +183,40 @@ static void test_interval_list(char* test,
     }
 }
 
-void reset_publisher(sub_context_t* ctx, sub_publisher_t* pub)
+
+
+void reset_context(sub_context_t* ctx)
 {
     sub_packet_t* pack = 0;
+    sub_publisher_t* pub;
+    sub_publisher_node_t* p_node;
+    sub_publisher_list_t lst;
+    
+    sub_publisher_list_init(&lst, 0,0, 0);
+    p_node = sub_publisher_list_head(&ctx->publishers);
+    while(p_node) {
+        pub = p_node->data;
+        sub_remove_publisher(pub, 0);
+        sub_publisher_list_push_head(&lst, pub);
+        p_node = sub_publisher_list_head(&ctx->publishers);
+    }
 
-
-    sub_process_received_packets(pub);
-    while((pack = _sub_next_dispatch_ready(pub))) 
+    while((pack = sub_get_next_dispatch_ready(ctx))) 
         sub_packet_dispatched(pack);
 
-    while((pack = _sub_next_ack_ready(pub))) 
+    while((pack = sub_get_next_acknowledge_ready(ctx))) 
         sub_packet_acknowledged(pack);
 
-    sub_remove_publisher(pub, 0);
-    sub_init_publisher(pub, ctx);
+    while(sub_publisher_list_head(&lst))  {
+        sub_publisher_list_pop_head(&lst, &pub);
+        sub_init_publisher(pub, ctx);
+    }
+        
+        
+
     return;
 }
+
 
 void test_sub(void)
 {
@@ -231,8 +249,6 @@ void test_sub(void)
                          1, 5,
                          0, 0);
 
-
-
     // Check sequence
     test_sequence("1.1", &pub1.received, 1, 5);
     sub_process_received_packets(&pub1);
@@ -240,89 +256,89 @@ void test_sub(void)
     // Received queue should be empty.
     if (sub_packet_list_size(&pub1.received)) {
         printf("sub_test: failed  1.2. Wanted size 0, got %d\n",
-               sub_packet_list_size(&pub1.dispatch_ready));
+               sub_packet_list_size(&pub1.received));
         exit(255);
     }
         
-    test_sequence("1.3", &pub1.dispatch_ready, 1, 5);
+    test_sequence("1.3", &ctx.dispatch_ready, 1, 5);
 
     // Dispatch all packets and check that they disappear.
     // Packet 1.
-    pack = _sub_next_dispatch_ready(&pub1);
+    pack = sub_get_next_dispatch_ready(&ctx);
     sub_packet_dispatched(pack);
-    test_sequence("1.4", &pub1.dispatch_ready, 2, 5);
+    test_sequence("1.4", &ctx.dispatch_ready, 2, 5);
 
     // Packet 2.
-    pack = _sub_next_dispatch_ready(&pub1);
+    pack = sub_get_next_dispatch_ready(&ctx);
     sub_packet_dispatched(pack);
-    test_sequence("1.5", &pub1.dispatch_ready, 3, 5);
+    test_sequence("1.5", &ctx.dispatch_ready, 3, 5);
 
     // Packet 3.
-    pack = _sub_next_dispatch_ready(&pub1);
+    pack = sub_get_next_dispatch_ready(&ctx);
     sub_packet_dispatched(pack);
-    test_sequence("1.6", &pub1.dispatch_ready, 4, 5);
+    test_sequence("1.6", &ctx.dispatch_ready, 4, 5);
 
     // Packet 4.
-    pack = _sub_next_dispatch_ready(&pub1);
+    pack = sub_get_next_dispatch_ready(&ctx);
     sub_packet_dispatched(pack);
-    test_sequence("1.7", &pub1.dispatch_ready, 5, 5);
+    test_sequence("1.7", &ctx.dispatch_ready, 5, 5);
 
     // Packet 5.
-    pack = _sub_next_dispatch_ready(&pub1);
+    pack = sub_get_next_dispatch_ready(&ctx);
     sub_packet_dispatched(pack);
-    if (sub_packet_list_size(&pub1.dispatch_ready)) {
+    if (sub_packet_list_size(&ctx.dispatch_ready)) {
         printf("sub_test: failed  1.8. Wanted size 0, got %d\n",
-               sub_packet_list_size(&pub1.dispatch_ready));
+               sub_packet_list_size(&ctx.dispatch_ready));
         exit(255);
     }
 
     //
     // Packet 1-5 should now be in the ack_ready list
     //
-    test_sequence("1.9", &pub1.ack_ready, 1, 5);
+    test_sequence("1.9", &ctx.ack_ready, 1, 5);
 
     // Validate packet 1
-    pack = _sub_next_ack_ready(&pub1);
+    pack = sub_get_next_acknowledge_ready(&ctx);
     if (pack->pid != 1) {
         printf("sub_test: failed  1.10. Wanted pid 1, got %lu\n",
                pack->pid);
         exit(255);
     }
     sub_packet_acknowledged(pack);
-    test_sequence("1.11", &pub1.ack_ready, 2, 5);
+    test_sequence("1.11", &ctx.ack_ready, 2, 5);
 
     // Validate packet 2
-    pack = _sub_next_ack_ready(&pub1);
+    pack = sub_get_next_acknowledge_ready(&ctx);;
     if (pack->pid != 2) {
         printf("sub_test: failed  1.12. Wanted pid 2, got %lu\n",
                pack->pid);
         exit(255);
     }
     sub_packet_acknowledged(pack);
-    test_sequence("1.12", &pub1.ack_ready, 3, 5);
+    test_sequence("1.12", &ctx.ack_ready, 3, 5);
     
     // Validate packet 3
-    pack = _sub_next_ack_ready(&pub1);
+    pack = sub_get_next_acknowledge_ready(&ctx);;
     if (pack->pid != 3) {
         printf("sub_test: failed  1.13. Wanted pid 3, got %lu\n",
                pack->pid);
         exit(255);
     }
     sub_packet_acknowledged(pack);
-    test_sequence("1.14", &pub1.ack_ready, 4, 5);
+    test_sequence("1.14", &ctx.ack_ready, 4, 5);
 
     // Validate packet 4
-    pack = _sub_next_ack_ready(&pub1);
+    pack = sub_get_next_acknowledge_ready(&ctx);;
     if (pack->pid != 4) {
         printf("sub_test: failed  1.14. Wanted pid 4, got %lu\n",
                pack->pid);
         exit(255);
     }
     sub_packet_acknowledged(pack);
-    test_sequence("1.15", &pub1.ack_ready, 5, 5);
+    test_sequence("1.15", &ctx.ack_ready, 5, 5);
 
     // Validate packet 5
-    pack = _sub_next_ack_ready(&pub1);
+    pack = sub_get_next_acknowledge_ready(&ctx);;
     if (pack->pid != 5) {
         printf("sub_test: failed  1.16. Wanted pid 5, got %lu\n",
                pack->pid);
@@ -332,14 +348,14 @@ void test_sub(void)
 
 
     // Ack ready should be empty
-    if (sub_packet_list_size(&pub1.ack_ready)) {
+    if (sub_packet_list_size(&ctx.ack_ready)) {
         printf("sub_test: failed  1.17. Wanted size 0, got %d\n",
-               sub_packet_list_size(&pub1.ack_ready));
+               sub_packet_list_size(&ctx.ack_ready));
         exit(255);
     }
     
     // Reset pub1
-    reset_publisher(&ctx, &pub1);
+    reset_context(&ctx);
     
     //--------
     // Out of order packages.
@@ -357,11 +373,11 @@ void test_sub(void)
     test_sequence("2.1", &pub1.received, 1, 4);
 
     sub_process_received_packets(&pub1);
-    test_sequence("2.2", &pub1.dispatch_ready, 1, 4);
+    test_sequence("2.2", &ctx.dispatch_ready, 1, 4);
     
-    reset_publisher(&ctx, &pub1);
 
     // Start out-of-order packages
+    reset_context(&ctx);
     add_received_packets(&pub1, 0,
                          2, 2,
                          1, 1,
@@ -373,9 +389,9 @@ void test_sub(void)
     test_sequence("2.3", &pub1.received, 1, 4);
 
     sub_process_received_packets(&pub1);
-    test_sequence("2.4", &pub1.dispatch_ready, 1, 4);
+    test_sequence("2.4", &ctx.dispatch_ready, 1, 4);
     
-    reset_publisher(&ctx, &pub1);
+    reset_context(&ctx);
 
     // End out-of-order packages
     add_received_packets(&pub1, 0,
@@ -389,9 +405,9 @@ void test_sub(void)
     test_sequence("2.5", &pub1.received, 1, 4);
 
     sub_process_received_packets(&pub1);
-    test_sequence("2.6", &pub1.dispatch_ready, 1, 4);
+    test_sequence("2.6", &ctx.dispatch_ready, 1, 4);
 
-    reset_publisher(&ctx, &pub1);
+    reset_context(&ctx);
 
 
     //--------
@@ -414,7 +430,7 @@ void test_sub(void)
     //
     // Test multiple missing packages.
     // 
-    reset_publisher(&ctx, &pub1);
+    reset_context(&ctx);
 
     add_received_packets(&pub1, 0,
                          1, 2,
@@ -436,7 +452,7 @@ void test_sub(void)
     // Test multiple missing packages in multiple holes
     //--------
 
-    reset_publisher(&ctx, &pub1);
+    reset_context(&ctx);
 
     add_received_packets(&pub1, 0,
                          1, 2,
@@ -471,7 +487,7 @@ void test_sub(void)
     // that starts later than pid 1
     //--------
     //
-    reset_publisher(&ctx, &pub1);
+    reset_context(&ctx);
 
     add_received_packets(&pub1, 0,
                          100, 101,
@@ -495,7 +511,7 @@ void test_sub(void)
     // successfully procesed packages
     //--------
     // 
-    reset_publisher(&ctx, &pub1);
+    reset_context(&ctx);
 
     add_received_packets(&pub1, 0,
                          1, 2,
@@ -513,7 +529,7 @@ void test_sub(void)
     // move 1 and 2 to ready queue.
     sub_process_received_packets(&pub1);
     
-    test_sequence("5.1", &pub1.dispatch_ready, 1, 2);
+    test_sequence("5.1", &ctx.dispatch_ready, 1, 2);
 
     while(intv_list_pop_head(&holes, &intv));
 
@@ -564,7 +580,7 @@ void test_sub(void)
     sub_get_missing_packets(&pub1, &holes);
 
     // Ready packets should be 1-3
-    test_sequence("5.4", &pub1.dispatch_ready, 1, 3);
+    test_sequence("5.4", &ctx.dispatch_ready, 1, 3);
 
     test_interval_list("5.5", &holes,
                        5,5,
@@ -575,14 +591,14 @@ void test_sub(void)
 
     // Dispatch the ready packets
     // pid 1
-    pack = _sub_next_dispatch_ready(&pub1);
+    pack = sub_get_next_dispatch_ready(&ctx);
     sub_packet_dispatched(pack);
 
     // pid 2
-    pack = _sub_next_dispatch_ready(&pub1);
+    pack = sub_get_next_dispatch_ready(&ctx);
     sub_packet_dispatched(pack);
     // pid 3
-    pack = _sub_next_dispatch_ready(&pub1);
+    pack = sub_get_next_dispatch_ready(&ctx);
     sub_packet_dispatched(pack);
 
     // Ready queue is empty.
@@ -618,7 +634,7 @@ void test_sub(void)
     sub_get_missing_packets(&pub1, &holes);
 
     // Ready packets should be 4-7
-    test_sequence("5.8", &pub1.dispatch_ready, 4, 7);
+    test_sequence("5.8", &ctx.dispatch_ready, 4, 7);
 
     test_interval_list("5.9", &holes,
                        8,9,
@@ -644,7 +660,7 @@ void test_sub(void)
 
 
     // Ready packets should be 4-7
-    test_sequence("5.10", &pub1.dispatch_ready, 4, 7);
+    test_sequence("5.10", &ctx.dispatch_ready, 4, 7);
 
     test_interval_list("5.11", &holes,
                        8,9,
@@ -667,7 +683,7 @@ void test_sub(void)
     sub_get_missing_packets(&pub1, &holes);
 
     // Ready packets should be 4-21
-    test_sequence("5.12", &pub1.dispatch_ready, 4, 21);
+    test_sequence("5.12", &ctx.dispatch_ready, 4, 21);
 
     if (intv_list_size(&holes)) {
         printf("sub_test: failed  5.12 Wanted size 0, got %d\n",
@@ -680,7 +696,7 @@ void test_sub(void)
     // Test that we correctly drop dup packets
     //--------
 
-    reset_publisher(&ctx, &pub1);
+    reset_context(&ctx);
 
     add_received_packets(&pub1, 0,
                          1, 2,
@@ -732,19 +748,19 @@ void test_sub(void)
 
     // Dispatch packet 1-4
     // 1
-    pack = _sub_next_dispatch_ready(&pub1);
+    pack = sub_get_next_dispatch_ready(&ctx);
     sub_packet_dispatched(pack);
 
     // 2
-    pack = _sub_next_dispatch_ready(&pub1);
+    pack = sub_get_next_dispatch_ready(&ctx);
     sub_packet_dispatched(pack);
 
     // 3
-    pack = _sub_next_dispatch_ready(&pub1);
+    pack = sub_get_next_dispatch_ready(&ctx);
     sub_packet_dispatched(pack);
 
     // 4
-    pack = _sub_next_dispatch_ready(&pub1);
+    pack = sub_get_next_dispatch_ready(&ctx);
     sub_packet_dispatched(pack);
     
 
@@ -766,7 +782,7 @@ void test_sub(void)
 
     // Failure case detected during higher-level debugging
     // If we start with a pid different than 1, we fail
-    reset_publisher(&ctx, &pub1);
+    reset_context(&ctx);
     add_received_packets(&pub1, 0,
                          2, 2,
                          0,0);
@@ -778,7 +794,7 @@ void test_sub(void)
         exit(255);
     }
 
-    if (sub_packet_list_size(&pub1.dispatch_ready) != 1) {
+    if (sub_packet_list_size(&ctx.dispatch_ready) != 1) {
         printf("sub_test: failed  7.1 Wanted 1.\n");
         exit(255);
     }
@@ -795,7 +811,7 @@ void test_sub(void)
         exit(255);
     }
     
-    if (sub_packet_list_size(&pub1.dispatch_ready) != 2) {
+    if (sub_packet_list_size(&ctx.dispatch_ready) != 2) {
         printf("sub_test: failed  7.3 Wanted 2.\n");
         exit(255);
     }
@@ -803,7 +819,7 @@ void test_sub(void)
     // 
     // Test functionality to harvest packets that are ready to be acknowledged.
     //
-    reset_publisher(&ctx, &pub1);
+    reset_context(&ctx);
     add_received_packets(&pub1, 100,
                          1, 2,
                          0, 0);
@@ -819,22 +835,22 @@ void test_sub(void)
     sub_process_received_packets(&pub1);
     
     // Dispatch all packets, moving them to the ack queue.
-    pack = _sub_next_dispatch_ready(&pub1);
+    pack = sub_get_next_dispatch_ready(&ctx);
     sub_packet_dispatched(pack);
     
-    pack = _sub_next_dispatch_ready(&pub1);
+    pack = sub_get_next_dispatch_ready(&ctx);
     sub_packet_dispatched(pack);
     
-    pack = _sub_next_dispatch_ready(&pub1);
+    pack = sub_get_next_dispatch_ready(&ctx);
     sub_packet_dispatched(pack);
     
-    pack = _sub_next_dispatch_ready(&pub1);
+    pack = sub_get_next_dispatch_ready(&ctx);
     sub_packet_dispatched(pack);
     
-    pack = _sub_next_dispatch_ready(&pub1);
+    pack = sub_get_next_dispatch_ready(&ctx);
     sub_packet_dispatched(pack);
 
-    pack = _sub_next_dispatch_ready(&pub1);
+    pack = sub_get_next_dispatch_ready(&ctx);
     sub_packet_dispatched(pack);
     
     sub_packet_list_init(&lst, 0, 0, 0);

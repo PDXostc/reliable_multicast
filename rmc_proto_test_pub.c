@@ -95,19 +95,21 @@ void test_rmc_proto_pub(char* mcast_group_addr,
 
     printf("rmc_proto_test_pub: context: ctx[%.9X]\n", rmc_context_id(ctx));
 
-    for(ind = 0; ind < sizeof(td) / sizeof(td[0]); ++ind) {
+    for(ind = 0; ind < sizeof(td) / sizeof(td[0]); ) {
         usec_timestamp_t now = rmc_usec_monotonic_timestamp();
         usec_timestamp_t wait_until = now + td[ind].msec_wait * 1000;
         usec_timestamp_t t_out = 0;
-
+        int tick_ind = 0;
         queue_test_data(ctx, td, ind);
         
         // Process events until it is time to queue and send the next
         // frame (or quit).
         while(now <= wait_until) {
             t_out = (wait_until - now);
-            process_events(ctx, epollfd, t_out, 2, &ind);
+            process_events(ctx, epollfd, t_out, 2, &tick_ind);
             now = rmc_usec_monotonic_timestamp();
+            if (tick_ind)
+                ++ind;
         }
     }
 }
