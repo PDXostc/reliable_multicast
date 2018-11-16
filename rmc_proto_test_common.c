@@ -191,31 +191,20 @@ int process_events(rmc_context_t* ctx, int epollfd, usec_timestamp_t timeout, in
 {
     struct epoll_event events[RMC_MAX_CONNECTIONS];
     char buf[16];
-    usec_timestamp_t tout = timeout;
     int nfds = 0;
-        
+
     *tick_ind = 0;
 
-    // Get the next timeout 
-    // If we get ENODATA back, it means that we have no timeouts queued.
-    rmc_get_next_timeout(ctx, &tout);
-    if (tout == -1)
-        tout = timeout;
-    
-    if (timeout != -1 && tout != -1)
-        tout = RMC_MIN(tout, timeout);
-
-    nfds = epoll_wait(epollfd, events, RMC_MAX_CONNECTIONS, (tout == -1)?-1:(tout / 1000));
+    nfds = epoll_wait(epollfd, events, RMC_MAX_CONNECTIONS, (timeout == -1)?-1:(timeout / 1000));
     if (nfds == -1) {
         perror("epoll_wait");
         exit(255);
     }
 
     // Timeout
-    if (nfds == 0) {
-        rmc_process_timeout(ctx);
+    if (nfds == 0) 
         return ETIME;
-    }
+
 
     // printf("poll_wait(): %d results\n", nfds);
 
@@ -267,6 +256,7 @@ int process_events(rmc_context_t* ctx, int epollfd, usec_timestamp_t timeout, in
                 *tick_ind = 1;
         }
     }
+
     return 0;
 }
 
