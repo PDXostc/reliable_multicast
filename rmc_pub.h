@@ -138,11 +138,12 @@ extern void pub_get_timed_out_packets(pub_subscriber_t* sub,
                                       usec_timestamp_t timeout_ts,
                                       pub_packet_list_t* result);
 
-// Find the packet, and its subscriber, with the oldest inflight
-// packet that is awaiting an ack.
-extern void pub_get_oldest_unackowledged_packet(pub_context_t* ctx,
-                                                pub_subscriber_t** subscriber,
-                                                pub_packet_t** packet);
+// Get the time when the oldest packet was sent that we still are waiting
+// for an acknowledgement on from the subscriber.
+extern int pub_get_oldest_unackowledged_packet(pub_context_t* ctx,
+                                               usec_timestamp_t* sent_ts);
+
+
 
 extern user_data_t pub_user_data(pub_context_t* ctx);
 
