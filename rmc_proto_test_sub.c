@@ -26,14 +26,14 @@ static void process_incoming_data(rmc_context_t* ctx, sub_packet_t* pack, rmc_te
     printf("rmc_proto_test_sub:process_incoming_data() ind[%d] pid[%lu] payload[%s]: ok\n",
            ind, pack->pid, (char*) pack->payload);
     
-    if (!strcmp(pack->payload, "exit")) {
-        puts("Got exit trigger from publisher");
-        // Get the final ack out
-        rmc_packet_dispatched(ctx, pack);
-        rmc_packet_acknowledged(ctx, pack);
-        rmc_write(ctx, rmc_sub_packet_connection(pack), 0);
-        exit(0);
-    }
+//    if (!strcmp(pack->payload, "exit")) {
+//        puts("Got exit trigger from publisher");
+//        // Get the final ack out
+//        rmc_packet_dispatched(ctx, pack);
+//        rmc_packet_acknowledged(ctx, pack);
+//        rmc_write(ctx, rmc_sub_packet_connection(pack), 0);
+//        exit(0);
+//    }
         
     rmc_packet_dispatched(ctx, pack);
     rmc_packet_acknowledged(ctx, pack);
@@ -63,13 +63,14 @@ void test_rmc_proto_sub(char* mcast_group_addr,
     user_data_t ud = { .u64 = 0 };
     int mode = 0;
     int ind = 0;
+    usec_timestamp_t t_out = 0;
     static rmc_test_data_t td[] = {
         // First packet sent by publisher, 'ping', will be dropped
         // since it is used to trigger a ack socket setup.
         { "p1", 2, 0 },
         { "p2", 3, 0 },
         { "p3", 4, 0 },
-        { "exit", 5, 0 }
+        { "p4", 5, 0 }
     };
 
     signal(SIGHUP, SIG_IGN);
@@ -103,7 +104,14 @@ void test_rmc_proto_sub(char* mcast_group_addr,
     while(ind < sizeof(td) / sizeof(td[0])) {
         int tick_ind = 0;
         sub_packet_t* pack = 0;
-        process_events(ctx, epollfd, -1, 3, &tick_ind);
+
+        rmc_get_next_timeout(ctx, &t_out);
+
+        if (process_events(ctx, epollfd, t_out, 3, &tick_ind) == ETIME) {
+            rmc_process_timeout(ctx);
+            continue;
+        }
+
         // Process as many packets as possible.
         while((pack = rmc_get_next_dispatch_ready(ctx))) {
             process_incoming_data(ctx, pack, &td[ind], ind);
@@ -111,5 +119,17 @@ void test_rmc_proto_sub(char* mcast_group_addr,
                 ++ind;
         }
     }
+        
+    // Process timed out acks that need to be sent.
+    rmc_get_next_timeout(ctx, &t_out);
+
+    while(t_out != -1) {
+        int tick_ind = 0;
+        if (process_events(ctx, epollfd, t_out, 2, &tick_ind) == ETIME)
+            rmc_process_timeout(ctx);
+
+        rmc_get_next_timeout(ctx, &t_out);
+    }
+
     puts("Done");
 }
