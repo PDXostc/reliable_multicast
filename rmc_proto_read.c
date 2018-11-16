@@ -42,9 +42,14 @@ static inline rmc_connection_t* _find_publisher_by_listen_address(rmc_context_t*
     strcpy(want_addr_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(listen_address) }));
 
 
+//    printf("_find_publisher_by_listen_address(): max_connection_ind[%d]\n", ctx->max_connection_ind);
     while(ind <= ctx->max_connection_ind) {
         strcpy(have_addr_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->connections[ind].remote_address)}));
+        
+//        printf("_find_publisher_by_listen_address(): want[%s:%d] got [%s:%d]\n",
+//               want_addr_str, port, have_addr_str, ctx->connections[ind].remote_port);
 
+        
         if (ctx->connections[ind].descriptor != -1 &&  
             listen_address == ctx->connections[ind].remote_address &&
             port == ctx->connections[ind].remote_port)
@@ -70,12 +75,15 @@ static int _decode_multicast(rmc_context_t* ctx,
     while(len) {
         cmd_packet_header_t* cmd_pack = (cmd_packet_header_t*) packet;
 
-        printf("_decode_multicast(): Len[%d] Hdr Len[%lu] Payload Len[%d] Payload[%s]\n",
-               len, sizeof(cmd_packet_header_t), cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
+        //      printf("_decode_multicast(): Len[%d] Hdr Len[%lu] Payload Len[%d] Payload[%s]\n",
+//               len, sizeof(cmd_packet_header_t), cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
 
         // Check that we do not have a duplicate
         if (sub_packet_is_duplicate(pub, cmd_pack->pid)) {
-            printf("_decode_multicast(%lu): Duplicate or pre-connect straggler\n", cmd_pack->pid);
+            printf("_decode_multicast(%lu): Duplicate or pre-connect straggler\n",
+                   cmd_pack->pid);
+            packet += sizeof(cmd_packet_header_t) + cmd_pack->payload_len;
+            len -= sizeof(cmd_packet_header_t) + cmd_pack->payload_len;
             continue;
         }
 
@@ -155,8 +163,7 @@ static int _process_multicast_read(rmc_context_t* ctx, uint8_t* read_res)
         
     strcpy(src_addr_str, inet_ntoa(src_addr.sin_addr));
     strcpy(listen_addr_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(mcast_hdr->listen_ip) }));
-    printf("mcast_rx(): ctx_id[0x%.8X] len[%.5d] from[%s:%d] listen[%s:%d]",
-           mcast_hdr->context_id,
+    printf("mcast_rx(): len[%.5d] from[%s:%d] listen[%s:%d]",
            mcast_hdr->payload_len,
            src_addr_str, ntohs(src_addr.sin_port),
            listen_addr_str, mcast_hdr->listen_port);
