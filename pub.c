@@ -93,13 +93,13 @@ packet_id_t pub_queue_packet(pub_context_t* ctx,
     //
     ppack->parent_node =
         pub_packet_list_insert_sorted(&ctx->queued,
-                                ppack,
-                                lambda(int, (pub_packet_t* n_dt, pub_packet_t* o_dt) {
-                                        (n_dt->pid > o_dt->pid)?1:
-                                            ((n_dt->pid < o_dt->pid)?-1:
-                                             0);
-                                    }
-                                    ));
+                                      ppack,
+                                      lambda(int, (pub_packet_t* n_dt, pub_packet_t* o_dt) {
+                                              (n_dt->pid > o_dt->pid)?1:
+                                                  ((n_dt->pid < o_dt->pid)?-1:
+                                                   0);
+                                          }
+                                          ));
 
     return ppack->pid;
 }
@@ -273,12 +273,14 @@ void pub_get_timed_out_packets(pub_subscriber_t* sub,
 }
 
 
-void pub_get_oldest_unackowledged_packet(pub_context_t* ctx, pub_subscriber_t** subscriber, pub_packet_t** packet)
+// Get the oldest sent packet that we have yet receive an
+// acknowledgement for from subscriber
+int pub_get_oldest_unackowledged_packet(pub_context_t* ctx, usec_timestamp_t* timeout_ack)
 {
-    usec_timestamp_t oldest = 0;
+    usec_timestamp_t oldest = -1;
 
-    *subscriber = 0; // In case we have no subscribers with inflight packets
-    *packet = 0; 
+    if (!ctx || !timeout_ack)
+        return 0;
 
     // Traverse all subscribers.
     pub_sub_list_for_each(&ctx->subscribers,
@@ -291,15 +293,14 @@ void pub_get_oldest_unackowledged_packet(pub_context_t* ctx, pub_subscriber_t** 
                                       return 1;
 
                                   pack = pub_packet_list_tail(lst)->data;
-                                  if (pack->send_ts < oldest || !oldest) {
-                                      *packet = pack;
-                                      *subscriber = sub_node->data;
+                                  if (oldest == -1 || pack->send_ts < oldest) {
                                       oldest = pack->send_ts;
                                   }
                                   return 1;
                               }), 0);
-    
-                          
+
+    *timeout_ack = oldest;
+    return 1;
 }
 
 user_data_t pub_packet_user_data(pub_packet_t* ppack)
