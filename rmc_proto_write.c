@@ -25,7 +25,6 @@
 #include <netdb.h>
 #include <assert.h>
 
-
 // FIXME: If we see timed out (== lost) packets from subscribers, we should
 //        switch them to TCP for a period of time in order
 //        to use TCP's flow control until congestion has eased.
@@ -72,8 +71,7 @@ static int _process_multicast_write(rmc_context_t* ctx)
     listen_addr = inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->listen_if_addr) });
     mcast_addr = inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) });
 
-    printf("mcast_tx(): ctx_id[0x%.8X] mcast[%s:%d] listen[%s:%d]",
-           mcast_hdr->context_id,
+    printf("mcast_tx(): mcast[%s:%d] listen[%s:%d]",
            mcast_addr, ntohs(sock_addr.sin_port),
            listen_addr, mcast_hdr->listen_port);
 
@@ -93,7 +91,7 @@ static int _process_multicast_write(rmc_context_t* ctx)
         mcast_hdr->payload_len += sizeof(cmd_packet_header_t) + pack->payload_len;
         pub_packet_list_push_head(&snd_list, pack);
 
-        printf(" pid[%lu]\n", pack->pid);
+        printf(" pid[%lu]", pack->pid);
         // FIXME: Maybe add a specific API call to traverse queued packages?
         pnode = pub_packet_list_prev(pack->parent_node);
         pack = pnode?pnode->data:0;
@@ -238,11 +236,6 @@ int rmc_write(rmc_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* op_res)
         rmc_complete_connect(ctx, conn);
         return 0;
     }
-
-    // Take all packets that are ready for 
-//    if (conn->mode == RMC_CONNECTION_MODE_SUBSCRIBER)
-//        process_ack_ready_packets(ctx);
-#warning Collect, interval, and ack/free all packets transmitted.
 
     old_action = ctx->connections[s_ind].action;
 
