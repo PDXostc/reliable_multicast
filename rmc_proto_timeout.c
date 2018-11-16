@@ -24,15 +24,17 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-
+#include <assert.h>
 
 // =============
 // TIMEOUT MANAGEMENT
 // =============
-static int _process_packet_timeout(rmc_context_t* ctx,
-                                   pub_subscriber_t* sub,
-                                   pub_packet_t* pack,
-                                   usec_timestamp_t timeout_ts)
+#define RMC_MIN(x,y) ((x)<(y)?(x):(y))
+
+static int _process_sent_packet_timeout(rmc_context_t* ctx,
+                                        pub_subscriber_t* sub,
+                                        pub_packet_t* pack,
+                                        usec_timestamp_t timeout_ts)
 {
     // Send the packet via TCP.
     rmc_connection_t* conn = 0;
@@ -50,6 +52,13 @@ static int _process_packet_timeout(rmc_context_t* ctx,
     if (!ctx || !sub || !pack)
         return EINVAL;
 
+    printf("process_sent_packet_timeout(): pid[%lu] mcast[%s:%d] listen[%s:%d]\n",
+           pack->pid,
+           inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }),
+           ctx->mcast_port,
+           inet_ntoa( (struct in_addr) { .s_addr = htonl(conn->remote_address) }),
+           ctx->listen_port);
+    
     conn = (rmc_connection_t*) pub_packet_user_data(pack).ptr;
     if (!conn || conn->mode != RMC_CONNECTION_MODE_PUBLISHER)
         return EINVAL;
@@ -119,7 +128,8 @@ static int _process_subscriber_timeout(rmc_context_t* ctx, pub_subscriber_t* sub
     // with oldest packet first.
     while((pnode = pub_packet_list_tail(&packets))) {
         // Outbound circular buffer may be full.
-        if ((res = _process_packet_timeout(ctx, sub, pnode->data, timeout_ts)) != 0)
+        printf("Timed out packet: %lu\n", pnode->data->pid);
+        if ((res = _process_sent_packet_timeout(ctx, sub, pnode->data, timeout_ts)) != 0)
             return res;
 
         // We were successful in queuing the packet transmission.
@@ -129,6 +139,73 @@ static int _process_subscriber_timeout(rmc_context_t* ctx, pub_subscriber_t* sub
     return 0;
 }
 
+
+void _process_packet_ack_timeout(rmc_context_t* ctx)
+{
+    sub_packet_t* pack = 0;
+
+    while((pack = sub_get_next_acknowledge_ready(&ctx->sub_ctx))) {
+        rmc_connection_t* conn = 0;
+        ssize_t res = 0;
+        uint8_t *seg1 = 0;
+        uint32_t seg1_len = 0;
+        uint8_t *seg2 = 0;
+        uint32_t seg2_len = 0;
+        cmd_ack_single_t ack = {
+            .packet_id = pack->pid
+        };
+        uint32_t available = 0;
+        uint32_t old_in_use = 0;
+        rmc_poll_action_t old_action = 0;
+    
+        conn = sub_packet_user_data(pack).ptr;
+        sub_packet_acknowledged(pack);
+        if (!conn || conn->mode != RMC_CONNECTION_MODE_SUBSCRIBER)
+            continue;
+
+        available = circ_buf_available(&conn->write_buf);
+        old_in_use = circ_buf_in_use(&conn->write_buf);
+        old_action = conn->action;
+
+        printf("process_packet_ack_timeout(): pid[%lu] mcast[%s:%d] listen[%s:%d]\n",
+               pack->pid,
+               inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }),
+               ctx->mcast_port,
+               inet_ntoa( (struct in_addr) { .s_addr = htonl(conn->remote_address) }),
+               conn->remote_port);
+
+        // Allocate memory for command
+        circ_buf_alloc(&conn->write_buf, 1,
+                       &seg1, &seg1_len,
+                       &seg2, &seg2_len);
+
+
+        *seg1 = RMC_CMD_ACK_SINGLE;
+
+        // Allocate memory for packet header
+        circ_buf_alloc(&conn->write_buf, sizeof(ack) ,
+                       &seg1, &seg1_len,
+                       &seg2, &seg2_len);
+
+        // Copy in packet header
+        memcpy(seg1, (uint8_t*) &ack, seg1_len);
+        if (seg2_len) 
+            memcpy(seg2, ((uint8_t*) &ack) + seg1_len, seg2_len);
+
+
+        // We always want to read from the tcp  socket.
+        conn->action |= RMC_POLLWRITE;
+
+        if (ctx->poll_modify)
+            (*ctx->poll_modify)(ctx,
+                                conn->descriptor,
+                                conn->connection_index,
+                                old_action,
+                                conn->action);
+
+    }
+    
+}
 
 int rmc_process_timeout(rmc_context_t* ctx)
 {
@@ -140,6 +217,9 @@ int rmc_process_timeout(rmc_context_t* ctx)
     if (!ctx)
         return EINVAL;
     
+    // Check if we have any acks we need to process.
+    _process_packet_ack_timeout(ctx);
+
     pub_sub_list_init(&subs, 0, 0, 0);
     pub_get_timed_out_subscribers(&ctx->pub_ctx, ts - ctx->resend_timeout, &subs);
 
@@ -154,40 +234,61 @@ int rmc_process_timeout(rmc_context_t* ctx)
             return res;
         }
     }
+
     return 0;
 }
 
 
 int rmc_get_next_timeout(rmc_context_t* ctx, usec_timestamp_t* result)
 {
-    usec_timestamp_t ts = rmc_usec_monotonic_timestamp();
-    pub_subscriber_t* sub = 0;
-    pub_packet_t* pack = 0;
-
+    usec_timestamp_t oldest_received_ts = 0;
+    usec_timestamp_t oldest_sent_ts = 0;
+    usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
     if (!ctx || !result)
         return EINVAL;
     
-    // Get the oldest packet, and its subscriber, with the
-    // oldest pending ack that we haven't seen yet.
-    pub_get_oldest_unackowledged_packet(&ctx->pub_ctx, &sub, &pack);
+    // Get the send timestamp of the oldest packet we have yet to
+    // receive an acknowledgement for from the subscriber.
+    pub_get_oldest_unackowledged_packet(&ctx->pub_ctx, &oldest_sent_ts);
 
-    // If no subscriber has inflight packets, then set result to -1.
-    if (!sub) {
+    // Get the timestamp when the oldest packet was received that we haven
+    // yet to send an acknowledgement back to the publisher for.
+    sub_get_oldest_unacknowledged_packet(&ctx->sub_ctx, &oldest_received_ts);
+    
+    // Did we have infinite timeout on both?
+    if (oldest_sent_ts == -1 && oldest_received_ts == -1) {
         *result = -1;
-        return ENODATA;
+        return 1;
+    }
+        
+    // Convert to millisecond from now that it times out
+    if (oldest_sent_ts != -1)  {
+        oldest_sent_ts = oldest_sent_ts + ctx->resend_timeout - current_ts;
+        if (oldest_sent_ts < 0)
+            oldest_sent_ts = 0;
     }
 
-    // Has our oldest packet already expired?
-    if (pack->send_ts <= ts - ctx->resend_timeout) {
-        *result = 0;
-        return 0;
+    if (oldest_received_ts != -1) {
+        oldest_received_ts = oldest_received_ts + ctx->ack_timeout - current_ts;
+        if (oldest_received_ts < 0)
+            oldest_received_ts = 0;
     }
 
-    *result =  (ts - ctx->resend_timeout) - (ts - pack->send_ts);
-    return 0;
+    // Did we get two competing timestamps?
+    if (oldest_sent_ts != -1 && oldest_received_ts != -1)
+    {
+        *result = RMC_MIN(oldest_sent_ts, oldest_received_ts);
+        return 1;
+    }
+
+    // Did we get one infinite and one finite timestamp?
+    if (oldest_sent_ts == -1 && oldest_received_ts != -1)
+    {
+        *result = oldest_received_ts;
+        return 1;
+    }
+    
+    // Only one combination left:
+    *result = oldest_sent_ts;
+    return 1;
 }
-
-
-
-
-
