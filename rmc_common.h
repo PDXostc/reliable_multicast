@@ -19,7 +19,7 @@
 //
 typedef uint64_t packet_id_t;
 typedef uint16_t payload_len_t;
-typedef uint64_t usec_timestamp_t;
+typedef int64_t usec_timestamp_t;
 
 typedef union {
     void* ptr;
@@ -47,4 +47,3 @@ typedef union {
 extern usec_timestamp_t rmc_usec_monotonic_timestamp(void);
 
 #endif // __RMC_COMMON_H__
-
