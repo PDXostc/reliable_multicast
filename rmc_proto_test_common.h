@@ -55,7 +55,7 @@ extern void poll_remove(rmc_context_t* ctx,
 
 extern int process_packet(rmc_context_t* ctx, int major, int minor);
 
-extern void queue_test_data(rmc_context_t* ctx, rmc_test_data_t* td_arr, int td_arr_ind);
+extern void queue_test_data(rmc_context_t* ctx, rmc_test_data_t* td_arr);
 
 extern int process_events(rmc_context_t* ctx, int epollfd, usec_timestamp_t timeout, int major, int* index);
 
