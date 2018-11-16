@@ -16,7 +16,7 @@ static uint8_t _test_print_pending(pub_packet_node_t* node, void* dt)
 
     printf("%*cPacket          %p\n", indent*2, ' ', pack);
     printf("%*c  PID             %lu\n", indent*2, ' ', pack->pid);
-    printf("%*c  Sent timestamp  %lu\n", indent*2, ' ', pack->send_ts);
+    printf("%*c  Sent timestamp  %ld\n", indent*2, ' ', pack->send_ts);
     printf("%*c  Reference count %d\n", indent*2, ' ', pack->ref_count);
     printf("%*c  Parent node     %p\n", indent*2, ' ', pack->parent_node);
     printf("%*c  Payload Length  %d\n", indent*2, ' ', pack->payload_len);
@@ -79,6 +79,7 @@ void test_pub(void)
     packet_id_t pid = 0;
     pub_sub_list_t sub_lst;
     pub_packet_node_t* pnode = 0;
+    usec_timestamp_t ts = 0;
 
     pub_init_context(&ctx);
     pub_init_subscriber(&sub1, &ctx);
@@ -416,7 +417,7 @@ void test_pub(void)
     pub_queue_packet(&ctx, "5", 2, user_data_nil());
     pub_queue_packet(&ctx, "6", 2, user_data_nil());
 
-    // Send each packt in turn, increasing time stamp
+    // Send each packet in turn, increasing time stamp
     // by one for each packet
     pack = pub_next_queued_packet(&ctx);
     pub_packet_sent(&ctx, pack, 1);
@@ -563,10 +564,10 @@ void test_pub(void)
     //
     // Test oldest inflight packets
     // 
-    pub_get_oldest_unackowledged_packet(&ctx, &sptr1, &pack);
+    pub_get_oldest_unackowledged_packet(&ctx, &ts);
 
-    if (!sptr1) {
-        printf("Failed pub test 15.1. Wanted oldest subscriber. Got nothing\n");
+    if (ts == -1) {
+        printf("Failed pub test 15.1. Wanted oldest subscriber sent ts. Got nothing\n");
         exit(255);
     }
 
@@ -575,26 +576,9 @@ void test_pub(void)
     // sub1: - 2 3 4 5 6
     // sub2: - - - 4 5 6
     // sub3: - - - - - -
-    if (sptr1 == &sub2) {
-        printf("Failed pub test 15.2. Wanted sub1, got sub2\n");
-        exit(255);
-    }
-
-    if (sptr1 == &sub3) {
-        printf("Failed pub test 15.3. Wanted sub1, got sub3\n");
-
-        exit(255);
-    }
-
-    if (sptr1 != &sub1) {
-        printf("Failed pub test 15.4. Wanted sub1, got weird %p\n",
-               sptr1);
-        exit(255);
-    }
-
-    if (pack->pid != 2) {
-        printf("Failed pub test 15.5. Wanted pid 2, got %lu\n",
-               pack->pid);
+    if (ts != 2) {
+        printf("Failed pub test 15.5. Wanted ts 2, got %lu\n",
+               ts);
         exit(255);
         
     }
