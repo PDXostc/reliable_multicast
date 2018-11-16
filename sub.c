@@ -348,8 +348,6 @@ inline user_data_t sub_packet_user_data(sub_packet_t* pack)
 }
 
 
-
-
 // Grab all packets that were received before timeout_ts
 // from all publishers
 void sub_get_timed_out_packets(sub_context_t* ctx,
@@ -371,5 +369,28 @@ void sub_get_timed_out_packets(sub_context_t* ctx,
                                      }
                                      return 0;
                                  }), 0);
+}
+
+// Get the oldest received packet that we have yet to acknowledge back
+// to publisher
+int sub_get_oldest_unacknowledged_packet(sub_context_t* ctx, usec_timestamp_t* received_ts)
+{
+    usec_timestamp_t oldest = 0;
+    sub_packet_node_t* pnode = 0;
+
+    if (!ctx || !received_ts)
+        return 0;
+
+    pnode = sub_packet_list_head(&ctx->ack_ready);
+
+    if (!pnode) {
+        *received_ts = -1;
+        return 1;
+    }
+
+    *received_ts = pnode->data->received_ts;
+
+    return 1;
+
 }
 

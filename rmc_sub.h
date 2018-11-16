@@ -154,4 +154,9 @@ extern void sub_packet_acknowledged(sub_packet_t* pack);
 
 extern  user_data_t sub_packet_user_data(sub_packet_t* pack);
 
+// Get the timestamp when the oldest packet was received that we have
+// yet to send an acknowledgement back to the publisher for.
+extern int sub_get_oldest_unacknowledged_packet(sub_context_t* ctx,
+                                                usec_timestamp_t* received_ts);
+
 #endif // __REL_MCAST_SUB__
