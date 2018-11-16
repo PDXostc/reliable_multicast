@@ -21,7 +21,7 @@ static uint8_t _test_print_pending(sub_packet_node_t* node, void* dt)
     printf("%*c  PID             %lu\n", indent*2, ' ', pack->pid);
     printf("%*c  Parent node     %p\n", indent*2, ' ', pack->owner_node);
     printf("%*c  Payload Length  %d\n", indent*2, ' ', pack->payload_len);
-    printf("%*c  Received time   %lu\n", indent*2, ' ', pack->received_ts);
+    printf("%*c  Received time   %ld\n", indent*2, ' ', pack->received_ts);
     putchar('\n');
     return 1;
 }
