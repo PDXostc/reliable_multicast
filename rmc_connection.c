@@ -137,6 +137,7 @@ void _rmc_conn_init_connection_vector(rmc_connection_vector_t* conn_vec,
     conn_vec->size = elem_count;
     conn_vec->max_connection_ind = -1;
     conn_vec->connection_count = 0;
+    conn_vec->connections = (rmc_connection_t*) buffer;
     conn_vec->poll_add = poll_add;
     conn_vec->poll_modify = poll_modify;
     conn_vec->poll_remove = poll_remove;
