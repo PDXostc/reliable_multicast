@@ -26,42 +26,9 @@
 #include <netdb.h>
 #include <assert.h>
 
-static inline rmc_connection_t* _find_publisher_by_listen_address(rmc_context_t* ctx,
-                                                                  uint32_t listen_address,
-                                                                  uint16_t port)
-{
-    rmc_connection_index_t ind = 0;
-    char want_addr_str[80];
-    char have_addr_str[80];
-
-    // Do we have any connections in use at all?
-    if (ctx->max_connection_ind == -1)
-        return 0;
-    
-    // FIXME: Replace with hash table search to speed up.
-    strcpy(want_addr_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(listen_address) }));
 
 
-//    printf("_find_publisher_by_listen_address(): max_connection_ind[%d]\n", ctx->max_connection_ind);
-    while(ind <= ctx->max_connection_ind) {
-        strcpy(have_addr_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->connections[ind].remote_address)}));
-        
-//        printf("_find_publisher_by_listen_address(): want[%s:%d] got [%s:%d]\n",
-//               want_addr_str, port, have_addr_str, ctx->connections[ind].remote_port);
-
-        
-        if (ctx->connections[ind].descriptor != -1 &&  
-            listen_address == ctx->connections[ind].remote_address &&
-            port == ctx->connections[ind].remote_port)
-            return &ctx->connections[ind];
-
-        ++ind;
-    }
-    return 0;
-}
-
-
-static int _decode_multicast(rmc_context_t* ctx,
+static int _decode_multicast(rmc_sub_context_t* ctx,
                              uint8_t* packet,
                              ssize_t packet_len,
                              rmc_connection_t* conn)
@@ -91,8 +58,8 @@ static int _decode_multicast(rmc_context_t* ctx,
         // incoming payload.
         // Use malloc() if nothing is specified.
         // Must be freed by rmc_packet_dispatched()
-        if (ctx->sub_payload_alloc)
-            payload = (*ctx->sub_payload_alloc)(cmd_pack->payload_len, ctx->user_data);
+        if (ctx->payload_alloc)
+            payload = (*ctx->payload_alloc)(cmd_pack->payload_len, ctx->user_data);
         else
             payload = malloc(cmd_pack->payload_len);
  
@@ -116,7 +83,7 @@ static int _decode_multicast(rmc_context_t* ctx,
 }
 
 
-static int _process_multicast_read(rmc_context_t* ctx, uint8_t* read_res)
+static int _process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
 {
     uint8_t buffer[RMC_MAX_PAYLOAD];
     uint8_t *data = buffer;
@@ -174,12 +141,12 @@ static int _process_multicast_read(rmc_context_t* ctx, uint8_t* read_res)
     // FIXME: REMOVE WHEN WE HAVE DELETED IP_MULTICAST_LOOP
     if (mcast_hdr->context_id == ctx->context_id) {
         puts(" - loopback (skipped)");
-        if (ctx->poll_modify)
-            (*ctx->poll_modify)(ctx,
-                                ctx->mcast_recv_descriptor,
-                                RMC_MULTICAST_RECV_INDEX,
-                                RMC_POLLREAD,
-                                RMC_POLLREAD);
+        if (ctx->conn_vec.poll_modify)
+            (*ctx->conn_vec.poll_modify)(ctx->user_data,
+                                         ctx->mcast_recv_descriptor,
+                                         RMC_MULTICAST_RECV_INDEX,
+                                         RMC_POLLREAD,
+                                         RMC_POLLREAD);
         *read_res = RMC_READ_MULTICAST_LOOPBACK;
         return 0; // Loopback message
     }
@@ -193,13 +160,14 @@ static int _process_multicast_read(rmc_context_t* ctx, uint8_t* read_res)
         mcast_hdr->listen_ip = ntohl(src_addr.sin_addr.s_addr);
 
     // Find the socket we use to ack received packets back to the publisher.
-    conn = _find_publisher_by_listen_address(ctx, mcast_hdr->listen_ip, mcast_hdr->listen_port);
+    conn = _rmc_conn_find_by_address(&ctx->conn_vec, mcast_hdr->listen_ip, mcast_hdr->listen_port);
 
     // If no socket is setup, initiate the connection to the publisher.
     // Drop the recived packet
     if (!conn) {
         // Add an outbound tcp connection to the publisher.
-        res = rmc_connect_tcp_by_address(ctx, mcast_hdr->listen_ip, mcast_hdr->listen_port, &sock_ind);
+        res = _rmc_conn_connect_tcp_by_address(&ctx->conn_vec, mcast_hdr->listen_ip, mcast_hdr->listen_port, &sock_ind);
+        
 
         if (read_res) {
             if (res)
@@ -231,45 +199,18 @@ static int _process_multicast_read(rmc_context_t* ctx, uint8_t* read_res)
 
 rearm:
     // Re-arm the poll descriptor and return.
-    if (ctx->poll_modify)
-        (*ctx->poll_modify)(ctx,
-                            ctx->mcast_recv_descriptor,
-                            RMC_MULTICAST_RECV_INDEX,
-                            RMC_POLLREAD,
-                            RMC_POLLREAD);
+    if (ctx->conn_vec.poll_modify)
+        (*ctx->conn_vec.poll_modify)(ctx->user_data,
+                                     ctx->mcast_recv_descriptor,
+                                     RMC_MULTICAST_RECV_INDEX,
+                                     RMC_POLLREAD,
+                                     RMC_POLLREAD);
 
     
     return res;
 }
 
-static int _process_cmd_packet(rmc_context_t* ctx, rmc_connection_t* conn, payload_len_t len)
-{
-    return 0;
-}
-
-static int _process_cmd_ack_single(rmc_context_t* ctx, rmc_connection_t* conn, payload_len_t len)
-{
-    cmd_ack_single_t ack;
-    if (len < sizeof(ack))
-        return EAGAIN;
-
-    circ_buf_read(&conn->read_buf, (uint8_t*) &ack, sizeof(ack), 0);
-    circ_buf_free(&conn->read_buf, sizeof(ack), 0);
-    printf("Acking[%lu]\n", ack.packet_id);
-//    extern void test_print_pub_context(pub_context_t* ctx);
-//    test_print_pub_context(&ctx->pub_ctx);
-    pub_packet_ack(&conn->pubsub.subscriber,
-                   ack.packet_id,
-                   lambda(void, (void* payload, payload_len_t payload_len, user_data_t user_data) {
-                           if (ctx->pub_payload_free)
-                               (*ctx->pub_payload_free)(payload, payload_len, user_data);
-                           else
-                               free(payload);
-                       }));
-    return 0;
-}
-
-static int _process_cmd_ack_interval(rmc_context_t* ctx, rmc_connection_t* conn, payload_len_t len)
+static int _process_cmd_packet(rmc_sub_context_t* ctx, rmc_connection_t* conn, payload_len_t len)
 {
     return 0;
 }
@@ -279,17 +220,18 @@ static int _process_cmd_ack_interval(rmc_context_t* ctx, rmc_connection_t* conn,
 // EAGAIN can be returned if one or more commands have been executed
 // and it is the last command that is partial.
 ///
-static int _process_tcp_read(rmc_context_t* ctx,
+static int _process_tcp_read(rmc_sub_context_t* ctx,
                              rmc_connection_index_t s_ind,
                              uint8_t* read_res)
 {
-    rmc_connection_t* conn = &ctx->connections[s_ind];
+    rmc_connection_t* conn = _rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
     uint32_t in_use = circ_buf_in_use(&conn->read_buf);
     uint8_t command = 0;
     int sock_err = 0;
     socklen_t len = sizeof(sock_err);
     int res;
 
+    assert(conn);
     // Do we have a command byte?
     if (in_use < 1) {
         if (getsockopt(conn->descriptor,
@@ -300,7 +242,7 @@ static int _process_tcp_read(rmc_context_t* ctx,
             printf("process_tcp_read(): getsockopt(): %s\n",
                    strerror(errno));
             sock_err = errno; // Save it.
-            rmc_close_connection(ctx, conn->connection_index);
+            _rmc_conn_close_connection(&ctx->conn_vec, conn->connection_index);
             return sock_err;
         }
         printf("process_tcp_read(): getsockopt(ok): %s\n",
@@ -331,15 +273,6 @@ static int _process_tcp_read(rmc_context_t* ctx,
             }
             break;
 
-        case RMC_CMD_ACK_SINGLE:
-            if ((res = _process_cmd_ack_single(ctx, conn, in_use)) != 0)
-                return res; // Most likely EAGAIN
-            break;
-
-        case RMC_CMD_ACK_INTERVAL:
-            if ((res = _process_cmd_ack_interval(ctx, conn, in_use)) != 0)
-                return res; // Most likely EAGAIN
-
 
         default:
             // FIXME: Disconnect subscriber and report issue.
@@ -364,9 +297,9 @@ static int _process_tcp_read(rmc_context_t* ctx,
 }
 
 
-int _tcp_read(rmc_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* read_res)
+static int _tcp_read(rmc_sub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* read_res)
 {
-    rmc_connection_t* conn = &ctx->connections[s_ind];
+    rmc_connection_t* conn = _rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
     ssize_t res = 0;
     uint8_t *seg1 = 0;
     uint32_t seg1_len = 0;
@@ -416,58 +349,42 @@ int _tcp_read(rmc_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* read_re
     
 }
 
-int rmc_read(rmc_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* op_res)
+int rmc_sub_read(rmc_sub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* op_res)
 {
     int res = 0;
+    rmc_connection_t* conn = 0;
 
     if (!ctx)
         return EINVAL;
 
-    if (s_ind == RMC_MULTICAST_RECV_INDEX) 
-        return _process_multicast_read(ctx, op_res);
+    conn = _rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
 
-
-    if (s_ind == RMC_LISTEN_INDEX)  {
-
-        res = rmc_process_accept(ctx, &s_ind);
-
-        if (res && op_res)
-            *op_res = RMC_ERROR;
-
-        if (!res && op_res)
-            *op_res = RMC_READ_ACCEPT;
-
-        return res;
-    }
-            
-            
-    // Is c_ind within our connection vector?
-    if (s_ind >= RMC_MAX_CONNECTIONS) {
+    if (!conn) {
         if (op_res) 
             *op_res = RMC_ERROR;
-        return EINVAL;
-    }
 
-    if (ctx->connections[s_ind].descriptor == -1) {
-        if (op_res) 
-            *op_res = RMC_ERROR;
         return ENOTCONN;
     }
+    
+    if (s_ind == RMC_MULTICAST_RECV_INDEX) 
+        return _process_multicast_read(ctx, op_res);
+            
+            
 
     res = _tcp_read(ctx, s_ind, op_res);
 
     if (res == EPIPE) {
-        rmc_close_connection(ctx, s_ind);
+        _rmc_conn_close_connection(&ctx->conn_vec, s_ind);
         return 0; // This is not an error, just regular maintenance.
     }
 
     // Read poll is always active. Callback to re-arm.
-    if (ctx->poll_modify) {
-        (*ctx->poll_modify)(ctx, 
-                            ctx->connections[s_ind].descriptor, 
-                            s_ind, 
-                            RMC_POLLREAD, 
-                            RMC_POLLREAD);
+    if (ctx->conn_vec.poll_modify) {
+        (*ctx->conn_vec.poll_modify)(ctx->user_data, 
+                                     conn->descriptor, 
+                                     s_ind, 
+                                     RMC_POLLREAD, 
+                                     RMC_POLLREAD);
     }
     return res;
 }

@@ -33,7 +33,7 @@
 // =============
 // SOCKET WRITE
 // =============
-static int _process_multicast_write(rmc_context_t* ctx)
+static int _process_multicast_write(rmc_pub_context_t* ctx)
 {
     pub_context_t* pctx = &ctx->pub_ctx;
     pub_packet_t* pack = pub_next_queued_packet(pctx);
@@ -61,14 +61,14 @@ static int _process_multicast_write(rmc_context_t* ctx)
 
     // If listen_ip == 0 then receiver will use source address of packet as tcp
     // address to connect to.
-    mcast_hdr->listen_ip = ctx->listen_if_addr; 
-    mcast_hdr->listen_port = ctx->listen_port; 
+    mcast_hdr->listen_ip = ctx->control_listen_if_addr; 
+    mcast_hdr->listen_port = ctx->control_listen_port; 
 
     packet_ptr += sizeof(multicast_header_t);
 
     pub_packet_list_init(&snd_list, 0, 0, 0);
 
-    listen_addr = inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->listen_if_addr) });
+    listen_addr = inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->control_listen_if_addr) });
     mcast_addr = inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) });
 
     printf("mcast_tx(): mcast[%s:%d] listen[%s:%d]",
@@ -110,12 +110,12 @@ static int _process_multicast_write(rmc_context_t* ctx)
         if ( errno != EAGAIN && errno != EWOULDBLOCK)
             return errno;
 
-        if (ctx->poll_modify) {
-            (*ctx->poll_modify)(ctx,
-                                ctx->mcast_send_descriptor,
-                                RMC_MULTICAST_SEND_INDEX,
-                                RMC_POLLWRITE,
-                                RMC_POLLWRITE);
+        if (ctx->conn_vec.poll_modify) {
+            (*ctx->conn_vec.poll_modify)(ctx->user_data,
+                                         ctx->mcast_send_descriptor,
+                                         RMC_MULTICAST_SEND_INDEX,
+                                         RMC_POLLWRITE,
+                                         RMC_POLLWRITE);
         }
         return 0;
     }
@@ -132,9 +132,9 @@ static int _process_multicast_write(rmc_context_t* ctx)
 //    extern void test_print_pub_context(pub_context_t* ctx);
 //    test_print_pub_context(&ctx->pub_ctx);
 
-    if (ctx->poll_modify) {
+    if (ctx->conn_vec.poll_modify) {
         // Do we have more packets to send?
-        (*ctx->poll_modify)(ctx,
+        (*ctx->conn_vec.poll_modify)(ctx->user_data,
                             ctx->mcast_send_descriptor,
                             RMC_MULTICAST_SEND_INDEX,
                             RMC_POLLWRITE,
@@ -144,7 +144,7 @@ static int _process_multicast_write(rmc_context_t* ctx)
 }
 
 
-static int _process_tcp_write(rmc_context_t* ctx, rmc_connection_t* conn, uint32_t* bytes_left)
+static int _process_tcp_write(rmc_pub_context_t* ctx, rmc_connection_t* conn, uint32_t* bytes_left)
 {
     uint8_t *seg1 = 0;
     uint32_t seg1_len = 0;
@@ -196,7 +196,7 @@ static int _process_tcp_write(rmc_context_t* ctx, rmc_connection_t* conn, uint32
     return 0;
 }
 
-int rmc_write(rmc_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* op_res)
+int rmc_pub_write(rmc_pub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* op_res)
 {
     int res = 0;
     int rearm_write = 0;
@@ -220,7 +220,7 @@ int rmc_write(rmc_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* op_res)
         return EINVAL;
     }
 
-    conn = &ctx->connections[s_ind];
+    conn = _rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
 
     if (conn->descriptor == -1) {
         if (op_res)
@@ -233,14 +233,14 @@ int rmc_write(rmc_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* op_res)
     if (conn->mode == RMC_CONNECTION_MODE_CONNECTING) {
         if (op_res)
             *op_res = RMC_COMPLETE_CONNECTION;
-        rmc_complete_connect(ctx, conn);
+        _rmc_conn_complete_connection(&ctx->conn_vec, conn);
         return 0;
     }
 
-    old_action = ctx->connections[s_ind].action;
+    old_action = conn->action;
 
     // Do we have any data to write?
-    if (circ_buf_in_use(&ctx->connections[s_ind].write_buf) == 0) {
+    if (circ_buf_in_use(&conn->write_buf) == 0) {
         if (op_res)
             *op_res = RMC_ERROR;
 
@@ -250,19 +250,19 @@ int rmc_write(rmc_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* op_res)
     if (op_res)
         *op_res = RMC_WRITE_TCP;
     
-    res = _process_tcp_write(ctx, &ctx->connections[s_ind], &bytes_left_after);
+    res = _process_tcp_write(ctx, conn, &bytes_left_after);
     
     if (bytes_left_after == 0) 
-        ctx->connections[s_ind].action &= ~RMC_POLLWRITE;
+        conn->action &= ~RMC_POLLWRITE;
     else
-        ctx->connections[s_ind].action |= RMC_POLLWRITE;
+        conn->action |= RMC_POLLWRITE;
 
-    if (ctx->poll_modify)
-        (*ctx->poll_modify)(ctx,
-                            ctx->connections[s_ind].descriptor,
-                            s_ind,
-                            old_action,
-                            ctx->connections[s_ind].action);
+    if (ctx->conn_vec.poll_modify)
+        (*ctx->conn_vec.poll_modify)(ctx->user_data,
+                                     conn->descriptor,
+                                     s_ind,
+                                     old_action,
+                                     conn->action);
 
     // Did we encounter an error.
     if (res && op_res)

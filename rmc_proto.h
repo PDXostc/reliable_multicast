@@ -51,7 +51,6 @@ typedef struct cmd_packet_header {
 // Probably needs to be a lot bigger in high
 // throughput situations.
 #define RMC_MAX_TCP_PENDING_WRITE 0xFFFF 
-#define RMC_MAX_CONNECTIONS 16
 #define RMC_LISTEN_SOCKET_BACKLOG 5
 #define RMC_DEFAULT_PACKET_TIMEOUT 5000000
 #define RMC_DEFAULT_ACK_TIMEOUT 50000 // 50 msec.
@@ -70,8 +69,49 @@ typedef struct cmd_packet_header {
 // Socket is being connected.
 #define RMC_CONNECTION_MODE_CONNECTING 3
 
+
 typedef uint32_t rmc_connection_index_t;
 typedef uint16_t rmc_poll_action_t;
+
+// Called when a new connection is created by rmc.
+//
+// poll->action & RMC_POLLREAD
+// specifies that we want rmc_write() to
+// be called (with poll->connection_index as an
+// argument) when the connection can be
+// written to (asynchronously).
+//
+// poll->action & RMC_POLLWRITE
+// specifies that we want rmc_write() to
+// be called (with poll->connection_index as an
+// argument) when the connection can be
+// written to (asynchronously).
+//
+typedef void (*rmc_poll_add_cb_t)(user_data_t user_data,
+                                  int descriptor,
+                                  rmc_connection_index_t index,
+                                  rmc_poll_action_t initial_action);
+
+// The poll action either needs to be re-armed 
+// in cases where polling is oneshot (epoll(2) with EPOLLONESHOT),
+// or the poll action has changed.
+//
+// Rearming can be detected by checking if
+// old_action == rmc_connection_action(sock);
+//
+typedef void (*rmc_poll_modify_cb_t)(user_data_t user_data,
+                                     int descriptor,
+                                     rmc_connection_index_t index,
+                                     rmc_poll_action_t old_action,
+                                     rmc_poll_action_t new_action);
+
+
+
+// Callback to remove a connection previously added with poll_add().
+typedef void (*rmc_poll_remove_cb_t)(user_data_t user_data,
+                                     int descriptor,
+                                     rmc_connection_index_t index);
+
 typedef struct rmc_connection {
     // Index of owner rmc_connection_t struct in the master
     // rmc_context_t::connections[] array.
@@ -134,30 +174,62 @@ typedef struct rmc_connection {
 } rmc_connection_t;
 
 
-// A single context.
-typedef struct rmc_context {
-    pub_context_t pub_ctx;
-    sub_context_t sub_ctx;
-    int connection_count;
+// Maximum number of subscribers an rmc_pub_context_t can have.
+// Maximum number of 
+#define RMC_MAX_CONNECTIONS 16
+
+
+// A an array of connections with its own resource management.
+// Used both by rmc_pub_context_t and rmc_sub_context_t.
+//
+typedef struct rmc_connection_vector {
+    // Number of elements in connections.
+    uint32_t size;
+
+    // Number of elements in connections that are currently in usebr
+    uint32_t connection_count;
 
     // Top connection index currently in use.
     rmc_connection_index_t max_connection_ind;  
-    rmc_connection_t connections[RMC_MAX_CONNECTIONS]; //
+
+    // Array of connections.
+    // Memory provided by rmc_init_connection_vector().
+    rmc_connection_t *connections;
+
+    // user data to be provided to poll callbacks.
     user_data_t user_data;
 
-    in_addr_t mcast_if_addr; // In host format (little endian)
-    in_addr_t listen_if_addr; // In host format
+    // When we want to know if a connection can be written to or read from
+    rmc_poll_add_cb_t poll_add;
+
+    // We have changed the action bitmap.
+    rmc_poll_modify_cb_t poll_modify;
+    
+    // Callback when we don't need connection ready notifications.
+    rmc_poll_remove_cb_t poll_remove;
+} rmc_connection_vector_t;
+
+
+
+    
+// A publisher single context.
+typedef struct rmc_pub_context {
+    pub_context_t pub_ctx;
+
+    rmc_connection_vector_t conn_vec;
+
+    user_data_t user_data;
+
+    in_addr_t control_listen_if_addr; // In host format for control 
     in_addr_t mcast_group_addr; // In host format
     int mcast_port; // Must be same for all particants.
  
     // Must be different for each process on same machine.
     // Multiple contexts within a single program can share listen port
     // to do load distribution on incoming connections
-    int listen_port; 
+    int control_listen_port; 
 
-    int mcast_recv_descriptor;
     int mcast_send_descriptor;
-
     int listen_descriptor;
 
     
@@ -168,154 +240,198 @@ typedef struct rmc_context {
     // As a publisher, whendo we start re-sending packets via TCP
     // since they weren't acked when we sent them out via multicast
     uint32_t resend_timeout;
+    
+    // Callback to free memory for packets that has been
+    // successfully sent out.
+    void (*payload_free)(void* payload,
+                         payload_len_t payload_len,
+                         user_data_t user_data);
+
+
+} rmc_pub_context_t;
+
+// A single subscriber context
+typedef struct rmc_sub_context {
+    sub_context_t sub_ctx;
+
+    rmc_connection_vector_t conn_vec;
+
+    user_data_t user_data;
+
+    in_addr_t control_address; // Address of control channel
+    int control_port; 
+    in_addr_t mcast_if_addr; // In host format (little endian)
+    in_addr_t mcast_group_addr; // In host format
+    int mcast_port; // Must be same for all particants.
+ 
+    // Must be different for each process on same machine.
+    // Multiple contexts within a single program can share listen port
+    // to do load distribution on incoming connections
+
+    int mcast_recv_descriptor;
+
+    
+    // Randomly genrated context ID allowing us to recognize and drop
+    // looped back multicast messages.
+    rmc_context_id_t context_id; 
 
     // As a subscriber, how long can we sit on acknowledgements to be
     // sent back to the publisher before we pack them all up
     // and burst them back via tcp.
     uint32_t ack_timeout;
 
-    // When we want to know if a connection can be written to or read from
-    void (*poll_add)(struct rmc_context* context,
-                     int descriptor,
-                     rmc_connection_index_t index,
-                     rmc_poll_action_t initial_action);
-
-    // We have changed the action bitmap.
-    void (*poll_modify)(struct rmc_context* context,
-                        int descriptor,
-                        rmc_connection_index_t index,
-                        rmc_poll_action_t old_action,
-                        rmc_poll_action_t new_action);
-
-    // Callback when we don't need connection ready notifications.
-    void (*poll_remove)(struct rmc_context* context,
-                        int descriptor,
-                        rmc_connection_index_t index);
-
     
     // Called to alloc memory for incoming data.
     // that needs to be processed.
-    void* (*sub_payload_alloc)(payload_len_t payload_len,
+    void* (*payload_alloc)(payload_len_t payload_len,
                                user_data_t user_data);
 
-    // Callback to free memory for packets that has been
-    // successfully sent out.
-    void (*pub_payload_free)(void* payload,
-                             payload_len_t payload_len,
-                             user_data_t user_data);
+} rmc_sub_context_t;
 
-
-} rmc_context_t;
 
 
 // All functions return error codes from error
-extern int rmc_init_context(rmc_context_t* context,
-                            // Domain name or IP of multicast group to join.
-                            char* multicast_group_addr,  
+extern int rmc_pub_init_context(rmc_pub_context_t* context,
+                                // Used to avoid loopback dispatch of published packets
+                                rmc_context_id_t context_id,
+                                // Domain name or IP of multicast group to join.
+                                char* multicast_group_addr,  
+                                int multicast_port, 
 
-                            // IP address to listen to for incoming subscription
-                            // connection from subscribers receiving multicast packets
-                            // Default if 0 ptr: "0.0.0.0" (IFADDR_ANY)
-                            char* multicast_iface_addr, 
+                                // IP address to listen to for incoming subscription
+                                // connection from subscribers receiving multicast packets
+                                // Default if 0 ptr: "0.0.0.0" (IFADDR_ANY)
+                                char* control_listen_iface_addr, 
 
-                            // IP address to listen to for incoming subscription
-                            // connection from subscribers receiving multicast packets
-                            // Default if 0 ptr: "0.0.0.0" (IFADDR_ANY)
-                            char* listen_iface_addr, 
+                                int control_listen_port, 
 
-                            int multicast_port, 
+                                // User data that can be extracted with rmc_user_data(.                            
+                                // Typical application is for the poll and memory callbacks below
+                                // to tie back to its structure using the provided
+                                // pointer to the invoking rmc_context_t structure.
+                                user_data_t user_data,
 
-                            int listen_port, 
+                                // See typedef
+                                rmc_poll_add_cb_t poll_add,
 
-                            // User data that can be extracted with rmc_user_data(.                            
-                            // Typical application is for the poll and memory callbacks below
-                            // to tie back to its structure using the provided
-                            // pointer to the invoking rmc_context_t structure.
-                            user_data_t user_data,
+                                // See typedef
+                                rmc_poll_modify_cb_t poll_modify,
 
-                            // Called when a new connection is created by rmc.
-                            //
-                            // poll->action & RMC_POLLREAD
-                            // specifies that we want rmc_write() to
-                            // be called (with poll->connection_index as an
-                            // argument) when the connection can be
-                            // written to (asynchronously).
-                            //
-                            // poll->action & RMC_POLLWRITE
-                            // specifies that we want rmc_write() to
-                            // be called (with poll->connection_index as an
-                            // argument) when the connection can be
-                            // written to (asynchronously).
-                            //
-
-                            void (*poll_add)(struct rmc_context* context,
-                                             int descriptor,
-                                             rmc_connection_index_t index,
-                                             rmc_poll_action_t initial_action),
-                            
-                            // The poll action either needs to be re-armed 
-                            // in cases where polling is oneshot (epoll(2) with EPOLLONESHOT),
-                            // or the poll action has changed.
-                            //
-                            // Rearming can be detected by checking if
-                            // old_action == rmc_connection_action(sock);
-                            //
-                            void (*poll_modify)(struct rmc_context* context,
-                                                int descriptor,
-                                                rmc_connection_index_t index,
-                                                rmc_poll_action_t old_action,
-                                                rmc_poll_action_t new_action),
+                                // See typedef
+                                rmc_poll_remove_cb_t poll_remove,
 
 
+                                // Byte array of memory to be used for connections and their circular buffers.
+                                // Size should be a multiple of sizeof(rmc_connection_t).
+                                uint8_t* conn_vec,
 
-                            // Callback to remove a connection previously added with poll_add().
-                            void (*poll_remove)(struct rmc_context* context,
-                                                int descriptor,
-                                                rmc_connection_index_t index),
+                                // Number of elements available in conn_vec.
+                                uint32_t conn_vec_size, 
 
-
-
-
-                            // Callback to allocate payload memory used to store
-                            // incoming packages. Called via rmc_read() when
-                            // a new multicast or tcp payload packet is delivered.
-                            //
-                            // The allocated memory has to manually freed by the caller
-                            // after an rmc_packet_dispatched() has been called to
-                            // mark the packet as processed.
-                            //
-                            // If set to 0, malloc() will be used.
-                            void* (*sub_payload_alloc)(payload_len_t payload_len,
-                                                       user_data_t user_data),
-
-                            // Callback to previously allocated memory provided
-                            // by the caller of rmc_queue_packet().
-                            //
-                            // Invoked by rmc_read() when an ack has been collected
-                            // from all subscribers.
-                            //
-                            // If set 0, free() will be used.
-                            void (*pub_payload_free)(void* payload,
+                                // Callback to previously allocated memory provided
+                                // by the caller of rmc_queue_packet().
+                                //
+                                // Invoked by rmc_read() when an ack has been collected
+                                // from all subscribers.
+                                //
+                                // If set 0, free() will be used.
+                                void (*payload_free)(void* payload,
                                                      payload_len_t payload_len,
                                                      user_data_t user_data));
 
 
-extern int rmc_activate_context(rmc_context_t* context);
+// All functions return error codes from error
+extern int rmc_sub_init_context(rmc_sub_context_t* context,
 
-extern int rmc_deactivate_context(rmc_context_t* context);
+                                rmc_context_id_t context_id,
 
-extern int rmc_connect_subscription(rmc_context_t* context,
-                                    char* server_addr,
-                                    int server_port,
-                                    int* result_connection,
-                                    int* result_connection_index);
+                                // Domain name or IP of multicast group to join.
+                                char* multicast_group_addr,  
 
-extern int rmc_set_user_data(rmc_context_t* ctx, user_data_t user_data);
-extern user_data_t rmc_user_data(rmc_context_t* ctx);
-extern rmc_context_id_t rmc_context_id(rmc_context_t* ctx);
+                                // IP address to listen to for incoming subscription
+                                // connection from subscribers receiving multicast packets
+                                // Default if 0 ptr: "0.0.0.0" (IFADDR_ANY)
+                                char* multicast_iface_addr, 
+                                int multicast_port, 
 
-extern int rmc_get_next_timeout(rmc_context_t* context, usec_timestamp_t* result);
-extern int rmc_process_timeout(rmc_context_t* context);
+                                // IP address to listen to for incoming subscription
+                                // connection from subscribers receiving multicast packets
+                                // Default if 0 ptr: "0.0.0.0" (IFADDR_ANY)
+                                char* control_addr, 
+                                int control_port, 
+
+                                // User data that can be extracted with rmc_user_data(.                            
+                                // Typical application is for the poll and memory callbacks below
+                                // to tie back to its structure using the provided
+                                // pointer to the invoking rmc_context_t structure.
+                                user_data_t user_data,
+
+
+                                // See typedef
+                                rmc_poll_add_cb_t poll_add,
+
+                                // See typedef
+                                rmc_poll_modify_cb_t poll_modify,
+
+                                // See typedef
+                                rmc_poll_remove_cb_t poll_remove,
+
+                                // Byte array of memory to be used for connections and their circular buffers.
+                                // Size should be a multiple of sizeof(rmc_connection_t).
+                                uint8_t* conn_vec,
+
+                                // Number of elements available in conn_vec.
+                                uint32_t conn_vec_size, 
+
+                                // Callback to allocate payload memory used to store
+                                // incoming packages. Called via rmc_read() when
+                                // a new multicast or tcp payload packet is delivered.
+                                //
+                                // The allocated memory has to manually freed by the caller
+                                // after an rmc_packet_dispatched() has been called to
+                                // mark the packet as processed.
+                                //
+                                // If set to 0, malloc() will be used.
+                                void* (*payload_alloc)(payload_len_t payload_len,
+                                                       user_data_t user_data));
+
+
+
+extern int rmc_pub_activate_context(rmc_pub_context_t* context);
+extern int rmc_pub_deactivate_context(rmc_pub_context_t* context);
+extern int rmc_pub_set_user_data(rmc_pub_context_t* ctx, user_data_t user_data);
+extern user_data_t rmc_pub_user_data(rmc_pub_context_t* ctx);
+extern rmc_context_id_t rmc_pub_context_id(rmc_pub_context_t* ctx);
+extern int rmc_pub_get_next_timeout(rmc_pub_context_t* context, usec_timestamp_t* result);
+extern int rmc_pub_process_timeout(rmc_pub_context_t* context);
+extern int rmc_pub_read(rmc_pub_context_t* context, rmc_connection_index_t connection_index, uint8_t* op_res);
+extern int rmc_pub_write(rmc_pub_context_t* context, rmc_connection_index_t connection_index, uint8_t* op_res);
+extern int rmc_pub_timeout_get_next(rmc_pub_context_t* ctx, usec_timestamp_t* result);
+extern int rmc_pub_timeout_process(rmc_pub_context_t* ctx);
+
+extern int rmc_pub_queue_packet(rmc_pub_context_t* context, void* payload, payload_len_t payload_len);
+
+
+extern int rmc_sub_activate_context(rmc_sub_context_t* context);
+extern int rmc_sub_deactivate_context(rmc_sub_context_t* context);
+extern int rmc_sub_set_user_data(rmc_sub_context_t* ctx, user_data_t user_data);
+extern user_data_t rmc_sub_user_data(rmc_sub_context_t* ctx);
+extern rmc_context_id_t rmc_sub_context_id(rmc_sub_context_t* ctx);
+extern int rmc_sub_get_next_timeout(rmc_sub_context_t* context, usec_timestamp_t* result);
+extern int rmc_sub_process_timeout(rmc_sub_context_t* context);
+extern int rmc_sub_read(rmc_sub_context_t* context, rmc_connection_index_t connection_index, uint8_t* op_res);
+extern int rmc_sub_write(rmc_sub_context_t* context, rmc_connection_index_t connection_index, uint8_t* op_res);
+extern int rmc_sub_timeout_get_next(rmc_sub_context_t* ctx, usec_timestamp_t* result);
+extern int rmc_sub_timeout_process(rmc_sub_context_t* ctx);
+
+extern int rmc_sub_get_dispatch_ready_count(rmc_sub_context_t* context);
+extern sub_packet_t* rmc_sub_get_next_dispatch_ready(rmc_sub_context_t* context);
+extern int rmc_sub_packet_dispatched(rmc_sub_context_t* context, sub_packet_t* packet);
+
+// CALLER STILL HAS TO FREE pack->payload!
+extern int rmc_sub_packet_acknowledged(rmc_sub_context_t* context, sub_packet_t* packet);
+extern rmc_connection_index_t rmc_sub_packet_connection(sub_packet_t* packet);
+
 
 // If a valid pointer, res will be set to:
 
@@ -356,38 +472,42 @@ extern int rmc_process_timeout(rmc_context_t* context);
 // Data was sent on TCP connection.
 #define RMC_WRITE_TCP 10
  
-extern int rmc_read(rmc_context_t* context, rmc_connection_index_t connection_index, uint8_t* op_res);
-extern int rmc_write(rmc_context_t* context, rmc_connection_index_t connection_index, uint8_t* op_res);
-extern int rmc_queue_packet(rmc_context_t* context, void* payload, payload_len_t payload_len);
-extern int rmc_get_poll_size(rmc_context_t* context, int *result);
-extern int rmc_get_poll_vector(rmc_context_t* context, rmc_connection_t* result, int* len);
-extern int rmc_get_poll(rmc_context_t* context, int connection_index, rmc_connection_t* result);
-extern int rmc_get_dispatch_ready_count(rmc_context_t* context);
-extern sub_packet_t* rmc_get_next_dispatch_ready(rmc_context_t* context);
+extern void _rmc_conn_init_connection_vector(rmc_connection_vector_t* conn_vec,
+                                             uint8_t* buffer,
+                                             uint32_t element_count,
+                                             user_data_t user_data,
+                                             rmc_poll_add_cb_t poll_add,
+                                             rmc_poll_modify_cb_t poll_modify,
+                                             rmc_poll_remove_cb_t poll_remove);
+
+extern rmc_connection_t* _rmc_conn_find_by_index(rmc_connection_vector_t* conn_vec,
+                                                 rmc_connection_index_t index);
+
+extern rmc_connection_t* _rmc_conn_find_by_address(rmc_connection_vector_t* conn_vec,
+                                                   uint32_t remote_address,
+                                                   uint16_t remote_port);
+
+extern int _rmc_conn_process_accept(int listen_descriptor,
+                                    rmc_connection_vector_t* conn_vec,
+                                    rmc_connection_index_t* result_index);
+
+extern int rmc_conn_get_poll_size(rmc_connection_vector_t* conn_vec, int *result);
+extern int rmc_conn_get_poll_vector(rmc_connection_vector_t* conn_vec, rmc_connection_t* result, int* len);
+
+extern int _rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
+                                            in_addr_t address,
+                                            in_port_t port,
+                                            rmc_connection_index_t* result_index);
+
+extern int _rmc_conn_connect_tcp_by_host(rmc_connection_vector_t* conn_vec,
+                                         char* server_addr,
+                                         in_port_t port,
+                                         rmc_connection_index_t* result_index);
 
 
-// FIXME: MOVE TO INTERNAL HEADER FILE
-extern void rmc_reset_connection(rmc_connection_t*conn, int index);
+extern int _rmc_conn_close_connection(rmc_connection_vector_t* conn_vec,
+                                      rmc_connection_index_t s_ind);
 
-extern int rmc_connect_tcp_by_address(rmc_context_t* context,
-                                      in_addr_t address,
-                                      in_port_t port,
-                                      rmc_connection_index_t* result_index);
-
-extern int rmc_connect_tcp_by_host(rmc_context_t* context,
-                                   char* server_addr,
-                                   in_port_t port,
-                                   rmc_connection_index_t* result_index);
-
-extern int rmc_process_accept(rmc_context_t* context,
-                              rmc_connection_index_t* result_index);
-
-extern int rmc_close_connection(rmc_context_t* context, rmc_connection_index_t s_ind);
-extern int rmc_packet_dispatched(rmc_context_t* context, sub_packet_t* packet);
-
-// CALLER STILL HAS TO FREE pack->payload!
-extern int rmc_packet_acknowledged(rmc_context_t* context, sub_packet_t* packet);
-
-extern int rmc_complete_connect(rmc_context_t* context, rmc_connection_t*conn);
-extern rmc_connection_index_t rmc_sub_packet_connection(sub_packet_t* packet);
+extern int _rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
+                                         rmc_connection_t*conn);
 #endif // __RMC_PROTO_H__

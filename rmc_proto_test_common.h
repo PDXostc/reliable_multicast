@@ -23,14 +23,14 @@
 typedef struct {
     char* payload;
     packet_id_t pid;
+    // For subscribers, how long to wait until we put out an ack
+    // For publishers, how long to wait before we send out next packet.
     uint32_t msec_wait;
 } rmc_test_data_t;
 
 extern char* _index(rmc_connection_index_t index, char* res);
 
 
-extern int _descriptor(rmc_context_t* ctx,
-                       rmc_connection_index_t index);
 
 extern void* _test_proto_alloc(payload_len_t plen);
 
@@ -38,25 +38,22 @@ extern void test_proto_free(void* payload, payload_len_t plen);
 
 extern void _test(char* fmt_string, int major, int minor, int error);
 
-extern void poll_add(rmc_context_t* ctx,
+extern void poll_add(user_data_t user_data,
                      int descriptor,
                      rmc_connection_index_t index,
                      rmc_poll_action_t action);
 
-extern void poll_modify(rmc_context_t* ctx,
+extern void poll_modify(user_data_t user_data,
                         int descriptor,
                         rmc_connection_index_t index,
                         rmc_poll_action_t old_action,
                         rmc_poll_action_t new_action);
 
-extern void poll_remove(rmc_context_t* ctx,
+extern void poll_remove(user_data_t user_data,
                         int descriptor,
                         rmc_connection_index_t index);
 
-extern int process_packet(rmc_context_t* ctx, int major, int minor);
 
-extern void queue_test_data(rmc_context_t* ctx, rmc_test_data_t* td_arr);
 
-extern int process_events(rmc_context_t* ctx, int epollfd, usec_timestamp_t timeout, int major, int* index);
-
+extern char* _op_res_string(uint8_t res);
 #endif // __RMC_PROTO_TEST_COMMON_H__

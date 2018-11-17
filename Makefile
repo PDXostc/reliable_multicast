@@ -9,12 +9,17 @@ OBJ= interval.o \
 	time.o \
 	sub.o \
 	circular_buffer.o \
-	rmc_proto_packet.o \
-	rmc_proto_socket.o \
-	rmc_proto_read.o \
-	rmc_proto_write.o \
-	rmc_proto_timeout.o \
-	rmc_proto_ctx.o
+	rmc_connection.o \
+	rmc_sub_packet.o \
+	rmc_pub_packet.o \
+	rmc_sub_ctx.o \
+	rmc_pub_ctx.o \
+	rmc_sub_read.o \
+	rmc_pub_read.o \
+	rmc_sub_write.o \
+	rmc_pub_write.o \
+	rmc_pub_timeout.o \
+	rmc_sub_timeout.o 
 
 TEST_OBJ = interval_test.o \
 	rmc_proto_test_common.o \

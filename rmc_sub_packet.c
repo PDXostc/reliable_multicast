@@ -13,62 +13,21 @@
 #include <errno.h>
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <errno.h>
-#include <sys/uio.h>
-#include <sys/time.h>
-#include <sys/resource.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <assert.h>
 
 
-int rmc_queue_packet(rmc_context_t* ctx,
-                     void* payload,
-                     payload_len_t payload_len)
-{
-    pub_packet_t *pack;
 
-    if (!ctx || !payload || !payload_len)
-        return EINVAL;
-    
-    pack = pub_next_queued_packet(&ctx->pub_ctx);    
- 
-    // FIXME: Upper limit to how many packets we can queue before
-    //        returning ENOMEM
-    pub_queue_packet(&ctx->pub_ctx, payload, payload_len, user_data_ptr(ctx));
-
-    if (ctx->poll_modify)  {
-        // Did we already have a packet pending for send prior
-        // to queueing the lastest packet? If so, old action
-        // was POLLWRITE, if not, it was 0.
-        (*ctx->poll_modify)(ctx,
-                            ctx->mcast_send_descriptor,
-                            RMC_MULTICAST_SEND_INDEX,
-                            (pack?RMC_POLLWRITE:0),
-                            RMC_POLLWRITE);
-    }
-
-    return 0;
-}
-
-
-int rmc_get_dispatch_ready_count(rmc_context_t* ctx)
+int rmc_sub_get_dispatch_ready_count(rmc_sub_context_t* ctx)
 {
     return sub_get_dispatch_ready_count(&ctx->sub_ctx);
 }
 
-sub_packet_t* rmc_get_next_dispatch_ready(rmc_context_t* ctx)
+sub_packet_t* rmc_sub_get_next_dispatch_ready(rmc_sub_context_t* ctx)
 {
     return sub_get_next_dispatch_ready(&ctx->sub_ctx);
 }
 
 
-int rmc_packet_dispatched(rmc_context_t* ctx, sub_packet_t* pack)
+int rmc_sub_packet_dispatched(rmc_sub_context_t* ctx, sub_packet_t* pack)
 {
     rmc_connection_t* conn = sub_packet_user_data(pack).ptr;
     uint16_t old_action = 0;
@@ -88,7 +47,7 @@ int rmc_packet_dispatched(rmc_context_t* ctx, sub_packet_t* pack)
 
 
 // Queue the packet up for being acked by rmc_proto_timeout.c::_process_packet_ack_timeout()
-int rmc_packet_acknowledged(rmc_context_t* ctx, sub_packet_t* pack)
+int rmc_sub_packet_acknowledged(rmc_sub_context_t* ctx, sub_packet_t* pack)
 {
     rmc_connection_t* conn = 0;
 
