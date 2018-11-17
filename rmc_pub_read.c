@@ -37,7 +37,7 @@ static int _process_cmd_ack_single(rmc_pub_context_t* ctx, rmc_connection_t* con
     printf("Acking[%lu]\n", ack.packet_id);
 //    extern void test_print_pub_context(pub_context_t* ctx);
 //    test_print_pub_context(&ctx->pub_ctx);
-    pub_packet_ack(&conn->pubsub.subscriber,
+    pub_packet_ack(&ctx->subscribers[conn->connection_index],
                    ack.packet_id,
                    lambda(void, (void* payload, payload_len_t payload_len, user_data_t user_data) {
                            if (ctx->payload_free)
@@ -198,13 +198,20 @@ int rmc_pub_read(rmc_pub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* 
         return EINVAL;
 
     if (s_ind == RMC_LISTEN_INDEX)  {
-
+        rmc_connection_t* conn = 0;
         res = _rmc_conn_process_accept(ctx->listen_descriptor, &ctx->conn_vec, &s_ind);
 
-        if (res && op_res)
-            *op_res = RMC_ERROR;
+        if (res) {
+            if ( op_res)
+                *op_res = RMC_ERROR;
+            return res;
+        }
 
-        if (!res && op_res)
+        // Setup the subscriber struct
+        conn = _rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
+        assert(conn);
+        pub_init_subscriber(&ctx->subscribers[s_ind], &ctx->pub_ctx);
+        if (op_res)
             *op_res = RMC_READ_ACCEPT;
 
         return res;

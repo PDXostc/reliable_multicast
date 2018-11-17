@@ -148,29 +148,6 @@ typedef struct rmc_connection {
 
     in_port_t remote_port;    // In host format
     uint32_t remote_address;  // In host format
-
-    // Subscriber and publishers to to manage inflight packets for this connection.
-    // The union member to use is specified by the 'mode' member.
-    //
-    // 'subscriber' is used when the connection was accepted by _process_accept()
-    // and we take on the role as a publisher of packets.
-    // Added to rmc_context_t::pub_ctx in rmc_init_context() through a
-    // pub_init_subscriber() call.
-    // pub_subscriber_t::user_data of the subscriber points back to this
-    // struct.
-    //
-    // 'publisher' is used when we connected to a publisher in _process_multicast_read()
-    // as we receive a packet from a previously unknown sender (publisher) that
-    // we need to connect a TCP connection to in order to do ack and resend management.
-    // Added to rmc_context_t::sub_ctx in rmc_init_context() through a
-    // sub_init_publisher() call.
-    // sub_publisher_t::user_data of the subscriber points back to this
-    // struct.
-    //
-    union {
-        pub_subscriber_t subscriber;
-        sub_publisher_t publisher;
-    } pubsub;
 } rmc_connection_t;
 
 
@@ -210,13 +187,22 @@ typedef struct rmc_connection_vector {
 } rmc_connection_vector_t;
 
 
-
     
 // A publisher single context.
 typedef struct rmc_pub_context {
     pub_context_t pub_ctx;
 
     rmc_connection_vector_t conn_vec;
+
+    // Array of subscribers, maintained with the same index as conn_vec
+    //
+    // 'subscribers' are used when the connection in conn_vec with the
+    // same index was accepted by _process_accept() and we take on the
+    // role as a publisher of packets.  Added to
+    // rmc_pub_context_t::pub_ctx in rmc_init_context() through a
+    // pub_init_subscriber() call.  pub_subscriber_t::user_data of the
+    // subscriber points to the corresponding conn_vec struct
+    pub_subscriber_t *subscribers;
 
     user_data_t user_data;
 
@@ -255,6 +241,17 @@ typedef struct rmc_sub_context {
     sub_context_t sub_ctx;
 
     rmc_connection_vector_t conn_vec;
+
+    // Array of publishers maintained with the same index as conn_vec
+    // 'publishers' are used when we connected to a publisher in _process_multicast_read()
+    // as we receive a packet from a previously unknown sender (publisher) that
+    // we need to connect a TCP connection to in order to do ack and resend management.
+    // Added to rmc_context_t::sub_ctx in rmc_init_context() through a
+    // sub_init_publisher() call.
+    // sub_publisher_t::user_data of the subscriber points to the corresponding
+    // conn_vec struct.
+    //
+    sub_publisher_t* publishers;
 
     user_data_t user_data;
 

@@ -110,6 +110,8 @@ int rmc_sub_write(rmc_sub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t*
     if (conn->mode == RMC_CONNECTION_MODE_CONNECTING) {
         if (op_res)
             *op_res = RMC_COMPLETE_CONNECTION;
+
+        sub_init_publisher(&ctx->publishers[s_ind], &ctx->sub_ctx);
         _rmc_conn_complete_connection(&ctx->conn_vec, conn);
         return 0;
     }

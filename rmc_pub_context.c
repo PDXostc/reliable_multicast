@@ -109,6 +109,7 @@ int rmc_pub_init_context(rmc_pub_context_t* ctx,
     // outgoing_payload_free() is called to free the payload.
     pub_init_context(&ctx->pub_ctx);
 
+    ctx->subscribers = malloc(sizeof(pub_subscriber_t) * conn_vec_size);
     return 0;
 }
 

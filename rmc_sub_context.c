@@ -117,6 +117,8 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
 
     sub_init_context(&ctx->sub_ctx);
 
+    // FIXME: Better memory management
+    ctx->publishers = malloc(sizeof(sub_publisher_t) * conn_vec_size);
     return 0;
 }
 

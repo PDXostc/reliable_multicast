@@ -229,13 +229,6 @@ int rmc_pub_write(rmc_pub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t*
         return ENOTCONN;
     }
 
-    // Is this socket in the process of being connected
-    if (conn->mode == RMC_CONNECTION_MODE_CONNECTING) {
-        if (op_res)
-            *op_res = RMC_COMPLETE_CONNECTION;
-        _rmc_conn_complete_connection(&ctx->conn_vec, conn);
-        return 0;
-    }
 
     old_action = conn->action;
 

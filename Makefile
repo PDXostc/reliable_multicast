@@ -12,8 +12,8 @@ OBJ= interval.o \
 	rmc_connection.o \
 	rmc_sub_packet.o \
 	rmc_pub_packet.o \
-	rmc_sub_ctx.o \
-	rmc_pub_ctx.o \
+	rmc_sub_context.o \
+	rmc_pub_context.o \
 	rmc_sub_read.o \
 	rmc_pub_read.o \
 	rmc_sub_write.o \

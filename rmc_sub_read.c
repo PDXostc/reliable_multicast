@@ -35,7 +35,8 @@ static int _decode_multicast(rmc_sub_context_t* ctx,
 {
     payload_len_t len = (payload_len_t) packet_len;
     uint8_t* payload = 0;
-    sub_publisher_t* pub = &conn->pubsub.publisher;
+    sub_publisher_t* pub = &ctx->publishers[conn->connection_index];
+
     usec_timestamp_t now = rmc_usec_monotonic_timestamp();
 
     // Traverse the received datagram and extract all packets
