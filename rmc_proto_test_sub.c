@@ -121,6 +121,7 @@ static int process_events(rmc_sub_context_t* ctx, int epollfd, usec_timestamp_t 
 }
 
 
+
 void test_rmc_proto_sub(char* mcast_group_addr,
                         char* mcast_if_addr,
                         char* control_addr,
@@ -147,7 +148,8 @@ void test_rmc_proto_sub(char* mcast_group_addr,
         { "p1", 2, 0 },
         { "p2", 3, 0 },
         { "p3", 4, 0 },
-        { "p4", 5, 0 }
+        { "p4", 5, 0 },
+//        { "d1", 6, -1 } // Drop and expect tcp retransmit
     };
 
     signal(SIGHUP, SIG_IGN);

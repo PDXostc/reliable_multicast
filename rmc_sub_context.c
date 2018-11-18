@@ -195,7 +195,7 @@ int rmc_sub_activate_context(rmc_sub_context_t* ctx)
     if (ctx->conn_vec.poll_add) 
         (*ctx->conn_vec.poll_add)(ctx->user_data,
                                   ctx->mcast_recv_descriptor,
-                                  RMC_MULTICAST_RECV_INDEX,
+                                  RMC_MULTICAST_INDEX,
                                   RMC_POLLREAD);
 
     return 0;

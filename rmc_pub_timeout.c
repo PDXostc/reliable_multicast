@@ -33,7 +33,6 @@ static int _process_sent_packet_timeout(rmc_pub_context_t* ctx,
     uint8_t *seg2 = 0;
     uint32_t seg2_len = 0;
     int res = 0;
-    uint8_t cmd = RMC_CMD_PACKET;
     cmd_packet_header_t pack_cmd = {
         .pid = pack->pid,
         .payload_len = pack->payload_len
@@ -63,7 +62,7 @@ static int _process_sent_packet_timeout(rmc_pub_context_t* ctx,
                    &seg2, &seg2_len);
 
 
-    *seg1 = cmd;
+    *seg1 = RMC_CMD_PACKET;
 
     // Allocate memory for packet header
     circ_buf_alloc(&conn->write_buf, sizeof(pack_cmd) ,
@@ -81,8 +80,7 @@ static int _process_sent_packet_timeout(rmc_pub_context_t* ctx,
                    &seg1, &seg1_len,
                    &seg2, &seg2_len);
 
-
-    // Copy in packet header
+    // Copy in packet payload
     memcpy(seg1, pack->payload, seg1_len);
     if (seg2_len) 
         memcpy(seg2, ((uint8_t*) pack->payload) + seg1_len, seg2_len);

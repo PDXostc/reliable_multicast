@@ -7,11 +7,28 @@
 
 #include "rmc_proto_test_common.h"
 
+
+static uint8_t _test_print_pending(pub_packet_node_t* node, void* dt)
+{
+    pub_packet_t* pack = (pub_packet_t*) node->data;
+    int indent = (int) (uint64_t) dt;
+
+    printf("%*cPacket          %p\n", indent*2, ' ', pack);
+    printf("%*c  PID             %lu\n", indent*2, ' ', pack->pid);
+    printf("%*c  Sent timestamp  %ld\n", indent*2, ' ', pack->send_ts);
+    printf("%*c  Reference count %d\n", indent*2, ' ', pack->ref_count);
+    printf("%*c  Parent node     %p\n", indent*2, ' ', pack->parent_node);
+    printf("%*c  Payload Length  %d\n", indent*2, ' ', pack->payload_len);
+    printf("%*c  Payload         %s\n", indent*2, ' ', (char*) pack->payload);
+    putchar('\n');
+    return 1;
+}
+
 static int _descriptor(rmc_pub_context_t* ctx,
                        rmc_connection_index_t index)
 {
     switch(index) {
-    case RMC_MULTICAST_SEND_INDEX:
+    case RMC_MULTICAST_INDEX:
         return ctx->mcast_send_descriptor;
 
     case RMC_LISTEN_INDEX:
@@ -49,12 +66,11 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
         uint8_t op_res = 0;
         rmc_connection_index_t c_ind = events[nfds].data.u32;
 
-//        printf("pub_poll_wait(%s:%d)%s%s%s\n",
-//               _index(c_ind, buf), _descriptor(ctx, c_ind),
-//               ((events[nfds].events & EPOLLIN)?" read":""),
-//
-//               ((events[nfds].events & EPOLLOUT)?" write":""),
-//               ((events[nfds].events & EPOLLHUP)?" disconnect":""));
+        printf("pub_poll_wait(%s:%d)%s%s%s\n",
+               _index(c_ind, buf), _descriptor(ctx, c_ind),
+               ((events[nfds].events & EPOLLIN)?" read":""),
+               ((events[nfds].events & EPOLLOUT)?" write":""),
+               ((events[nfds].events & EPOLLHUP)?" disconnect":""));
 
         // Figure out what to do.
         if (events[nfds].events & EPOLLHUP) {
@@ -96,22 +112,6 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
     return 0;
 }
 
-
-static uint8_t _test_print_pending(pub_packet_node_t* node, void* dt)
-{
-    pub_packet_t* pack = (pub_packet_t*) node->data;
-    int indent = (int) (uint64_t) dt;
-
-    printf("%*cPacket          %p\n", indent*2, ' ', pack);
-    printf("%*c  PID             %lu\n", indent*2, ' ', pack->pid);
-    printf("%*c  Sent timestamp  %ld\n", indent*2, ' ', pack->send_ts);
-    printf("%*c  Reference count %d\n", indent*2, ' ', pack->ref_count);
-    printf("%*c  Parent node     %p\n", indent*2, ' ', pack->parent_node);
-    printf("%*c  Payload Length  %d\n", indent*2, ' ', pack->payload_len);
-    printf("%*c  Payload         %s\n", indent*2, ' ', (char*) pack->payload);
-    putchar('\n');
-    return 1;
-}
 
 void queue_test_data(rmc_pub_context_t* ctx, rmc_test_data_t* td)
 {

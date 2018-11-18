@@ -113,7 +113,7 @@ static int _process_multicast_write(rmc_pub_context_t* ctx)
         if (ctx->conn_vec.poll_modify) {
             (*ctx->conn_vec.poll_modify)(ctx->user_data,
                                          ctx->mcast_send_descriptor,
-                                         RMC_MULTICAST_SEND_INDEX,
+                                         RMC_MULTICAST_INDEX,
                                          RMC_POLLWRITE,
                                          RMC_POLLWRITE);
         }
@@ -136,7 +136,7 @@ static int _process_multicast_write(rmc_pub_context_t* ctx)
         // Do we have more packets to send?
         (*ctx->conn_vec.poll_modify)(ctx->user_data,
                             ctx->mcast_send_descriptor,
-                            RMC_MULTICAST_SEND_INDEX,
+                            RMC_MULTICAST_INDEX,
                             RMC_POLLWRITE,
                             pub_next_queued_packet(pctx)?RMC_POLLWRITE:0);
     }
@@ -155,7 +155,7 @@ int rmc_pub_write(rmc_pub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t*
     rmc_connection_t* conn = 0;
     assert(ctx);
 
-    if (s_ind == RMC_MULTICAST_SEND_INDEX) {
+    if (s_ind == RMC_MULTICAST_INDEX) {
         if (op_res)
             *op_res = RMC_WRITE_MULTICAST;
         return _process_multicast_write(ctx);

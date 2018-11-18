@@ -145,7 +145,7 @@ static int _process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
         if (ctx->conn_vec.poll_modify)
             (*ctx->conn_vec.poll_modify)(ctx->user_data,
                                          ctx->mcast_recv_descriptor,
-                                         RMC_MULTICAST_RECV_INDEX,
+                                         RMC_MULTICAST_INDEX,
                                          RMC_POLLREAD,
                                          RMC_POLLREAD);
         *read_res = RMC_READ_MULTICAST_LOOPBACK;
@@ -203,7 +203,7 @@ rearm:
     if (ctx->conn_vec.poll_modify)
         (*ctx->conn_vec.poll_modify)(ctx->user_data,
                                      ctx->mcast_recv_descriptor,
-                                     RMC_MULTICAST_RECV_INDEX,
+                                     RMC_MULTICAST_INDEX,
                                      RMC_POLLREAD,
                                      RMC_POLLREAD);
 
@@ -233,7 +233,7 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* 
     if (!op_res)
         op_res = &dummy_res;
 
-    if (s_ind == RMC_MULTICAST_RECV_INDEX) 
+    if (s_ind == RMC_MULTICAST_INDEX) 
         return _process_multicast_read(ctx, op_res);
 
     conn = _rmc_conn_find_by_index(&ctx->conn_vec, s_ind);

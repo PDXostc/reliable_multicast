@@ -23,9 +23,10 @@
 typedef struct {
     char* payload;
     packet_id_t pid;
-    // For subscribers, how long to wait until we put out an ack
+    // For subscribers, how long to wait until we put out an ack. -1 = drop packet
+    //
     // For publishers, how long to wait before we send out next packet.
-    uint32_t msec_wait;
+    usec_timestamp_t msec_wait; // usec.
 } rmc_test_data_t;
 
 extern char* _index(rmc_connection_index_t index, char* res);

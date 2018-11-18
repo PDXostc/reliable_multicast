@@ -176,8 +176,8 @@ int rmc_pub_activate_context(rmc_pub_context_t* ctx)
     if (ctx->conn_vec.poll_add) {
         (*ctx->conn_vec.poll_add)(ctx->user_data,
                                   ctx->mcast_send_descriptor,
-                                  RMC_MULTICAST_SEND_INDEX,
-                                  0);
+                                  RMC_MULTICAST_INDEX,
+                                  RMC_POLLREAD);
 
         (*ctx->conn_vec.poll_add)(ctx->user_data,
                                   ctx->listen_descriptor,

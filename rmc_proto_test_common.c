@@ -14,12 +14,8 @@
 char* _index(rmc_connection_index_t index, char* res)
 {
     switch(index) {
-    case RMC_MULTICAST_SEND_INDEX:
-        return strcpy(res, "mcast_send");
-
-    case RMC_MULTICAST_RECV_INDEX:
-        return strcpy(res, "mcast_recv");
-
+    case RMC_MULTICAST_INDEX:
+        return strcpy(res, "multicast");
 
     case RMC_LISTEN_INDEX:
         return strcpy(res, "listen");

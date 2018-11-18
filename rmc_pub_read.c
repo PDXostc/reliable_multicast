@@ -98,6 +98,38 @@ int rmc_pub_read(rmc_pub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* 
         return res;
     }
             
+    if (s_ind == RMC_MULTICAST_INDEX)  {
+        uint8_t throw_away; // Read only one byte of packet, rest will be discarded by kernel
+        struct sockaddr_in src_addr;
+        socklen_t addr_len = sizeof(src_addr);
+        ssize_t len = 0;
+
+        
+        if (ctx->mcast_send_descriptor == -1) {
+            *op_res = RMC_ERROR;
+            return ENOTCONN;
+        }
+
+        errno = 0;
+        len = recvfrom(ctx->mcast_send_descriptor,
+                       &throw_away, 1, 0,
+                       (struct sockaddr*) &src_addr, &addr_len);
+
+        if (len == -1) {
+            printf("rmc_pub_read(): recvfrom(MULTICAST): %s\n", strerror(errno));
+            *op_res = RMC_ERROR;
+            return errno;
+        }
+        printf("rmc_pub_read(): recvfrom(MULTICAST): Ignored loopback.\n");
+        if (ctx->conn_vec.poll_modify)
+            (*ctx->conn_vec.poll_modify)(ctx->user_data,
+                                         ctx->mcast_send_descriptor,
+                                         RMC_MULTICAST_INDEX,
+                                         RMC_POLLREAD,
+                                         RMC_POLLREAD);
+        return 0;
+    }
+
     conn = _rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
 
     if (!conn) {

@@ -37,7 +37,7 @@ int rmc_pub_queue_packet(rmc_pub_context_t* ctx,
         // was POLLWRITE, if not, it was 0.
         (*ctx->conn_vec.poll_modify)(ctx->user_data,
                                      ctx->mcast_send_descriptor,
-                                     RMC_MULTICAST_SEND_INDEX,
+                                     RMC_MULTICAST_INDEX,
                                      (pack?RMC_POLLWRITE:0),
                                      RMC_POLLWRITE);
     }
