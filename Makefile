@@ -10,6 +10,7 @@ OBJ= interval.o \
 	sub.o \
 	circular_buffer.o \
 	rmc_connection.o \
+	rmc_protocol.o \
 	rmc_sub_packet.o \
 	rmc_pub_packet.o \
 	rmc_sub_context.o \
@@ -35,7 +36,7 @@ HDR= rmc_common.h \
 	rmc_list_template.h \
 	rmc_pub.h \
 	interval.h \
-	rmc_proto.h \
+	reliable_multicast.h \
 	rmc_sub.h \
 	circular_buffer.h
 

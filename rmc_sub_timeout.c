@@ -8,7 +8,7 @@
 
 
 #define _GNU_SOURCE
-#include "rmc_proto.h"
+#include "reliable_multicast.h"
 #include <errno.h>
 #include <stdio.h>
 #include <sys/socket.h>

@@ -8,7 +8,7 @@
 #ifndef __RMC_PROTO_TEST_COMMON_H__
 #define __RMC_PROTO_TEST_COMMON_H__
 
-#include "rmc_proto.h"
+#include "reliable_multicast.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
