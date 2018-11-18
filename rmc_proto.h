@@ -458,7 +458,7 @@ extern rmc_connection_index_t rmc_sub_packet_connection(sub_packet_t* packet);
 
 // TCP was reset
 #define RMC_READ_DISCONNECT 7
-
+ 
 // Multicast packlet was written
 #define RMC_WRITE_MULTICAST 8
 
@@ -468,7 +468,14 @@ extern rmc_connection_index_t rmc_sub_packet_connection(sub_packet_t* packet);
 
 // Data was sent on TCP connection.
 #define RMC_WRITE_TCP 10
- 
+
+
+typedef struct rmc_conn_command_dispatch {
+    uint8_t command;
+    int (*dispatch)(rmc_connection_t* conn, user_data_t user_data);
+} rmc_conn_command_dispatch_t;
+
+
 extern void _rmc_conn_init_connection_vector(rmc_connection_vector_t* conn_vec,
                                              uint8_t* buffer,
                                              uint32_t element_count,
@@ -507,4 +514,19 @@ extern int _rmc_conn_close_connection(rmc_connection_vector_t* conn_vec,
 
 extern int _rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
                                          rmc_connection_t*conn);
+
+extern int _rmc_conn_process_tcp_write(rmc_connection_t* conn, uint32_t* bytes_left);
+
+extern int _rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
+                              rmc_connection_index_t s_ind,
+                              uint8_t* read_res,
+                              rmc_conn_command_dispatch_t* dispatch_table, // Terminated by a null dispatch entry
+                              user_data_t user_data);
+
+
+extern int _rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
+                                      rmc_connection_index_t s_ind,
+                                      uint8_t* read_res,
+                                      rmc_conn_command_dispatch_t* dispatch_table, // Terminated by a null dispatch entry
+                                      user_data_t user_data);
 #endif // __RMC_PROTO_H__

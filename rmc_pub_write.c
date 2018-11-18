@@ -144,57 +144,6 @@ static int _process_multicast_write(rmc_pub_context_t* ctx)
 }
 
 
-static int _process_tcp_write(rmc_pub_context_t* ctx, rmc_connection_t* conn, uint32_t* bytes_left)
-{
-    uint8_t *seg1 = 0;
-    uint32_t seg1_len = 0;
-    uint8_t *seg2 = 0;
-    uint32_t seg2_len = 0;
-    struct iovec iov[2];
-    ssize_t res = 0;
-
-
-    // Grab as much data as we can.
-    // The call will only return available
-    // data.
-    circ_buf_read_segment(&conn->write_buf,
-                          sizeof(conn->write_buf_data),
-                          &seg1, &seg1_len,
-                          &seg2, &seg2_len);
-
-    if (!seg1_len) {
-        *bytes_left = 0;
-        return ENODATA;
-    }
-    
-    // Setup a zero-copy scattered socket write
-    iov[0].iov_base = seg1;
-    iov[0].iov_len = seg1_len;
-    iov[1].iov_base = seg2;
-    iov[1].iov_len = seg2_len;
-
-    errno = 0;
-    res = writev(conn->descriptor, iov, seg2_len?2:1);
-
-    // How did that write go?
-    if (res == -1) { 
-        *bytes_left = circ_buf_in_use(&conn->write_buf);
-        return errno;
-    }
-
-    if (res == 0) { 
-        *bytes_left = circ_buf_in_use(&conn->write_buf);
-        return 0;
-    }
-
-    // We wrote a specific number of bytes, free those
-    // bytes from the circular buffer.
-    // At the same time grab number of bytes left to
-    // send from the buffer.,
-    circ_buf_free(&conn->write_buf, res, bytes_left);
-
-    return 0;
-}
 
 int rmc_pub_write(rmc_pub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* op_res)
 {
@@ -243,7 +192,7 @@ int rmc_pub_write(rmc_pub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t*
     if (op_res)
         *op_res = RMC_WRITE_TCP;
     
-    res = _process_tcp_write(ctx, conn, &bytes_left_after);
+    res = _rmc_conn_process_tcp_write(conn, &bytes_left_after);
     
     if (bytes_left_after == 0) 
         conn->action &= ~RMC_POLLWRITE;

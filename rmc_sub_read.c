@@ -211,152 +211,27 @@ rearm:
     return res;
 }
 
-static int _process_cmd_packet(rmc_sub_context_t* ctx, rmc_connection_t* conn, payload_len_t len)
+static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
 {
     return 0;
 }
 
-// Return EAGAIN if we have a partial command that needs to more data
-// to be processed.
-// EAGAIN can be returned if one or more commands have been executed
-// and it is the last command that is partial.
-///
-static int _process_tcp_read(rmc_sub_context_t* ctx,
-                             rmc_connection_index_t s_ind,
-                             uint8_t* read_res)
-{
-    rmc_connection_t* conn = _rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
-    uint32_t in_use = circ_buf_in_use(&conn->read_buf);
-    uint8_t command = 0;
-    int sock_err = 0;
-    socklen_t len = sizeof(sock_err);
-    int res;
-
-    assert(conn);
-    // Do we have a command byte?
-    if (in_use < 1) {
-        if (getsockopt(conn->descriptor,
-                       SOL_SOCKET,
-                       SO_ERROR,
-                       &sock_err,
-                       &len) == -1) {
-            printf("process_tcp_read(): getsockopt(): %s\n",
-                   strerror(errno));
-            sock_err = errno; // Save it.
-            _rmc_conn_close_connection(&ctx->conn_vec, conn->connection_index);
-            return sock_err;
-        }
-        printf("process_tcp_read(): getsockopt(ok): %s\n",
-               strerror(sock_err));
-        return sock_err;
-    }
-
-
-    // We have at least one byte available.
-    res = circ_buf_read(&conn->read_buf, &command, 1, 0);
-    circ_buf_free(&conn->read_buf, 1, &in_use);
-
-    if (res) {
-        if (read_res)
-            *read_res = RMC_ERROR;
-        return res;
-    }
-    
-    if (read_res)
-        *read_res = RMC_READ_TCP;
-    
-
-    while(1) {
-        switch(command) {
-        case RMC_CMD_PACKET:
-            if ((res = _process_cmd_packet(ctx, conn, in_use)) == EAGAIN) {
-                return 0;
-            }
-            break;
-
-
-        default:
-            // FIXME: Disconnect subscriber and report issue.
-            return EPROTO;
-        }
-
-        in_use = circ_buf_in_use(&conn->read_buf);
-
-        if (!in_use)
-            return 0;
-
-        // We are at the start of the next command.
-        // Read the command byte.
-        res = circ_buf_read(&conn->read_buf, &command, 1, 0);
-        if (res)
-            return res;
-
-        circ_buf_free(&conn->read_buf, 1, 0);
-    }
-
-    return 0;
-}
-
-
-static int _tcp_read(rmc_sub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* read_res)
-{
-    rmc_connection_t* conn = _rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
-    ssize_t res = 0;
-    uint8_t *seg1 = 0;
-    uint32_t seg1_len = 0;
-    uint8_t *seg2 = 0;
-    uint32_t seg2_len = 0;
-    struct iovec iov[2];
-    uint32_t available = circ_buf_available(&conn->read_buf);
-
-    // Grab as much data as we can.
-    // The call will only return available
-    // data.
-    circ_buf_alloc(&conn->read_buf,
-                   available,
-                   &seg1, &seg1_len,
-                   &seg2, &seg2_len);
-
-    if (!seg1_len) {
-        if (read_res)
-            *read_res = RMC_ERROR;
-        return ENOMEM;
-    }
-
-    // Setup a zero-copy scattered socket write
-    iov[0].iov_base = seg1;
-    iov[0].iov_len = seg1_len;
-    iov[1].iov_base = seg2;
-    iov[1].iov_len = seg2_len;
-    
-    res = readv(conn->descriptor, iov, 2);
-
-
-    if (res == -1 || res == 0) {
-        if (read_res)
-            *read_res = RMC_READ_DISCONNECT;
-
-        // Give back the memory.
-        circ_buf_trim(&conn->read_buf, available);
-        return EPIPE;
-    }
-    
-    // Trim the tail end of the allocated data to match the number of
-    // bytes read.
-    printf("circ_buf_alloc(): Got %d. Trimming to %ld\n", available, res);
-    circ_buf_trim(&conn->read_buf, res);
-
-    return _process_tcp_read(ctx, s_ind, read_res);
-    
-}
 
 int rmc_sub_read(rmc_sub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* op_res)
 {
     int res = 0;
+    uint8_t dummy_res = 0;
     rmc_connection_t* conn = 0;
+    static rmc_conn_command_dispatch_t dispatch_table[] = {
+        { .command = RMC_CMD_PACKET, .dispatch = _process_cmd_packet },
+        { .command = 0, .dispatch = 0 }
+    };
 
     if (!ctx)
         return EINVAL;
+
+    if (!op_res)
+        op_res = &dummy_res;
 
     if (s_ind == RMC_MULTICAST_RECV_INDEX) 
         return _process_multicast_read(ctx, op_res);
@@ -364,14 +239,13 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* 
     conn = _rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
 
     if (!conn) {
-        if (op_res) 
-            *op_res = RMC_ERROR;
+        *op_res = RMC_ERROR;
 
         return ENOTCONN;
     }
-    
 
-    res = _tcp_read(ctx, s_ind, op_res);
+    res = _rmc_conn_tcp_read(&ctx->conn_vec, s_ind, op_res,
+                             dispatch_table, user_data_ptr(ctx));
 
     if (res == EPIPE) {
         _rmc_conn_close_connection(&ctx->conn_vec, s_ind);
