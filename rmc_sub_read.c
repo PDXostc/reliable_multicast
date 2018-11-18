@@ -358,6 +358,9 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* 
     if (!ctx)
         return EINVAL;
 
+    if (s_ind == RMC_MULTICAST_RECV_INDEX) 
+        return _process_multicast_read(ctx, op_res);
+
     conn = _rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
 
     if (!conn) {
@@ -367,10 +370,6 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* 
         return ENOTCONN;
     }
     
-    if (s_ind == RMC_MULTICAST_RECV_INDEX) 
-        return _process_multicast_read(ctx, op_res);
-            
-            
 
     res = _tcp_read(ctx, s_ind, op_res);
 
