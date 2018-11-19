@@ -59,6 +59,7 @@ typedef struct pub_subscriber {
     // Contains pointers to pending_packet_t sent but not
     // acknowledged.
     pub_packet_list_t inflight;
+    user_data_t user_data;
 } pub_subscriber_t;
 
 RMC_LIST(pub_sub_list, pub_sub_node, pub_subscriber_t*)
@@ -104,7 +105,9 @@ typedef struct pub_context {
 //
 extern void pub_init_context(pub_context_t* ctx);
 
-extern void pub_init_subscriber(pub_subscriber_t* sub, pub_context_t* ctx);
+extern void pub_init_subscriber(pub_subscriber_t* sub,
+                                pub_context_t* ctx,
+                                user_data_t sub_user_data);
 
 // Payload will be freed by callback to (*pub_payload_free)() argument
 // of pub_packet_ack()
@@ -131,12 +134,14 @@ extern void pub_packet_ack(pub_subscriber_t* sub,
 // Collect all subscribers that have unacknowledged
 // packets older than or equal to max_age usecs.
 extern void pub_get_timed_out_subscribers(pub_context_t* ctx,
-                                          usec_timestamp_t timeout_ts,
+                                          usec_timestamp_t current_ts,     // as reported by rmc_usec_monotonic_timestamp().
+                                          usec_timestamp_t timeout_period, // Number of usecs until timeout
                                           pub_sub_list_t* result);
 
-extern void pub_get_timed_out_packets(pub_subscriber_t* sub,
-                                      usec_timestamp_t timeout_ts,
-                                      pub_packet_list_t* result);
+void pub_get_timed_out_packets(pub_subscriber_t* sub,
+                               usec_timestamp_t current_ts,     // as reported by rmc_usec_monotonic_timestamp().
+                               usec_timestamp_t timeout_period, // Number of usecs until timeout
+                               pub_packet_list_t* result);
 
 // Get the time when the oldest packet was sent that we still are waiting
 // for an acknowledgement on from the subscriber.
@@ -146,5 +151,6 @@ extern int pub_get_oldest_unackowledged_packet(pub_context_t* ctx,
 
 
 extern user_data_t pub_user_data(pub_context_t* ctx);
+extern user_data_t pub_subscriber_user_data(pub_subscriber_t* sub);
 
 #endif // __RMC_PUB_H__
