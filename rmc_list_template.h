@@ -215,14 +215,16 @@
             node->owner->tail = node->prev;                             \
                                                                         \
         node->owner->elem_count--;                                      \
+        node->owner = 0;                                                \
         return node;                                                    \
     }                                                                   \
                                                                         \
                                                                         \
     void LISTTYPE##_delete(NODETYPE* node)                              \
     {                                                                   \
+        LISTTYPE* owner = node->owner;                                  \
         LISTTYPE##_unlink(node);                                        \
-        (*node->owner->free_node)(node, node->owner->user_data);        \
+        (*owner->free_node)(node, owner->user_data);                    \
     }                                                                   \
                                                                         \
                                                                         \
