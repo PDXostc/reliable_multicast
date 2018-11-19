@@ -29,7 +29,7 @@ int rmc_pub_queue_packet(rmc_pub_context_t* ctx,
  
     // FIXME: Upper limit to how many packets we can queue before
     //        returning ENOMEM
-    pub_queue_packet(&ctx->pub_ctx, payload, payload_len, user_data_ptr(ctx));
+    pub_queue_packet(&ctx->pub_ctx, payload, payload_len, user_data_nil());
 
     if (ctx->conn_vec.poll_modify)  {
         // Did we already have a packet pending for send prior
