@@ -57,7 +57,7 @@ static void process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, rm
     }
 
     // Is this a magic packet sent by publisher to get us to exit?
-    if (strcmp((char*) pack->payload, "exit")) {
+    if (!strcmp((char*) pack->payload, "exit")) {
         printf("rmc_proto_test_sub[3.4] ind[%d] pid[%lu] Got Exit packet.\n",
                ind, pack->pid);
         puts("Done");
