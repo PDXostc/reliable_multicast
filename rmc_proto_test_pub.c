@@ -168,7 +168,10 @@ void test_rmc_proto_pub(char* mcast_group_addr,
         { "p1", 2, 0 },
         { "p3", 4, 0 },
         { "p2", 3, 0 },
-        { "p4", 5, 1000000 }, // Wait for 1 sec until exiting to process residual event.
+        { "p4", 5, 0 }, 
+        // Dropped packagte.
+        { "d1", 6, 300000 }, // Wait for 1 sec until exiting to process residual event.
+        { "exit", 7, 1000000 }, // Wait for 1 sec until exiting to process residual event.
     };
 
 
@@ -204,7 +207,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
 
     for(ind = 0; ind < sizeof(td) / sizeof(td[0]); ) {
         usec_timestamp_t now =  rmc_usec_monotonic_timestamp();
-        usec_timestamp_t tout =  now + td[ind].msec_wait;
+        usec_timestamp_t tout =  now + td[ind].wait;
         int tick_ind = 0;
 
         queue_test_data(ctx, &td[ind]);
