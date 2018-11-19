@@ -92,7 +92,7 @@ int rmc_pub_read(rmc_pub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* 
         // Setup the subscriber struct
         conn = _rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
         assert(conn);
-        pub_init_subscriber(&ctx->subscribers[s_ind], &ctx->pub_ctx);
+        pub_init_subscriber(&ctx->subscribers[s_ind], &ctx->pub_ctx, user_data_ptr(conn));
         *op_res = RMC_READ_ACCEPT;
 
         return res;
