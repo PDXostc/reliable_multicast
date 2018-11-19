@@ -23,8 +23,7 @@
 
 static int _process_sent_packet_timeout(rmc_pub_context_t* ctx,
                                         pub_subscriber_t* sub,
-                                        pub_packet_t* pack,
-                                        usec_timestamp_t timeout_ts)
+                                        pub_packet_t* pack)
 {
     // Send the packet via TCP.
     rmc_connection_t* conn = 0;
@@ -41,6 +40,8 @@ static int _process_sent_packet_timeout(rmc_pub_context_t* ctx,
     if (!ctx || !sub || !pack)
         return EINVAL;
 
+    conn = (rmc_connection_t*) pub_subscriber_user_data(sub).ptr;
+
     printf("process_sent_packet_timeout(): pid[%lu] mcast[%s:%d] listen[%s:%d]\n",
            pack->pid,
            inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }),
@@ -48,7 +49,6 @@ static int _process_sent_packet_timeout(rmc_pub_context_t* ctx,
            inet_ntoa( (struct in_addr) { .s_addr = htonl(conn->remote_address) }),
            ctx->control_listen_port);
     
-    conn = (rmc_connection_t*) pub_packet_user_data(pack).ptr;
     if (!conn || conn->mode != RMC_CONNECTION_MODE_PUBLISHER)
         return EINVAL;
         
@@ -101,7 +101,9 @@ static int _process_sent_packet_timeout(rmc_pub_context_t* ctx,
     return 0;
 }
 
-static int _process_subscriber_timeout(rmc_pub_context_t* ctx, pub_subscriber_t* sub, usec_timestamp_t timeout_ts)
+static int _process_subscriber_timeout(rmc_pub_context_t* ctx,
+                                       pub_subscriber_t* sub,
+                                       usec_timestamp_t current_ts)
 {
     pub_packet_list_t packets;
     pub_packet_t* pack = 0;
@@ -109,14 +111,14 @@ static int _process_subscriber_timeout(rmc_pub_context_t* ctx, pub_subscriber_t*
     int res = 0;
 
     pub_packet_list_init(&packets, 0, 0, 0);
-    pub_get_timed_out_packets(sub, timeout_ts, &packets);
+    pub_get_timed_out_packets(sub, current_ts, ctx->resend_timeout, &packets);
 
     // Traverse packets and send them for timeout. Start
     // with oldest packet first.
     while((pnode = pub_packet_list_tail(&packets))) {
         // Outbound circular buffer may be full.
         printf("Timed out packet: %lu\n", pnode->data->pid);
-        if ((res = _process_sent_packet_timeout(ctx, sub, pnode->data, timeout_ts)) != 0)
+        if ((res = _process_sent_packet_timeout(ctx, sub, pnode->data)) != 0)
             return res;
 
         // We were successful in queuing the packet transmission.
@@ -129,7 +131,7 @@ static int _process_subscriber_timeout(rmc_pub_context_t* ctx, pub_subscriber_t*
 
 int rmc_pub_timeout_process(rmc_pub_context_t* ctx)
 {
-    usec_timestamp_t ts = rmc_usec_monotonic_timestamp();
+    usec_timestamp_t now = rmc_usec_monotonic_timestamp();
     pub_sub_list_t subs;
     pub_subscriber_t* sub = 0;
     int res = 0;
@@ -138,10 +140,10 @@ int rmc_pub_timeout_process(rmc_pub_context_t* ctx)
         return EINVAL;
 
     pub_sub_list_init(&subs, 0, 0, 0);
-    pub_get_timed_out_subscribers(&ctx->pub_ctx, ts - ctx->resend_timeout, &subs);
+    pub_get_timed_out_subscribers(&ctx->pub_ctx, now, ctx->resend_timeout, &subs);
 
     while(pub_sub_list_pop_head(&subs, &sub)) {
-        res = _process_subscriber_timeout(ctx, sub, ts - ctx->resend_timeout);
+        res = _process_subscriber_timeout(ctx, sub, now);
 
         if (res) {
             // Clean up the list.
