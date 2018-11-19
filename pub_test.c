@@ -82,9 +82,9 @@ void test_pub(void)
     usec_timestamp_t ts = 0;
 
     pub_init_context(&ctx);
-    pub_init_subscriber(&sub1, &ctx);
-    pub_init_subscriber(&sub2, &ctx);
-    pub_init_subscriber(&sub3, &ctx);
+    pub_init_subscriber(&sub1, &ctx, user_data_nil());
+    pub_init_subscriber(&sub2, &ctx, user_data_nil());
+    pub_init_subscriber(&sub3, &ctx, user_data_nil());
 
     pub_queue_packet(&ctx, "1", 2, user_data_nil());
     pub_queue_packet(&ctx, "2", 2, user_data_nil());
@@ -475,7 +475,7 @@ void test_pub(void)
     // sub1 - 2,3,4
     // sub2 - 4
     pub_sub_list_init(&sub_lst, 0,0,0);
-    pub_get_timed_out_subscribers(&ctx, 4, &sub_lst);
+    pub_get_timed_out_subscribers(&ctx, 6, 2, &sub_lst);
 
     // sub1 and sub2 should be in the list
     if (pub_sub_list_size(&sub_lst) != 2) {
@@ -531,7 +531,7 @@ void test_pub(void)
     // Expected hits of subscribers:
     // sub1 - 2,3
     pub_sub_list_empty(&sub_lst);
-    pub_get_timed_out_subscribers(&ctx, 3, &sub_lst);
+    pub_get_timed_out_subscribers(&ctx, 6, 3, &sub_lst);
 
     // sub1 and sub2 should be in the list
     if (pub_sub_list_size(&sub_lst) != 1) {
