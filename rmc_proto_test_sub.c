@@ -7,36 +7,85 @@
 
 #include "rmc_proto_test_common.h"
 
+
+static uint8_t _test_print_pending(sub_packet_node_t* node, void* dt)
+{
+    sub_packet_t* pack = (sub_packet_t*) node->data;
+    int indent = (int) (uint64_t) dt;
+
+    printf("%*cPacket          %p\n", indent*2, ' ', pack);
+    printf("%*c  PID             %lu\n", indent*2, ' ', pack->pid);
+    printf("%*c  Parent node     %p\n", indent*2, ' ', pack->owner_node);
+    printf("%*c  Payload Length  %d\n", indent*2, ' ', pack->payload_len);
+    printf("%*c  Received time   %ld\n", indent*2, ' ', pack->received_ts);
+    putchar('\n');
+    return 1;
+}
+
+
+static int _descriptor(rmc_sub_context_t* ctx,
+                       rmc_connection_index_t index)
+{
+    switch(index) {
+    case RMC_MULTICAST_INDEX:
+        return ctx->mcast_recv_descriptor;
+
+    default:
+        return ctx->conn_vec.connections[index].descriptor;
+
+    }
+}
+
+
 static void process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, rmc_test_data_t* td, int ind)
 {
 
     _test("rmc_proto_test_sub[%d.%d] process_incoming_data(): %s", 3, 1, pack?0:ENODATA);
+
+    // Is PID as expected?
     if (pack->pid != td->pid) {
         printf("rmc_proto_test_sub[3.2] ind[%d] incoming pid[%lu] differs from expected pid [%lu]. payload[%s]\n",
                ind, pack->pid, td->pid, (char*) pack->payload);
         exit(255);
     }
 
+    // Is payload as expected?
     if (strcmp((char*) pack->payload, td->payload)) {
         printf("rmc_proto_test_sub[3.3] ind[%d] pid[%lu] incoming data[%s] differs from expected [%s]\n",
                ind, pack->pid, (char*) pack->payload, td->payload);
         exit(255);
     }
 
+    // Is this a magic packet sent by publisher to get us to exit?
+    if (strcmp((char*) pack->payload, "exit")) {
+        printf("rmc_proto_test_sub[3.4] ind[%d] pid[%lu] Got Exit packet.\n",
+               ind, pack->pid);
+        puts("Done");
+        exit(255);
+    }
+
+    // Do we need to drop the packet without acking it to the publisher?
+    if (td->wait == -1) {
+        printf("rmc_proto_test_sub:process_incoming_data() ind[%d] pid[%lu] payload[%s]: ok - Dropped according to test spec\n",
+               ind, pack->pid, (char*) pack->payload);
+
+        rmc_sub_packet_dispatched(ctx, pack);
+        rmc_sub_packet_acknowledged(ctx, pack);
+ //    sub_packet_list_for_each(&ctx->sub_ctx.ack_ready, _test_print_pending, 0);
+        return;
+    }
+
     printf("rmc_proto_test_sub:process_incoming_data() ind[%d] pid[%lu] payload[%s]: ok\n",
            ind, pack->pid, (char*) pack->payload);
     
-//    if (!strcmp(pack->payload, "exit")) {
-//        puts("Got exit trigger from publisher");
-//        // Get the final ack out
-//        rmc_packet_dispatched(ctx, pack);
-//        rmc_packet_acknowledged(ctx, pack);
-//        rmc_write(ctx, rmc_sub_packet_connection(pack), 0);
-//        exit(0);
-//    }
-        
     rmc_sub_packet_dispatched(ctx, pack);
-    rmc_sub_packet_acknowledged(ctx, pack);
+    
+    // We will still need to ack the packet through
+    // rmc_sub_timeout_process(), which will go through all dispatched
+    // packets and acknowledge them, but we will not need the payload
+    // anymore.
+    // Memory was originally allocated via the lambda payload alloc function
+    // provided as an argument to rmc_sub_init_context() below.
     free(pack->payload);
 }
 
@@ -76,7 +125,6 @@ static int process_events(rmc_sub_context_t* ctx, int epollfd, usec_timestamp_t 
 //        printf("poll_wait(%s:%d)%s%s%s\n",
 //               _index(c_ind, buf), _descriptor(ctx, c_ind),
 //               ((events[nfds].events & EPOLLIN)?" read":""),
-//
 //               ((events[nfds].events & EPOLLOUT)?" write":""),
 //               ((events[nfds].events & EPOLLHUP)?" disconnect":""));
 
@@ -110,10 +158,7 @@ static int process_events(rmc_sub_context_t* ctx, int epollfd, usec_timestamp_t 
                   major, 10,
                   rmc_sub_write(ctx, c_ind, &op_res));
 
-            printf("op_res: %s\n", _op_res_string(op_res));
-
-            if (op_res == RMC_WRITE_MULTICAST)
-                *tick_ind = 1;
+            printf("EPOLLOUT: op_res: %s\n", _op_res_string(op_res));
         }
     }
 
@@ -140,6 +185,7 @@ void test_rmc_proto_sub(char* mcast_group_addr,
     int mode = 0;
     int ind = 0;
     usec_timestamp_t t_out = 0;
+    usec_timestamp_t exit_ts = 0;
     uint8_t *conn_vec_mem = 0;
 
     static rmc_test_data_t td[] = {
@@ -149,10 +195,11 @@ void test_rmc_proto_sub(char* mcast_group_addr,
         { "p2", 3, 0 },
         { "p3", 4, 0 },
         { "p4", 5, 0 },
-//        { "d1", 6, -1 } // Drop and expect tcp retransmit
+        { "d1", 6, -1 } // Drop and expect tcp retransmit
     };
 
     signal(SIGHUP, SIG_IGN);
+
 
     epollfd = epoll_create1(0);
 
@@ -175,7 +222,7 @@ void test_rmc_proto_sub(char* mcast_group_addr,
                          (user_data_t) { .i32 = epollfd },
                          poll_add, poll_modify, poll_remove,
                          conn_vec_mem, RMC_MAX_CONNECTIONS,
-                         lambda(void*, (payload_len_t len, user_data_t dt) { malloc(len);}));
+                         lambda(void*, (payload_len_t len, user_data_t dt) { malloc(len); }));
 
     _test("rmc_proto_test_sub[%d.%d] activate_context(): %s",
           1, 1,
@@ -203,15 +250,15 @@ void test_rmc_proto_sub(char* mcast_group_addr,
         }
     }
         
-    // Process timed out acks that need to be sent.
-    rmc_sub_timeout_get_next(ctx, &t_out);
 
-    while(t_out != -1) {
+    while(1) {
         int tick_ind = 0;
-        if (process_events(ctx, epollfd, t_out, 2, &tick_ind) == ETIME)
-            rmc_sub_timeout_process(ctx);
 
         rmc_sub_timeout_get_next(ctx, &t_out);
+        if (process_events(ctx, epollfd, t_out, 2, &tick_ind) == ETIME) {
+            rmc_sub_timeout_process(ctx);
+        }
+
     }
 
     puts("Done");
