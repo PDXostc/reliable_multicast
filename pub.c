@@ -53,13 +53,14 @@ void pub_init_context(pub_context_t* ctx)
 }
 
 
-void pub_init_subscriber(pub_subscriber_t* sub, pub_context_t* ctx)
+void pub_init_subscriber(pub_subscriber_t* sub, pub_context_t* ctx, user_data_t sub_user_data)
 {
 
     assert(sub);
     assert(ctx);
 
     sub->context = ctx;
+    sub->user_data = sub_user_data;
     pub_packet_list_init(&sub->inflight, 0, 0, 0);
     pub_sub_list_push_tail(&ctx->subscribers, sub);
 }
@@ -239,16 +240,17 @@ void pub_packet_ack(pub_subscriber_t* sub,
 
 
 void pub_get_timed_out_subscribers(pub_context_t* ctx,
-                                   usec_timestamp_t timeout_ts,
+                                   usec_timestamp_t current_ts,
+                                   usec_timestamp_t timeout_period, // Number of usecs until timeout
                                    pub_sub_list_t* result)
 {
     // Traverse all subscribers.
     pub_sub_list_for_each(&ctx->subscribers,
                           // For each subscriber, check if their oldest inflight packet has a sent_ts
-                          // timestamp older than max_age. If so, add it to result.
+                          // timestamp older than max_age. If so, add the subscriber to result.
                           lambda(uint8_t, (pub_sub_node_t* sub_node, void* udata) {
                                   if (pub_packet_list_size(&sub_node->data->inflight) &&
-                                      pub_packet_list_tail(&sub_node->data->inflight)->data->send_ts <= timeout_ts)
+                                      pub_packet_list_tail(&sub_node->data->inflight)->data->send_ts + timeout_period <= current_ts)
                                       pub_sub_list_push_tail(result, sub_node->data);
                                   return 1;
                               }), 0);
@@ -257,7 +259,8 @@ void pub_get_timed_out_subscribers(pub_context_t* ctx,
 
 
 void pub_get_timed_out_packets(pub_subscriber_t* sub,
-                               usec_timestamp_t timeout_ts,
+                               usec_timestamp_t current_ts,
+                               usec_timestamp_t timeout_period, // Number of usecs until timeout
                                pub_packet_list_t* result)
 {
     // Traverse all inflight packets for subscriber until we find one that is not timed out.x
@@ -265,11 +268,12 @@ void pub_get_timed_out_packets(pub_subscriber_t* sub,
                                  // For each packet, check if their oldest inflight packet has a sent_ts
                                  // timestamp older than max_age. If so, add it to result.
                                  lambda(uint8_t, (pub_packet_node_t* pnode, void* udata) {
-                                         if (pnode->data->send_ts <= timeout_ts)
+                                         if (pnode->data->send_ts + timeout_period <= current_ts) {
                                              pub_packet_list_push_tail(result, pnode->data);
-                                         return 1;
+                                             return 1;
+                                         }
+                                         return 0;
                                      }), 0);
-
 }
 
 
@@ -306,4 +310,9 @@ int pub_get_oldest_unackowledged_packet(pub_context_t* ctx, usec_timestamp_t* ti
 user_data_t pub_packet_user_data(pub_packet_t* ppack)
 {
     return ppack?ppack->pkg_user_data:user_data_nil();
+}
+
+user_data_t pub_subscriber_user_data(pub_subscriber_t* sub)
+{
+    return sub?sub->user_data:user_data_nil();
 }
