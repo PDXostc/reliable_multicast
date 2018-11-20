@@ -42,18 +42,16 @@ static int _process_cmd_ack_single(rmc_connection_t* conn, user_data_t user_data
     printf("Acking[%lu]\n", ack.packet_id);
 
 //    extern void test_print_pub_context(pub_context_t* ctx);
+//    puts("\nBEFORE");
 //    test_print_pub_context(&ctx->pub_ctx);
 
-    // Acknowledge the packet, and call the payload free function
-    // provided to rmc_pub_init_context().
-    pub_packet_ack(&ctx->subscribers[conn->connection_index],
-                   ack.packet_id,
-                   lambda(void, (void* payload, payload_len_t payload_len, user_data_t user_data) {
-                           if (ctx->payload_free)
-                               (*ctx->payload_free)(payload, payload_len, user_data);
-                           else
-                               free(payload);
-                       }));
+    // Mark the packet as acknwoledged, and call the payload free function
+    // provided to rmc_pub_init_context(). If no function is
+    // provided, free() will bre called.
+    rmc_pub_packet_ack(ctx, conn, ack.packet_id) ;
+//    puts("\nAFTER");
+//    test_print_pub_context(&ctx->pub_ctx);
+
     return 0;
 }
 
