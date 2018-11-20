@@ -212,11 +212,12 @@ void pub_packet_ack(pub_subscriber_t* sub,
         exit(255); // TOOD: Handle at calling level.
     }
 
-    // Delete from subscriber's inflight packets
-    pub_packet_list_unlink(node);
-
     // Decrease ref counter
     ppack = node->data;
+
+    // Delete from subscriber's inflight packets
+    pub_packet_list_delete(node);
+
     ppack->ref_count--;
 
     // If ref_count is zero, then all subscribers have acked the
