@@ -60,6 +60,10 @@ static void process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, rm
     if (!strcmp((char*) pack->payload, "exit")) {
         printf("rmc_proto_test_sub[3.4] ind[%d] pid[%lu] Got Exit packet.\n",
                ind, pack->pid);
+    
+        rmc_sub_packet_dispatched(ctx, pack);
+        free(pack->payload);
+        rmc_sub_packet_acknowledged(ctx, pack);
         puts("Done");
         exit(255);
     }
@@ -70,6 +74,7 @@ static void process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, rm
                ind, pack->pid, (char*) pack->payload);
 
         rmc_sub_packet_dispatched(ctx, pack);
+        free(pack->payload);
         rmc_sub_packet_acknowledged(ctx, pack);
  //    sub_packet_list_for_each(&ctx->sub_ctx.ack_ready, _test_print_pending, 0);
         return;
