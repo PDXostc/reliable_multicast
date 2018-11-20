@@ -48,7 +48,7 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
 
     *tick_ind = 0;
 
-    nfds = epoll_wait(epollfd, events, RMC_MAX_CONNECTIONS, (timeout == -1)?-1:(timeout / 1000));
+    nfds = epoll_wait(epollfd, events, RMC_MAX_CONNECTIONS, (timeout == -1)?-1:((timeout / 1000) + 1));
     if (nfds == -1) {
         perror("epoll_wait");
         exit(255);
@@ -57,9 +57,6 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
     // Timeout
     if (nfds == 0) 
         return ETIME;
-
-
-    // printf("poll_wait(): %d results\n", nfds);
 
     while(nfds--) {
         int res = 0;
@@ -211,6 +208,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
         int tick_ind = 0;
 
         queue_test_data(ctx, &td[ind]);
+        printf("rmc_proto_test_pub: queue_test_data(%ld)\n", td[ind].pid);
 
         // Make sure we run the loop at least one.
         if (now > tout)
@@ -224,7 +222,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
 
             if (event_tout == -1 || event_tout > tout - now)
                 event_tout = tout - now;
-            
+
             if ((res = process_events(ctx, epollfd, event_tout, 2, &tick_ind)) == ETIME) 
                 rmc_pub_timeout_process(ctx);
 
