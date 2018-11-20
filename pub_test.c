@@ -582,7 +582,14 @@ void test_pub(void)
         exit(255);
         
     }
+    pub_packet_ack(&sub1, 2, 0);
+    pub_packet_ack(&sub1, 3, 0);
+    pub_packet_ack(&sub1, 4, 0);
+    pub_packet_ack(&sub1, 5, 0);
+    pub_packet_ack(&sub1, 6, 0);
 
-            
+    pub_packet_ack(&sub2, 4, 0);
+    pub_packet_ack(&sub2, 5, 0);
+    pub_packet_ack(&sub2, 6, 0);
 }
 
