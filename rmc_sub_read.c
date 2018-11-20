@@ -213,6 +213,18 @@ rearm:
 
 static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
 {
+    cmd_packet_header_t pack_hdr;
+    uint8_t buffer[RMC_MAX_PAYLOAD];
+    
+    circ_buf_read(&conn->read_buf, (uint8_t*) &pack_hdr, sizeof(pack_hdr), 0);
+    circ_buf_free(&conn->read_buf, sizeof(pack_hdr), 0);
+
+    printf("_process_cmd_packet(): pid         [%lu]\n", pack_hdr.pid);
+    printf("_process_cmd_packet(): payload_len [%d]\n", pack_hdr.payload_len);
+    
+    circ_buf_read(&conn->read_buf,  buffer, pack_hdr.payload_len, 0);
+    circ_buf_free(&conn->read_buf, pack_hdr.payload_len, 0);
+
     return 0;
 }
 
