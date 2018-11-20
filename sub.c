@@ -227,7 +227,7 @@ void sub_init_publisher(sub_publisher_t* pub, sub_context_t* ctx)
 
 
 void sub_remove_publisher(sub_publisher_t* pub,
-                          void (*free_payload_cb)(void*, payload_len_t, user_data_t))
+                          void (*payload_free_cb)(void*, payload_len_t, user_data_t))
 {
     sub_context_t* ctx = 0;
     sub_publisher_node_t* pub_node = 0;
@@ -250,8 +250,8 @@ void sub_remove_publisher(sub_publisher_t* pub,
     // Go through all received packets and wipe them.
     // Do a callback to free the payload, if specified.
     while(sub_packet_list_pop_head(&pub->received, &pack)) {
-        if (free_payload_cb)
-            (*free_payload_cb)(pack->payload, pack->payload_len, pack->pkg_user_data);
+        if (payload_free_cb)
+            (*payload_free_cb)(pack->payload, pack->payload_len, pack->pkg_user_data);
         _free_pending_packet(pack);
     }
 
