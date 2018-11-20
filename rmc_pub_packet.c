@@ -46,3 +46,16 @@ int rmc_pub_queue_packet(rmc_pub_context_t* ctx,
 }
 
 
+int rmc_pub_packet_ack(rmc_pub_context_t* ctx, rmc_connection_t* conn, packet_id_t pid)
+{
+    pub_packet_ack(&ctx->subscribers[conn->connection_index],
+                   pid, 
+                   lambda(void, (void* payload, payload_len_t payload_len, user_data_t user_data) {
+                           if (ctx->payload_free)
+                               (*ctx->payload_free)(payload, payload_len, user_data);
+                           else
+                               free(payload);
+                       }));
+    return 0;
+}
+

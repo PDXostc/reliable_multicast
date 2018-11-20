@@ -125,9 +125,10 @@ static int _process_multicast_write(rmc_pub_context_t* ctx)
     // Mark all packages in the multicast packet we just
     // sent in the multicast message as sent.
     // pub_packet_sent will call free_o
-    while(pub_packet_list_pop_head(&snd_list, &pack)) 
+    while(pub_packet_list_pop_tail(&snd_list, &pack))  {
+        printf("pid[%lu] sent\n", pack->pid);
         pub_packet_sent(pctx, pack, ts);
-
+    }
 
 //    extern void test_print_pub_context(pub_context_t* ctx);
 //    test_print_pub_context(&ctx->pub_ctx);
@@ -143,6 +144,68 @@ static int _process_multicast_write(rmc_pub_context_t* ctx)
     return 0;
 }
 
+int _rmc_pub_resend_packet(rmc_pub_context_t* ctx,
+                           rmc_connection_t* conn,
+                           pub_packet_t* pack)
+{
+    uint8_t *seg1 = 0;
+    uint32_t seg1_len = 0;
+    uint8_t *seg2 = 0;
+    uint32_t seg2_len = 0;
+    int res = 0;
+    cmd_packet_header_t pack_cmd = {
+        .pid = pack->pid,
+        .payload_len = pack->payload_len
+    };
+
+    // Do we have enough circular buffer meomory available?
+    if (circ_buf_available(&conn->write_buf) < 1 + sizeof(pack) + pack->payload_len)
+        return ENOMEM;
+    
+    // Allocate memory for command
+    circ_buf_alloc(&conn->write_buf, 1,
+                   &seg1, &seg1_len,
+                   &seg2, &seg2_len);
+
+
+    *seg1 = RMC_CMD_PACKET;
+
+    // Allocate memory for packet header
+    circ_buf_alloc(&conn->write_buf, sizeof(pack_cmd) ,
+                   &seg1, &seg1_len,
+                   &seg2, &seg2_len);
+
+
+    // Copy in packet header
+    memcpy(seg1, (uint8_t*) &pack_cmd, seg1_len);
+    if (seg2_len) 
+        memcpy(seg2, ((uint8_t*) &pack_cmd) + seg1_len, seg2_len);
+
+    // Allocate packet payload
+    circ_buf_alloc(&conn->write_buf, pack->payload_len,
+                   &seg1, &seg1_len,
+                   &seg2, &seg2_len);
+
+    // Copy in packet payload
+    memcpy(seg1, pack->payload, seg1_len);
+    if (seg2_len) 
+        memcpy(seg2, ((uint8_t*) pack->payload) + seg1_len, seg2_len);
+
+    // Setup the poll write action
+    if (!(conn->action & RMC_POLLWRITE)) {
+        rmc_poll_action_t old_action = conn->action;
+
+        conn->action |= RMC_POLLWRITE;
+        if (ctx->conn_vec.poll_modify)
+            (*ctx->conn_vec.poll_modify)(ctx->user_data,
+                                         conn->descriptor,
+                                         conn->connection_index,
+                                         old_action,
+                                         conn->action);
+    }    
+    
+    return 0;
+}    
 
 
 int rmc_pub_write(rmc_pub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* op_res)

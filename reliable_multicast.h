@@ -406,6 +406,7 @@ extern int rmc_pub_timeout_get_next(rmc_pub_context_t* ctx, usec_timestamp_t* re
 extern int rmc_pub_timeout_process(rmc_pub_context_t* ctx);
 
 extern int rmc_pub_queue_packet(rmc_pub_context_t* context, void* payload, payload_len_t payload_len);
+extern int rmc_pub_packet_ack(rmc_pub_context_t* ctx, rmc_connection_t* conn, packet_id_t pid);
 
 
 extern int rmc_sub_activate_context(rmc_sub_context_t* context);
@@ -416,6 +417,8 @@ extern rmc_context_id_t rmc_sub_context_id(rmc_sub_context_t* ctx);
 extern int rmc_sub_get_next_timeout(rmc_sub_context_t* context, usec_timestamp_t* result);
 extern int rmc_sub_process_timeout(rmc_sub_context_t* context);
 extern int rmc_sub_read(rmc_sub_context_t* context, rmc_connection_index_t connection_index, uint8_t* op_res);
+extern int _rmc_sub_write_acknowledgement(rmc_sub_context_t* ctx, sub_packet_t* pack);
+
 extern int rmc_sub_write(rmc_sub_context_t* context, rmc_connection_index_t connection_index, uint8_t* op_res);
 extern int rmc_sub_timeout_get_next(rmc_sub_context_t* ctx, usec_timestamp_t* result);
 extern int rmc_sub_timeout_process(rmc_sub_context_t* ctx);
@@ -515,6 +518,10 @@ extern int _rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
                                          rmc_connection_t*conn);
 
 extern int _rmc_conn_process_tcp_write(rmc_connection_t* conn, uint32_t* bytes_left);
+
+extern int _rmc_pub_resend_packet(rmc_pub_context_t* ctx,
+                                  rmc_connection_t* conn,
+                                  pub_packet_t* pack);
 
 extern int _rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
                               rmc_connection_index_t s_ind,
