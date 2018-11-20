@@ -35,6 +35,68 @@
 // =============
 
 
+int _rmc_sub_write_acknowledgement(rmc_sub_context_t* ctx, sub_packet_t* pack)
+{
+        ssize_t res = 0;
+        uint8_t *seg1 = 0;
+        uint32_t seg1_len = 0;
+        uint8_t *seg2 = 0;
+        uint32_t seg2_len = 0;
+        cmd_ack_single_t ack = {
+            .packet_id = pack->pid
+        };
+        uint32_t available = 0;
+        uint32_t old_in_use = 0;
+        rmc_poll_action_t old_action = 0;
+        rmc_connection_t* conn = 0;
+
+
+        conn = sub_packet_user_data(pack).ptr;
+
+        if (!conn || conn->mode != RMC_CONNECTION_MODE_SUBSCRIBER)
+            return ENOTCONN;
+
+        available = circ_buf_available(&conn->write_buf);
+        old_in_use = circ_buf_in_use(&conn->write_buf);
+        old_action = conn->action;
+
+        printf("_rmc_sub_write_acknowledgement(): pid[%lu] mcast[%s:%d] listen[%s:%d]\n",
+               pack->pid,
+               inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }),
+               ctx->mcast_port,
+               inet_ntoa( (struct in_addr) { .s_addr = htonl(conn->remote_address) }),
+               conn->remote_port);
+
+        // Allocate memory for command
+        circ_buf_alloc(&conn->write_buf, 1,
+                       &seg1, &seg1_len,
+                       &seg2, &seg2_len);
+
+
+        *seg1 = RMC_CMD_ACK_SINGLE;
+
+        // Allocate memory for packet header
+        circ_buf_alloc(&conn->write_buf, sizeof(ack) ,
+                       &seg1, &seg1_len,
+                       &seg2, &seg2_len);
+
+        // Copy in packet header
+        memcpy(seg1, (uint8_t*) &ack, seg1_len);
+        if (seg2_len) 
+            memcpy(seg2, ((uint8_t*) &ack) + seg1_len, seg2_len);
+
+
+        // We always want to read from the tcp  socket.
+        conn->action |= RMC_POLLWRITE;
+
+        if (ctx->conn_vec.poll_modify)
+            (*ctx->conn_vec.poll_modify)(ctx->user_data,
+                                         conn->descriptor,
+                                         conn->connection_index,
+                                         old_action,
+                                         conn->action);
+}
+
 int rmc_sub_write(rmc_sub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* op_res)
 {
     int res = 0;
