@@ -27,15 +27,7 @@ static int _process_sent_packet_timeout(rmc_pub_context_t* ctx,
 {
     // Send the packet via TCP.
     rmc_connection_t* conn = 0;
-    uint8_t *seg1 = 0;
-    uint32_t seg1_len = 0;
-    uint8_t *seg2 = 0;
-    uint32_t seg2_len = 0;
     int res = 0;
-    cmd_packet_header_t pack_cmd = {
-        .pid = pack->pid,
-        .payload_len = pack->payload_len
-    };
     
     if (!ctx || !sub || !pack)
         return EINVAL;
@@ -52,54 +44,11 @@ static int _process_sent_packet_timeout(rmc_pub_context_t* ctx,
     if (!conn || conn->mode != RMC_CONNECTION_MODE_PUBLISHER)
         return EINVAL;
         
-    // Do we have enough circular buffer meomory available?
-    if (circ_buf_available(&conn->write_buf) < 1 + sizeof(pack) + pack->payload_len)
-        return ENOMEM;
-    
-    // Allocate memory for command
-    circ_buf_alloc(&conn->write_buf, 1,
-                   &seg1, &seg1_len,
-                   &seg2, &seg2_len);
-
-
-    *seg1 = RMC_CMD_PACKET;
-
-    // Allocate memory for packet header
-    circ_buf_alloc(&conn->write_buf, sizeof(pack_cmd) ,
-                   &seg1, &seg1_len,
-                   &seg2, &seg2_len);
-
-
-    // Copy in packet header
-    memcpy(seg1, (uint8_t*) &pack_cmd, seg1_len);
-    if (seg2_len) 
-        memcpy(seg2, ((uint8_t*) &pack_cmd) + seg1_len, seg2_len);
-
-    // Allocate packet payload
-    circ_buf_alloc(&conn->write_buf, sizeof(pack),
-                   &seg1, &seg1_len,
-                   &seg2, &seg2_len);
-
-    // Copy in packet payload
-    memcpy(seg1, pack->payload, seg1_len);
-    if (seg2_len) 
-        memcpy(seg2, ((uint8_t*) pack->payload) + seg1_len, seg2_len);
-
-    // Setup the poll write action
-    if (!(conn->action & RMC_POLLWRITE)) {
-        rmc_poll_action_t old_action = conn->action;
-
-        conn->action |= RMC_POLLWRITE;
-        if (ctx->conn_vec.poll_modify)
-            (*ctx->conn_vec.poll_modify)(ctx->user_data,
-                                         conn->descriptor,
-                                         conn->connection_index,
-                                         old_action,
-                                         conn->action);
-    }    
-    
-    return 0;
+    res = _rmc_pub_resend_packet(ctx, conn, pack);
+    rmc_pub_packet_ack(ctx, conn, pack->pid) ;
+    return res;
 }
+
 
 static int _process_subscriber_timeout(rmc_pub_context_t* ctx,
                                        pub_subscriber_t* sub,
@@ -123,6 +72,7 @@ static int _process_subscriber_timeout(rmc_pub_context_t* ctx,
 
         // We were successful in queuing the packet transmission.
         pub_packet_list_pop_tail(&packets, &pack);
+
     }
 
     return 0;
@@ -168,6 +118,7 @@ int rmc_pub_timeout_get_next(rmc_pub_context_t* ctx, usec_timestamp_t* result)
     // Get the send timestamp of the oldest packet we have yet to
     // receive an acknowledgement for from the subscriber.
     pub_get_oldest_unackowledged_packet(&ctx->pub_ctx, &oldest_sent_ts);
+
     
     // Did we have infinite timeout?
     if (oldest_sent_ts == -1) {
