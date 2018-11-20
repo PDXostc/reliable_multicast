@@ -39,7 +39,7 @@ static int _process_cmd_ack_single(rmc_connection_t* conn, user_data_t user_data
     // Read and free.
     circ_buf_read(&conn->read_buf, (uint8_t*) &ack, sizeof(ack), 0);
     circ_buf_free(&conn->read_buf, sizeof(ack), 0);
-    printf("Acking[%lu]\n", ack.packet_id);
+    printf("_process_cmd_ack_single(): pid[%lu]\n", ack.packet_id);
 
 //    extern void test_print_pub_context(pub_context_t* ctx);
 //    puts("\nBEFORE");
@@ -60,6 +60,19 @@ static int _process_cmd_ack_interval(rmc_connection_t* conn, user_data_t user_da
     return 0;
 }
 
+int rmc_pub_close_connection(rmc_pub_context_t* ctx, rmc_connection_index_t s_ind)
+{
+    
+    printf("rmc_pub_close_connection(): index[%d]\n", s_ind);
+    _rmc_conn_close_connection(&ctx->conn_vec, s_ind);
+    pub_reset_subscriber(&ctx->subscribers[s_ind],
+                         lambda(void, (void* payload, payload_len_t payload_len, user_data_t user_data) {
+                                 if (ctx->payload_free)
+                                     (*ctx->payload_free)(payload, payload_len, user_data);
+                                 else
+                                     free(payload);
+                             }));
+}
 
 int rmc_pub_read(rmc_pub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* op_res)
 {
@@ -140,7 +153,7 @@ int rmc_pub_read(rmc_pub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* 
                              dispatch_table, user_data_ptr(ctx));
     
     if (res == EPIPE) {
-        _rmc_conn_close_connection(&ctx->conn_vec, s_ind);
+        rmc_pub_close_connection(ctx, s_ind);
         return 0; // This is not an error, just regular maintenance.
     }
 

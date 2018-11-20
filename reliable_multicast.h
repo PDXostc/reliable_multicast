@@ -402,6 +402,8 @@ extern int rmc_pub_get_next_timeout(rmc_pub_context_t* context, usec_timestamp_t
 extern int rmc_pub_process_timeout(rmc_pub_context_t* context);
 extern int rmc_pub_read(rmc_pub_context_t* context, rmc_connection_index_t connection_index, uint8_t* op_res);
 extern int rmc_pub_write(rmc_pub_context_t* context, rmc_connection_index_t connection_index, uint8_t* op_res);
+extern int rmc_pub_close_connection(rmc_pub_context_t* ctx, rmc_connection_index_t s_ind);
+
 extern int rmc_pub_timeout_get_next(rmc_pub_context_t* ctx, usec_timestamp_t* result);
 extern int rmc_pub_timeout_process(rmc_pub_context_t* ctx);
 

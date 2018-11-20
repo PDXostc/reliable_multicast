@@ -72,7 +72,7 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
         // Figure out what to do.
         if (events[nfds].events & EPOLLHUP) {
             _test("rmc_proto_test[%d.%d] process_events():rmc_close_tcp(): %s\n",
-                  major, 11, _rmc_conn_close_connection(&ctx->conn_vec, c_ind));
+                  major, 11, rmc_pub_close_connection(ctx, c_ind));
             continue;
         }
 

@@ -109,6 +109,12 @@ extern void pub_init_subscriber(pub_subscriber_t* sub,
                                 pub_context_t* ctx,
                                 user_data_t sub_user_data);
 
+// Clean up sub and free all data related to its inflight packets.
+void pub_reset_subscriber(pub_subscriber_t* sub,
+                          void (*pub_payload_free)(void* payload,
+                                                   payload_len_t payload_len,
+                                                   user_data_t user_data));
+
 // Payload will be freed by callback to (*pub_payload_free)() argument
 // of pub_packet_ack()
 extern packet_id_t pub_queue_packet(pub_context_t* ctx,

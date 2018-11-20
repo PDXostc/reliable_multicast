@@ -66,6 +66,22 @@ void pub_init_subscriber(pub_subscriber_t* sub, pub_context_t* ctx, user_data_t 
 }
 
 
+// Clean up all pending data.
+void pub_reset_subscriber(pub_subscriber_t* sub,
+                          void (*pub_payload_free)(void* payload,
+                                                   payload_len_t payload_len,
+                                                   user_data_t user_data))
+{
+    pub_packet_node_t* node = 0; // Packets
+    pub_packet_t* ppack = 0;
+
+    assert(sub);
+
+    while((node = pub_packet_list_tail(&sub->inflight)))
+        pub_packet_ack(sub, node->data->pid, pub_payload_free);
+}
+
+
 packet_id_t pub_queue_packet(pub_context_t* ctx,
                              void* payload,
                              payload_len_t payload_len,
