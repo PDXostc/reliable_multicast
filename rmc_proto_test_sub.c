@@ -200,7 +200,8 @@ void test_rmc_proto_sub(char* mcast_group_addr,
         { "p2", 3, 0 },
         { "p3", 4, 0 },
         { "p4", 5, 0 },
-        { "d1", 6, -1 } // Drop and expect tcp retransmit
+        { "d1", 6, -1 }, // Drop and expect tcp retransmit
+        { "exit", 7, 0 }, 
     };
 
     signal(SIGHUP, SIG_IGN);
