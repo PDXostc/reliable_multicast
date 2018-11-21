@@ -196,7 +196,6 @@ int _rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
     
     // Trim the tail end of the allocated data to match the number of
     // bytes read.
-    printf("circ_buf_alloc(): Got %d. Trimming to %ld\n", available, res);
     circ_buf_trim(&conn->read_buf, res);
 
     return _rmc_conn_process_tcp_read(conn_vec, s_ind, op_res,
