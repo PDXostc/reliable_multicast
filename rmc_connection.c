@@ -244,6 +244,7 @@ int _rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
                   (struct sockaddr*) &sock_addr,
                   sizeof(sock_addr));
 
+    conn_vec->connections[c_ind].remote_address = address;
     if (res == -1 && errno != EINPROGRESS) {
         err = errno; // Errno may be reset by close().
         perror("rmc_connect(): connect()");
