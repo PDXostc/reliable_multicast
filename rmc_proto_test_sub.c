@@ -76,7 +76,7 @@ static void process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, rm
 
         rmc_sub_packet_dispatched(ctx, pack);
         free(pack->payload);
-        _rmc_sub_packet_acknowledged(ctx, pack);
+        sub_packet_acknowledged(pack);
  //    sub_packet_list_for_each(&ctx->sub_ctx.ack_ready, _test_print_pending, 0);
         return;
     }
@@ -163,8 +163,6 @@ static int process_events(rmc_sub_context_t* ctx, int epollfd, usec_timestamp_t 
             _test("rmc_proto_test[%d.%d] process_events():rmc_write(): %s\n",
                   major, 10,
                   rmc_sub_write(ctx, c_ind, &op_res));
-
-            printf("EPOLLOUT: op_res: %s\n", _op_res_string(op_res));
         }
     }
 
