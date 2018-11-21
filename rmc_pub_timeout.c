@@ -11,10 +11,7 @@
 #include "reliable_multicast.h"
 #include <errno.h>
 #include <stdio.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
-#include <memory.h>
 
 // =============
 // TIMEOUT MANAGEMENT

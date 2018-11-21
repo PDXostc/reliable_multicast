@@ -5,28 +5,13 @@
 //
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
-
-
-#define _GNU_SOURCE
 #include "reliable_multicast.h"
 #include <string.h>
 #include <errno.h>
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <errno.h>
-#include <sys/uio.h>
-#include <sys/time.h>
-#include <sys/resource.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
-#include <netdb.h>
-#include <assert.h>
-
-
 
 static int _decode_multicast(rmc_sub_context_t* ctx,
                              uint8_t* packet,
@@ -229,6 +214,22 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
 }
 
 
+int rmc_sub_close_connection(rmc_sub_context_t* ctx, rmc_connection_index_t s_ind)
+{
+    
+    printf("rmc_sub_close_connection(): index[%d]\n", s_ind);
+    _rmc_conn_close_connection(&ctx->conn_vec, s_ind);
+
+    sub_reset_publisher(&ctx->publishers[s_ind],
+                         lambda(void, (void* payload, payload_len_t payload_len, user_data_t user_data) {
+                                 if (ctx->payload_free)
+                                     (*ctx->payload_free)(payload, payload_len, user_data);
+                                 else
+                                     free(payload);
+                             }));
+}
+
+
 int rmc_sub_read(rmc_sub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* op_res)
 {
     int res = 0;
@@ -260,7 +261,6 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* 
                              dispatch_table, user_data_ptr(ctx));
 
     if (res == EPIPE) {
-        _rmc_conn_close_connection(&ctx->conn_vec, s_ind);
         return 0; // This is not an error, just regular maintenance.
     }
 

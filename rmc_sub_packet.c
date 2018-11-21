@@ -7,11 +7,10 @@
 
 
 
-#define _GNU_SOURCE
 #include "reliable_multicast.h"
 #include <string.h>
 #include <errno.h>
-
+#include <stdlib.h>
 #include <stdio.h>
 
 
@@ -39,8 +38,9 @@ int rmc_sub_packet_dispatched(rmc_sub_context_t* ctx, sub_packet_t* pack)
 }
 
 
-// Queue the packet up for being acked by rmc_proto_timeout.c::_process_packet_ack_timeout()
-int rmc_sub_packet_acknowledged(rmc_sub_context_t* ctx, sub_packet_t* pack)
+// Called by rmc_sub_process_timeout() to
+// feed a packet ack to the tcp stream
+int _rmc_sub_packet_acknowledged(rmc_sub_context_t* ctx, sub_packet_t* pack)
 {
     rmc_connection_t* conn = 0;
 
@@ -52,8 +52,15 @@ int rmc_sub_packet_acknowledged(rmc_sub_context_t* ctx, sub_packet_t* pack)
     if (conn->mode != RMC_CONNECTION_MODE_SUBSCRIBER)
         return EINVAL;
 
+    // Queue up tcp command
+    _rmc_sub_write_acknowledgement(ctx, pack);
     sub_packet_acknowledged(pack);
 
+    if (ctx->payload_free)
+        (*ctx->payload_free)(pack->payload, pack->payload_len, ctx->user_data);
+    else
+        free(pack->payload);
+    
     return 0;
 }
 

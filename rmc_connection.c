@@ -13,15 +13,7 @@
 #include <errno.h>
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <unistd.h>
-#include <errno.h>
-#include <sys/uio.h>
-#include <sys/time.h>
-#include <sys/resource.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <assert.h>

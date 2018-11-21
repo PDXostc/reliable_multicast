@@ -11,20 +11,11 @@
 #include "reliable_multicast.h"
 #include <string.h>
 #include <errno.h>
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <errno.h>
-#include <sys/uio.h>
-#include <sys/time.h>
-#include <sys/resource.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
-#include <netdb.h>
-#include <assert.h>
+
 
 // =============
 // CONTEXT MANAGEMENT
@@ -52,7 +43,10 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
                          uint32_t conn_vec_size, // In bytes.
 
                          void* (*payload_alloc)(payload_len_t payload_len,
-                                                user_data_t user_data))
+                                                user_data_t user_data),
+                         void (*payload_free)(void* payload,
+                                              payload_len_t payload_len,
+                                              user_data_t user_data))
 {
     int ind = 0;
     struct in_addr addr;

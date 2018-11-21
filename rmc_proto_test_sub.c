@@ -63,7 +63,8 @@ static void process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, rm
     
         rmc_sub_packet_dispatched(ctx, pack);
         free(pack->payload);
-        rmc_sub_packet_acknowledged(ctx, pack);
+        sub_packet_acknowledged(pack);
+        rmc_sub_deactivate_context(ctx); // Currently no-op
         puts("Done");
         exit(255);
     }
@@ -75,7 +76,7 @@ static void process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, rm
 
         rmc_sub_packet_dispatched(ctx, pack);
         free(pack->payload);
-        rmc_sub_packet_acknowledged(ctx, pack);
+        _rmc_sub_packet_acknowledged(ctx, pack);
  //    sub_packet_list_for_each(&ctx->sub_ctx.ack_ready, _test_print_pending, 0);
         return;
     }
@@ -228,7 +229,7 @@ void test_rmc_proto_sub(char* mcast_group_addr,
                          (user_data_t) { .i32 = epollfd },
                          poll_add, poll_modify, poll_remove,
                          conn_vec_mem, RMC_MAX_CONNECTIONS,
-                         lambda(void*, (payload_len_t len, user_data_t dt) { malloc(len); }));
+                         0,0);
 
     _test("rmc_proto_test_sub[%d.%d] activate_context(): %s",
           1, 1,

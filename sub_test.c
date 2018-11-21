@@ -196,7 +196,7 @@ void reset_context(sub_context_t* ctx)
     p_node = sub_publisher_list_head(&ctx->publishers);
     while(p_node) {
         pub = p_node->data;
-        sub_remove_publisher(pub, 0);
+        sub_reset_publisher(pub, 0);
         sub_publisher_list_push_head(&lst, pub);
         p_node = sub_publisher_list_head(&ctx->publishers);
     }

@@ -10,11 +10,7 @@
 #define _GNU_SOURCE
 #include "reliable_multicast.h"
 #include <errno.h>
-#include <stdio.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <memory.h>
+
 
 
 int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
@@ -30,8 +26,7 @@ int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
 
 
     while((pack = sub_get_next_acknowledge_ready(&ctx->sub_ctx))) {
-        sub_packet_acknowledged(pack);
-        _rmc_sub_write_acknowledgement(ctx, pack);
+        _rmc_sub_packet_acknowledged(ctx, pack);
     }
     return 0;
 }

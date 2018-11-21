@@ -9,23 +9,10 @@
 
 #define _GNU_SOURCE 1
 #include "reliable_multicast.h"
-#include <string.h>
 #include <errno.h>
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <errno.h>
 #include <sys/uio.h>
-#include <sys/time.h>
-#include <sys/resource.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <assert.h>
-#include <netinet/tcp.h>
 
 
 int _rmc_conn_process_tcp_write(rmc_connection_t* conn, uint32_t* bytes_left)

@@ -225,8 +225,7 @@ void sub_init_publisher(sub_publisher_t* pub, sub_context_t* ctx)
     return;
 }
 
-
-void sub_remove_publisher(sub_publisher_t* pub,
+void sub_reset_publisher(sub_publisher_t* pub,
                           void (*payload_free_cb)(void*, payload_len_t, user_data_t))
 {
     sub_context_t* ctx = 0;

@@ -227,7 +227,8 @@ typedef struct rmc_pub_context {
     uint32_t resend_timeout;
     
     // Callback to free memory for packets that has been
-    // successfully sent out.
+    // successfully sent out. Memory is originally
+    // provided as an argument to rmc_pub_queue_packet().
     void (*payload_free)(void* payload,
                          payload_len_t payload_len,
                          user_data_t user_data);
@@ -280,8 +281,14 @@ typedef struct rmc_sub_context {
     // Called to alloc memory for incoming data.
     // that needs to be processed.
     void* (*payload_alloc)(payload_len_t payload_len,
-                               user_data_t user_data);
+                           user_data_t user_data);
 
+    // Called to free memory previously allocated with
+    // payload_alloc().
+    // If 0, free() will be used.
+    void (*payload_free)(void* payload,
+                         payload_len_t payload_len,
+                         user_data_t user_data);
 } rmc_sub_context_t;
 
 
@@ -324,7 +331,7 @@ extern int rmc_pub_init_context(rmc_pub_context_t* context,
                                 // Number of elements available in conn_vec.
                                 uint32_t conn_vec_size, 
 
-                                // Callback to previously allocated memory provided
+                               // Callback to previously allocated memory provided
                                 // by the caller of rmc_queue_packet().
                                 //
                                 // Invoked by rmc_read() when an ack has been collected
@@ -383,13 +390,32 @@ extern int rmc_sub_init_context(rmc_sub_context_t* context,
                                 // incoming packages. Called via rmc_read() when
                                 // a new multicast or tcp payload packet is delivered.
                                 //
-                                // The allocated memory has to manually freed by the caller
-                                // after an rmc_packet_dispatched() has been called to
-                                // mark the packet as processed.
+                                // The allocated memory will be automnatically freed
+                                // via a payload_free callback (see below) when
+                                // the packet has been acknowledged via a call
+                                // to rmc_sub_timeout_process() call.
+                                //
+                                // user_data will be set to the same user_data as provided
+                                // to rmc_sub_init_context().
                                 //
                                 // If set to 0, malloc() will be used.
                                 void* (*payload_alloc)(payload_len_t payload_len,
-                                                       user_data_t user_data));
+                                                       user_data_t user_data),
+
+                                // Callback to free memory previously allocated via
+                                // the payload_alloc callback.
+                                // The payload_free is called via rmc_sub_timeout_process()
+                                // when it has queued up the tcp command to acknowledge a packet
+                                // in _rmc_sub_packet_acknowledged().
+                                //
+                                // user_data will be set to the same user_data as provided
+                                // to rmc_sub_init_context().
+                                //
+                                // If set to 0, free() will be used.
+                                void (*payload_free)(void* payload,
+                                                     payload_len_t payload_len,
+                                                     user_data_t user_data));
+
 
 
 
@@ -429,8 +455,7 @@ extern int rmc_sub_get_dispatch_ready_count(rmc_sub_context_t* context);
 extern sub_packet_t* rmc_sub_get_next_dispatch_ready(rmc_sub_context_t* context);
 extern int rmc_sub_packet_dispatched(rmc_sub_context_t* context, sub_packet_t* packet);
 
-// CALLER STILL HAS TO FREE pack->payload!
-extern int rmc_sub_packet_acknowledged(rmc_sub_context_t* context, sub_packet_t* packet);
+extern int _rmc_sub_packet_acknowledged(rmc_sub_context_t* context, sub_packet_t* packet);
 extern rmc_connection_index_t rmc_sub_packet_connection(sub_packet_t* packet);
 
 

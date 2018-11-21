@@ -11,7 +11,6 @@
 #include "reliable_multicast.h"
 #include <string.h>
 #include <errno.h>
-
 #include <stdio.h>
 #include <stdlib.h>
 

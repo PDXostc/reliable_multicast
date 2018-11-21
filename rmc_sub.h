@@ -135,8 +135,8 @@ extern void sub_process_received_packets(sub_publisher_t* pub);
 extern void sub_get_missing_packets(sub_publisher_t* sub, intv_list_t* res);
 extern void sub_init_publisher(sub_publisher_t* pub, sub_context_t* ctx);
 extern sub_publisher_t* sub_find_publisher(sub_context_t* ctx, void* address, int address_len);
-extern void sub_remove_publisher(sub_publisher_t*,
-                                 void (*)(void*, payload_len_t, user_data_t));;
+extern void sub_reset_publisher(sub_publisher_t*,
+                                void (*)(void*, payload_len_t, user_data_t));;
 
 extern sub_packet_t* sub_get_next_dispatch_ready(sub_context_t* ctx);
 extern int sub_get_dispatch_ready_count(sub_context_t* ctx);
