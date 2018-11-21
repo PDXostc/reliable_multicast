@@ -28,8 +28,8 @@ static int _decode_multicast(rmc_sub_context_t* ctx,
     while(len) {
         cmd_packet_header_t* cmd_pack = (cmd_packet_header_t*) packet;
 
-        //      printf("_decode_multicast(): Len[%d] Hdr Len[%lu] Payload Len[%d] Payload[%s]\n",
-//               len, sizeof(cmd_packet_header_t), cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
+        printf("_decode_multicast(): Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s]\n",
+               len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
 
         // Check that we do not have a duplicate
         if (sub_packet_is_duplicate(pub, cmd_pack->pid)) {
@@ -49,8 +49,10 @@ static int _decode_multicast(rmc_sub_context_t* ctx,
         else
             payload = malloc(cmd_pack->payload_len);
  
-        if (!payload)
-            return ENOMEM;
+        if (!payload) {
+            perror("malloc");
+            exit(255);
+        }
 
         packet += sizeof(cmd_packet_header_t);
         memcpy(payload, packet, cmd_pack->payload_len);
@@ -98,7 +100,7 @@ static int _process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
                    (struct sockaddr*) &src_addr, &addr_len);
 
     if (len == -1) {
-        perror("rmc_proto::rmc_read_multicast(): recvfrom()");
+        perror("rmc_proto::_process_multicast_read(): recvfrom()");
         return errno;
     }
 
@@ -115,6 +117,14 @@ static int _process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
     }
         
     strcpy(src_addr_str, inet_ntoa(src_addr.sin_addr));
+
+    // If the publisher has a listen socket that runs on all interfaces, we will see 0.0.0.0
+    // as the mcast_hdr->listen_ip. In these cases substitute this address with the source
+    // address that the multicast packet came from.
+    
+    if (mcast_hdr->listen_ip == 0)
+        mcast_hdr->listen_ip = ntohl(src_addr.sin_addr.s_addr);
+
     strcpy(listen_addr_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(mcast_hdr->listen_ip) }));
     printf("mcast_rx(): len[%.5d] from[%s:%d] listen[%s:%d]",
            mcast_hdr->payload_len,
@@ -180,6 +190,7 @@ static int _process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
     
     // Record if we have any packets ready to ack prior
     // to decoding additional packets.
+
     res = _decode_multicast(ctx, data, mcast_hdr->payload_len, conn);
         
 
@@ -199,16 +210,42 @@ rearm:
 static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
 {
     cmd_packet_header_t pack_hdr;
-    uint8_t buffer[RMC_MAX_PAYLOAD];
+    uint8_t *payload = 0;
+    rmc_sub_context_t* ctx = (rmc_sub_context_t*) user_data.ptr;
     
     circ_buf_read(&conn->read_buf, (uint8_t*) &pack_hdr, sizeof(pack_hdr), 0);
     circ_buf_free(&conn->read_buf, sizeof(pack_hdr), 0);
 
-    printf("_process_cmd_packet(): pid         [%lu]\n", pack_hdr.pid);
-    printf("_process_cmd_packet(): payload_len [%d]\n", pack_hdr.payload_len);
+    printf("_process_cmd_packet(): pid [%lu] len[%d]\n", pack_hdr.pid, pack_hdr.payload_len);
     
-    circ_buf_read(&conn->read_buf,  buffer, pack_hdr.payload_len, 0);
+    if (sub_packet_is_duplicate(&ctx->publishers[conn->connection_index], pack_hdr.pid)) {
+        circ_buf_free(&conn->read_buf, pack_hdr.payload_len, 0);
+        printf("_process_cmd_packet(%lu): Duplicate or pre-connect straggler\n",
+               pack_hdr.pid);
+
+        return 0; // Dups are ok.
+    }
+
+    if (ctx->payload_alloc)
+        payload = (*ctx->payload_alloc)(pack_hdr.payload_len, ctx->user_data);
+    else
+        payload = malloc(pack_hdr.payload_len);
+
+    if (!payload) {
+        perror("_process_cmd_packet::memory alloc:");
+
+        exit(255);
+    }
+
+    circ_buf_read(&conn->read_buf, payload, pack_hdr.payload_len, 0);
     circ_buf_free(&conn->read_buf, pack_hdr.payload_len, 0);
+
+    sub_packet_received(&ctx->publishers[conn->connection_index],
+                        pack_hdr.pid,
+                        payload,
+                        pack_hdr.payload_len,
+                        rmc_usec_monotonic_timestamp(),
+                        user_data_ptr(conn));
 
     return 0;
 }
