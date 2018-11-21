@@ -38,7 +38,8 @@ int _rmc_sub_write_acknowledgement(rmc_sub_context_t* ctx, sub_packet_t* pack)
         uint32_t old_in_use = 0;
         rmc_poll_action_t old_action = 0;
         rmc_connection_t* conn = 0;
-
+        char group_addr[80];
+        char remote_addr[80];
 
         conn = sub_packet_user_data(pack).ptr;
 
@@ -49,11 +50,13 @@ int _rmc_sub_write_acknowledgement(rmc_sub_context_t* ctx, sub_packet_t* pack)
         old_in_use = circ_buf_in_use(&conn->write_buf);
         old_action = conn->action;
 
-        printf("_rmc_sub_write_acknowledgement(): pid[%lu] mcast[%s:%d] listen[%s:%d]\n",
+        strcpy(group_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }));
+        strcpy(remote_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(conn->remote_address) }));
+        printf("_rmc_sub_write_acknowledgement(): pid[%lu] mcast[%s:%d] remote[%s:%d]\n",
                pack->pid,
-               inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }),
+               group_addr,
                ctx->mcast_port,
-               inet_ntoa( (struct in_addr) { .s_addr = htonl(conn->remote_address) }),
+               remote_addr,
                conn->remote_port);
 
         // Allocate memory for command
