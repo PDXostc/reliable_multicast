@@ -261,6 +261,7 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* 
                              dispatch_table, user_data_ptr(ctx));
 
     if (res == EPIPE) {
+        rmc_sub_close_connection(ctx, s_ind);
         return 0; // This is not an error, just regular maintenance.
     }
 
