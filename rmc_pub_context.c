@@ -77,6 +77,13 @@ int rmc_pub_init_context(rmc_pub_context_t* ctx,
     }
     ctx->mcast_group_addr = ntohl(addr.s_addr);
 
+    if (!inet_aton(control_listen_if_addr, &addr)) {
+        fprintf(stderr, "rmc_init_pub_context(listen_if_addr): Could not resolve %s to IP address\n",
+                control_listen_if_addr);
+        return EINVAL;
+    }
+    ctx->control_listen_if_addr = ntohl(addr.s_addr);
+
     ctx->mcast_port = multicast_port;
     ctx->control_listen_port = control_listen_port;
 
