@@ -52,6 +52,7 @@ int sub_packet_is_duplicate(sub_publisher_t* pub, packet_id_t pid)
 int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
                         void* payload,
                         payload_len_t payload_len,
+                        uint8_t skip_acknowledgement,
                         usec_timestamp_t current_ts,
                         user_data_t pkg_user_data)
 {
@@ -63,6 +64,7 @@ int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
     pack->payload = payload;
     pack->payload_len = payload_len;
     pack->publisher = pub;
+    pack->skip_acknowledgement = skip_acknowledgement;
     pack->pkg_user_data = pkg_user_data;
     pack->received_ts = current_ts;
 
@@ -106,7 +108,7 @@ void sub_process_received_packets(sub_publisher_t* pub)
 
     while(node) {
         if (pub->max_pid_ready &&
-            node->data->pid != pub->max_pid_ready + 1)
+            node->data->pid != pub->max_pid_ready + 1) 
             break;
 
         // Drop the packet in at the tail of the context-level dispatch_ready queue.

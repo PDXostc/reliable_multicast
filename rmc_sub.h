@@ -70,6 +70,10 @@ typedef struct sub_packet {
     // Payload length provided by pub_queue_packet()
     payload_len_t payload_len;  
 
+    // Set to 1 if this packet does not need to be acked.
+    // Used when we receive packet via tcp.
+    uint8_t skip_acknowledgement;
+
     // Provided by sub_packet_received()
     // Retrieved by sub_packet_user_data()
     user_data_t pkg_user_data;   
@@ -124,6 +128,7 @@ extern int sub_packet_received(sub_publisher_t* pub,
                                packet_id_t pid,
                                void* payload,
                                payload_len_t payload_len,
+                               uint8_t skip_acknowledgement, 
                                usec_timestamp_t current_ts,
                                user_data_t pkg_user_data);
 
