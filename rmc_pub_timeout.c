@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <arpa/inet.h>
+#include <string.h>
 
 // =============
 // TIMEOUT MANAGEMENT
@@ -25,17 +26,21 @@ static int _process_sent_packet_timeout(rmc_pub_context_t* ctx,
     // Send the packet via TCP.
     rmc_connection_t* conn = 0;
     int res = 0;
+    char group_addr[80];
+    char remote_addr[80];
     
     if (!ctx || !sub || !pack)
         return EINVAL;
 
     conn = (rmc_connection_t*) pub_subscriber_user_data(sub).ptr;
 
+    strcpy(group_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }));
+    strcpy(remote_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(conn->remote_address) }));
     printf("process_sent_packet_timeout(): pid[%lu] mcast[%s:%d] listen[%s:%d]\n",
            pack->pid,
-           inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }),
+           group_addr,
            ctx->mcast_port,
-           inet_ntoa( (struct in_addr) { .s_addr = htonl(conn->remote_address) }),
+           remote_addr,
            ctx->control_listen_port);
     
     if (!conn || conn->mode != RMC_CONNECTION_MODE_PUBLISHER)
