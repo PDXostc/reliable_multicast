@@ -21,7 +21,7 @@ OBJ= 	pub.o \
 	rmc_pub_timeout.o \
 	rmc_sub_timeout.o 
 
-TEST_OBJ = interval_test.o \
+TEST_OBJ = sub_interval_test.o \
 	rmc_proto_test_common.o \
 	rmc_proto_test_pub.o \
 	rmc_proto_test_sub.o \
