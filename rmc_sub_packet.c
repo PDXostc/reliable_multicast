@@ -53,7 +53,9 @@ int _rmc_sub_packet_acknowledged(rmc_sub_context_t* ctx, sub_packet_t* pack)
         return EINVAL;
 
     // Queue up tcp command
-    _rmc_sub_write_acknowledgement(ctx, pack);
+    if (!pack->skip_acknowledgement)
+        _rmc_sub_write_acknowledgement(ctx, conn, pack->pid);
+
     sub_packet_acknowledged(pack);
 
     if (ctx->payload_free)
