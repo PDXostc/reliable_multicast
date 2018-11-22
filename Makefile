@@ -4,8 +4,7 @@
 
 
 # OBJ=list.o interval.o time.o pub.o
-OBJ= interval.o \
-	pub.o \
+OBJ= 	pub.o \
 	time.o \
 	sub.o \
 	circular_buffer.o \
@@ -36,7 +35,6 @@ HDR= rmc_common.h \
 		rmc_proto_test_common.h \
 		rmc_list_template.h \
 		rmc_pub.h \
-		interval.h \
 		reliable_multicast.h \
 		rmc_sub.h \
 		circular_buffer.h
