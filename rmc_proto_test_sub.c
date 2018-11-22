@@ -74,10 +74,23 @@ static void process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, rm
         printf("rmc_proto_test_sub:process_incoming_data() ind[%d] pid[%lu] payload[%s]: ok - Dropped according to test spec\n",
                ind, pack->pid, (char*) pack->payload);
 
+        // Patch the last received packet back to what we had
+        if (pack->publisher->max_pid_received == pack->pid)
+            pack->publisher->max_pid_received--;
+        else 
+            printf("rmc_proto_test_sub:process_incoming_data() ind[%d] pid[%lu] payload[%s]: Could not revert max_pid_received. Tcp resend will be marked as duplicate\n",
+                   ind, pack->pid, (char*) pack->payload);
+
+        // Patch the last received packet back to what we had
+        if (pack->publisher->max_pid_ready == pack->pid)
+            pack->publisher->max_pid_ready--;
+        else 
+            printf("rmc_proto_test_sub:process_incoming_data() ind[%d] pid[%lu] payload[%s]: Could not revert max_pid_rready. Tcp resend will be marked as duplicate\n",
+                   ind, pack->pid, (char*) pack->payload);
+
         rmc_sub_packet_dispatched(ctx, pack);
         free(pack->payload);
         sub_packet_acknowledged(pack);
- //    sub_packet_list_for_each(&ctx->sub_ctx.ack_ready, _test_print_pending, 0);
         return;
     }
 
@@ -85,14 +98,9 @@ static void process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, rm
            ind, pack->pid, (char*) pack->payload);
     
     rmc_sub_packet_dispatched(ctx, pack);
-    
-    // We will still need to ack the packet through
-    // rmc_sub_timeout_process(), which will go through all dispatched
-    // packets and acknowledge them, but we will not need the payload
-    // anymore.
-    // Memory was originally allocated via the lambda payload alloc function
-    // provided as an argument to rmc_sub_init_context() below.
     free(pack->payload);
+
+    return;
 }
 
 void* sub_alloc(payload_len_t payload_len,
@@ -155,7 +163,7 @@ static int process_events(rmc_sub_context_t* ctx, int epollfd, usec_timestamp_t 
             if (op_res == RMC_READ_ACCEPT)
                 continue;
 
-            if (op_res == RMC_READ_MULTICAST)
+            if (op_res == RMC_READ_MULTICAST || op_res == RMC_READ_TCP)
                 *tick_ind = 1;
         }
 
@@ -200,6 +208,7 @@ void test_rmc_proto_sub(char* mcast_group_addr,
         { "p3", 4, 0 },
         { "p4", 5, 0 },
         { "d1", 6, -1 }, // Drop and expect tcp retransmit
+        { "d1", 6, 0 },  // We will get resend via tcp.
         { "exit", 7, 0 }, 
     };
 
