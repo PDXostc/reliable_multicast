@@ -124,7 +124,7 @@ static void add_received_packets(sub_publisher_t* pub,
 
         for(pid = start; pid != stop + 1; ++pid) {
             sprintf(buf, "%lu", pid);
-            sub_packet_received(pub, pid, buf, strlen(buf)+1, ts_current, user_data_nil());
+            sub_packet_received(pub, pid, buf, strlen(buf)+1, 0, ts_current, user_data_nil());
         }
 
         start = va_arg(ap, packet_id_t);
@@ -823,7 +823,7 @@ void test_sub(void)
     add_received_packets(&pub1, 100,
                          1, 2,
                          0, 0);
-
+ 
     add_received_packets(&pub1, 200,
                          3, 4,
                          0, 0);
@@ -869,6 +869,74 @@ void test_sub(void)
     sub_packet_list_empty(&lst);
     sub_get_timed_out_packets(&ctx, 300, &lst);
     test_sequence("8.3", &lst, 1, 4);
+
+ 
+    // Replicate error found while testing.
+    // Replicate recive 1-6. dispatch/ack 1-6. Receive 7.
+    //
+    reset_context(&ctx);
+    add_received_packets(&pub1, 0,
+                         1, 6,
+                         0, 0);
+
+    sub_process_received_packets(&pub1);
+
+    // Dispatch all  six packets, moving them to the ack queue.
+    pack = sub_get_next_dispatch_ready(&ctx);
+    sub_packet_dispatched(pack);
+    sub_packet_acknowledged(pack);
+    
+    pack = sub_get_next_dispatch_ready(&ctx);
+    sub_packet_dispatched(pack);
+    sub_packet_acknowledged(pack);
+    
+    pack = sub_get_next_dispatch_ready(&ctx);
+    sub_packet_dispatched(pack);
+    sub_packet_acknowledged(pack);
+    
+    pack = sub_get_next_dispatch_ready(&ctx);
+    sub_packet_dispatched(pack);
+    sub_packet_acknowledged(pack);
+    
+    pack = sub_get_next_dispatch_ready(&ctx);
+    sub_packet_dispatched(pack);
+    sub_packet_acknowledged(pack);
+
+    pack = sub_get_next_dispatch_ready(&ctx);
+    sub_packet_dispatched(pack);
+    sub_packet_acknowledged(pack);
+    
+
+    sub_packet_list_empty(&lst);
+    if (sub_get_dispatch_ready_count(&ctx) != 0) {
+        printf("sub_test: failed 9.1 Wanted 0, got %d.\n", sub_get_dispatch_ready_count(&ctx));
+        exit(255);
+    }
+        
+    // Add packet 7
+    add_received_packets(&pub1, 0,
+                         7, 7,
+                         0,0);
+
+    sub_process_received_packets(&pub1);
+
+    if (sub_get_dispatch_ready_count(&ctx) != 1) {
+        printf("sub_test: failed 9.2 Wanted 1, got %d.\n", sub_get_dispatch_ready_count(&ctx));
+        exit(255);
+    }
+
+    pack = sub_get_next_dispatch_ready(&ctx);
+    if (!pack) {
+        printf("sub_test: failed 9.3 No dispatch ready pack found.\n");
+        exit(255);
+    }
+    if (pack->pid != 7) {
+        printf("sub_test: failed 9.4 Wanted pid 7. Got %lu.\n", pack->pid);
+        exit(255);
+    }
+
+    reset_context(&ctx);
+ 
 }
 
 
