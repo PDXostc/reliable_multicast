@@ -24,9 +24,9 @@
 // =============
 
 
-int _rmc_sub_write_acknowledgement(rmc_sub_context_t* ctx,
-                                   rmc_connection_t* conn,
-                                   packet_id_t pid)
+int _rmc_sub_write_single_acknowledgement(rmc_sub_context_t* ctx,
+                                          rmc_connection_t* conn,
+                                          packet_id_t pid)
 {
         ssize_t res = 0;
         uint8_t *seg1 = 0;
@@ -51,7 +51,7 @@ int _rmc_sub_write_acknowledgement(rmc_sub_context_t* ctx,
 
         strcpy(group_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }));
         strcpy(remote_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(conn->remote_address) }));
-        printf("_rmc_sub_write_acknowledgement(): pid[%lu] mcast[%s:%d] remote[%s:%d]\n",
+        printf("_rmc_sub_write_single_acknowledgement(): pid[%lu] mcast[%s:%d] remote[%s:%d]\n",
                pid,
                group_addr,
                ctx->mcast_port,

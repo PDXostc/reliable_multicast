@@ -39,8 +39,8 @@ int rmc_sub_packet_dispatched(rmc_sub_context_t* ctx, sub_packet_t* pack)
 
 
 // Called by rmc_sub_process_timeout() to
-// feed a packet ack to the tcp stream
-int _rmc_sub_packet_acknowledged(rmc_sub_context_t* ctx, sub_packet_t* pack)
+// write packet acks back to the sender.
+int _rmc_sub_single_packet_acknowledged(rmc_sub_context_t* ctx, sub_packet_t* pack)
 {
     rmc_connection_t* conn = 0;
 
@@ -52,9 +52,10 @@ int _rmc_sub_packet_acknowledged(rmc_sub_context_t* ctx, sub_packet_t* pack)
     if (conn->mode != RMC_CONNECTION_MODE_SUBSCRIBER)
         return EINVAL;
 
-    // Queue up tcp command
+
+    // If we are to write an ack, then do so.
     if (!pack->skip_acknowledgement)
-        _rmc_sub_write_acknowledgement(ctx, conn, pack->pid);
+        _rmc_sub_write_single_acknowledgement(ctx, conn, pack->pid);
 
     sub_packet_acknowledged(pack);
 
