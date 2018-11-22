@@ -13,6 +13,9 @@
 
 
 
+// Send all pending acknowledgements that we need to get going.
+// We batch them up since we have a greater chance of sending out a single
+// interval ack instead of one-by-one acks.
 int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
 {
     usec_timestamp_t ts = rmc_usec_monotonic_timestamp();
