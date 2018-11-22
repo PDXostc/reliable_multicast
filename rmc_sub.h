@@ -16,7 +16,6 @@
 #define __REL_MCAST_SUB_H__
 #include "rmc_common.h"
 #include "rmc_list.h"
-#include "interval.h"
 
 
 //
@@ -100,6 +99,18 @@ RMC_LIST(sub_publisher_list, sub_publisher_node, sub_publisher_t*)
 typedef sub_publisher_list sub_publisher_list_t;
 typedef sub_publisher_node sub_publisher_node_t;
 
+// Used by sub_get_ack_packet_intervals
+typedef struct packet_interval {
+    packet_id_t first_pid; // First packet ID in interval
+    packet_id_t last_pid; // LAst packet ID in interval
+} packet_interval_t;
+
+#include "rmc_list.h"
+
+RMC_LIST(intv_list, intv_node, packet_interval_t) 
+typedef intv_list intv_list_t;
+typedef intv_node intv_node_t;
+
 // A single subscriber context that collects the feeds
 // of multiple publishers into a single feed.
 // We move packdets that have been processed by sub_process_received_packets()
@@ -163,5 +174,10 @@ extern  user_data_t sub_packet_user_data(sub_packet_t* pack);
 // yet to send an acknowledgement back to the publisher for.
 extern int sub_get_oldest_unacknowledged_packet(sub_context_t* ctx,
                                                 usec_timestamp_t* received_ts);
+
+extern sub_packet_node_t* sub_get_packet_interval(sub_packet_node_t* start, packet_interval_t* interval);
+
+extern uint32_t sub_get_packet_intervals(sub_packet_list_t* list,
+                                         intv_list_t* result_intervals);
 
 #endif // __REL_MCAST_SUB__

@@ -16,6 +16,8 @@
 RMC_LIST_IMPL(sub_packet_list, sub_packet_node, sub_packet_t*) 
 RMC_LIST_IMPL(sub_publisher_list, sub_publisher_node, sub_publisher_t*) 
 
+RMC_LIST_IMPL(intv_list, intv_node, packet_interval_t) 
+
 // FIXME: Ditch malloc and use a stack-based alloc/free setup that operates
 //       on static-sized heap memory allocated at startup. 
 static sub_packet_t* _alloc_pending_packet()
@@ -395,3 +397,51 @@ int sub_get_oldest_unacknowledged_packet(sub_context_t* ctx, usec_timestamp_t* r
 
 }
 
+
+
+// Find a consecutive sequence of packet IDs in the packet id-sorted
+// list starting with node 'start'.  Return the first node after the
+// consecutive sequence was broken by a hole.
+// Return 0 reached end of list
+sub_packet_node_t* sub_get_packet_interval(sub_packet_node_t* start, packet_interval_t* interval)
+{
+    packet_id_t first_pid = start->data->pid;
+    packet_id_t last_pid = start->data->pid;
+
+    while(start) {
+        // Are we past the first iteration and did we find a hole?
+        if (first_pid != last_pid &&
+            start->data->pid != last_pid) 
+            break;
+
+        last_pid++;
+        start = sub_packet_list_next(start);
+    }    
+    last_pid--;
+    interval->first_pid = first_pid;
+    interval->last_pid = last_pid;
+    return start;
+}
+
+//
+// Find all consecutive intervals in the packet id-sorted list
+// 'list'
+// 
+uint32_t sub_get_packet_intervals(sub_packet_list_t* list,
+                                      intv_list_t* result_intervals)
+{
+    uint32_t res = 0;
+    sub_packet_node_t* node = 0;
+    
+    node = sub_packet_list_head(list);
+
+    while(node) {
+        packet_interval_t interval;
+
+        node = sub_get_packet_interval(node, &interval);
+        intv_list_push_tail(result_intervals, interval);
+        res += interval.last_pid - interval.first_pid + 1;
+    }
+
+    return res;
+}
