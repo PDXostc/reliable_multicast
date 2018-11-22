@@ -74,11 +74,20 @@ void pub_reset_subscriber(pub_subscriber_t* sub,
 {
     pub_packet_node_t* node = 0; // Packets
     pub_packet_t* ppack = 0;
+    pub_sub_node_t *snode = 0;
 
     assert(sub);
 
     while((node = pub_packet_list_tail(&sub->inflight)))
         pub_packet_ack(sub, node->data->pid, pub_payload_free);
+
+    
+    snode = pub_sub_list_find_node(&sub->context->subscribers, sub,
+                                   lambda(int, (pub_subscriber_t* a, pub_subscriber_t* b) {
+                                           return a == b;
+                                       }));
+    assert(snode);
+    pub_sub_list_delete(snode);
 }
 
 
