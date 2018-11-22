@@ -24,7 +24,9 @@
 // =============
 
 
-int _rmc_sub_write_acknowledgement(rmc_sub_context_t* ctx, sub_packet_t* pack)
+int _rmc_sub_write_acknowledgement(rmc_sub_context_t* ctx,
+                                   rmc_connection_t* conn,
+                                   packet_id_t pid)
 {
         ssize_t res = 0;
         uint8_t *seg1 = 0;
@@ -32,16 +34,13 @@ int _rmc_sub_write_acknowledgement(rmc_sub_context_t* ctx, sub_packet_t* pack)
         uint8_t *seg2 = 0;
         uint32_t seg2_len = 0;
         cmd_ack_single_t ack = {
-            .packet_id = pack->pid
+            .packet_id = pid
         };
         uint32_t available = 0;
         uint32_t old_in_use = 0;
         rmc_poll_action_t old_action = 0;
-        rmc_connection_t* conn = 0;
         char group_addr[80];
         char remote_addr[80];
-
-        conn = sub_packet_user_data(pack).ptr;
 
         if (!conn || conn->mode != RMC_CONNECTION_MODE_SUBSCRIBER)
             return ENOTCONN;
@@ -53,7 +52,7 @@ int _rmc_sub_write_acknowledgement(rmc_sub_context_t* ctx, sub_packet_t* pack)
         strcpy(group_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }));
         strcpy(remote_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(conn->remote_address) }));
         printf("_rmc_sub_write_acknowledgement(): pid[%lu] mcast[%s:%d] remote[%s:%d]\n",
-               pack->pid,
+               pid,
                group_addr,
                ctx->mcast_port,
                remote_addr,

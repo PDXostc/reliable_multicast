@@ -445,8 +445,9 @@ extern rmc_context_id_t rmc_sub_context_id(rmc_sub_context_t* ctx);
 extern int rmc_sub_get_next_timeout(rmc_sub_context_t* context, usec_timestamp_t* result);
 extern int rmc_sub_process_timeout(rmc_sub_context_t* context);
 extern int rmc_sub_read(rmc_sub_context_t* context, rmc_connection_index_t connection_index, uint8_t* op_res);
-extern int _rmc_sub_write_acknowledgement(rmc_sub_context_t* ctx, sub_packet_t* pack);
-
+extern int _rmc_sub_write_acknowledgement(rmc_sub_context_t* ctx,
+                                           rmc_connection_t* conn,
+                                           packet_id_t);
 extern int rmc_sub_write(rmc_sub_context_t* context, rmc_connection_index_t connection_index, uint8_t* op_res);
 extern int rmc_sub_timeout_get_next(rmc_sub_context_t* ctx, usec_timestamp_t* result);
 extern int rmc_sub_timeout_process(rmc_sub_context_t* ctx);
