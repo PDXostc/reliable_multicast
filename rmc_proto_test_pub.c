@@ -167,8 +167,8 @@ void test_rmc_proto_pub(char* mcast_group_addr,
         { "p2", 3, 0 },
         { "p4", 5, 0 }, 
         // Dropped packagte.
-        { "d1", 6, 300000 }, // Wait for 1 sec until exiting to process residual event.
-        { "exit", 7, 1000000 }, // Wait for 1 sec until exiting to process residual event.
+        { "d1", 6, 300000 },
+        { "exit", 7, 1000000 }, 
     };
 
 
