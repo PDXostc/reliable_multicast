@@ -27,11 +27,17 @@ int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
     if (!ctx)
         return EINVAL;
 
+    // If we only have one ack, then send it as a single ack.
+//    if (sub_get_acknowledge_ready_count(&ctx->sub_ctx) == 1) {
+        while((pack = sub_get_next_acknowledge_ready(&ctx->sub_ctx))) {
 
-    while((pack = sub_get_next_acknowledge_ready(&ctx->sub_ctx))) {
-        _rmc_sub_packet_acknowledged(ctx, pack);
-    }
-    return 0;
+
+            // Free payload via ctx->payload_free().
+            // Remove packet from system.
+            _rmc_sub_single_packet_acknowledged(ctx, pack);
+        }
+        return 0;
+//    }
 }
 
 
