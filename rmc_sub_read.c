@@ -60,8 +60,10 @@ static int _decode_multicast(rmc_sub_context_t* ctx,
         len -= sizeof(cmd_packet_header_t) + cmd_pack->payload_len;
 
         sub_packet_received(pub,
-                            cmd_pack->pid,payload, cmd_pack->payload_len,
+                            cmd_pack->pid, payload, cmd_pack->payload_len,
+                            0, // We need to send an ack for this packet
                             now, user_data_ptr(conn));
+
     }
 
     // Process received packages, moving consectutive ones
@@ -118,10 +120,10 @@ static int _process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
         
     strcpy(src_addr_str, inet_ntoa(src_addr.sin_addr));
 
-    // If the publisher has a listen socket that runs on all interfaces, we will see 0.0.0.0
-    // as the mcast_hdr->listen_ip. In these cases substitute this address with the source
-    // address that the multicast packet came from.
-    
+    // If the publisher has a listen socket that is bound on all
+    // interfaces (IF_ANY), we will see 0.0.0.0 as the
+    // mcast_hdr->listen_ip. In these cases substitute this address
+    // with the source address that the multicast packet came from.
     if (mcast_hdr->listen_ip == 0)
         mcast_hdr->listen_ip = ntohl(src_addr.sin_addr.s_addr);
 
@@ -131,7 +133,6 @@ static int _process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
            src_addr_str, ntohs(src_addr.sin_port),
            listen_addr_str, mcast_hdr->listen_port);
            
-
     data += sizeof(multicast_header_t);
     
     // FIXME: REMOVE WHEN WE HAVE DELETED IP_MULTICAST_LOOP
@@ -148,12 +149,6 @@ static int _process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
     }
     putchar('\n');
 
-    // If we have a complete spec for the networ address in the packet header, use that.
-    // If listen_ip_addr is 0, then use the IP address provided in source address returned
-    // by recvfrom
-    //
-    if (!mcast_hdr->listen_ip)
-        mcast_hdr->listen_ip = ntohl(src_addr.sin_addr.s_addr);
 
     // Find the socket we use to ack received packets back to the publisher.
     conn = _rmc_conn_find_by_address(&ctx->conn_vec, mcast_hdr->listen_ip, mcast_hdr->listen_port);
@@ -244,6 +239,7 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
                         pack_hdr.pid,
                         payload,
                         pack_hdr.payload_len,
+                        1, // Skip ack for this packet since we have received it via reliable tcp.
                         rmc_usec_monotonic_timestamp(),
                         user_data_ptr(conn));
 
@@ -298,9 +294,13 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* 
                              dispatch_table, user_data_ptr(ctx));
 
     if (res == EPIPE) {
+        *op_res = RMC_READ_DISCONNECT;
         rmc_sub_close_connection(ctx, s_ind);
         return 0; // This is not an error, just regular maintenance.
     }
+
+    sub_process_received_packets(&ctx->publishers[s_ind]);
+    *op_res = RMC_READ_TCP;
 
     // Read poll is always active. Callback to re-arm.
     if (ctx->conn_vec.poll_modify) {
