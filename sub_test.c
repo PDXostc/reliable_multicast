@@ -1,7 +1,7 @@
-// Copyright (C) 2018, Jaguar Land Rover
-// This program is licensed under the terms and conditions of the
-// Mozilla Public License, version 2.0.  The full text of the 
-// Mozilla Public License is at https://www.mozilla.org/MPL/2.0/
+// Copyright (C) 2018, Jaguar Land Rover This program is licensed
+// under the terms and conditions of the Mozilla Public License,
+// version 2.0.  The full text of the Mozilla Public License is at
+// https://www.mozilla.org/MPL/2.0/
 //
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
@@ -19,39 +19,21 @@ static uint8_t _test_print_pending(sub_packet_node_t* node, void* dt)
 
     printf("%*cPacket          %p\n", indent*2, ' ', pack);
     printf("%*c  PID             %lu\n", indent*2, ' ', pack->pid);
-    printf("%*c  Parent node     %p\n", indent*2, ' ', pack->owner_node);
     printf("%*c  Payload Length  %d\n", indent*2, ' ', pack->payload_len);
     printf("%*c  Received time   %ld\n", indent*2, ' ', pack->received_ts);
     putchar('\n');
     return 1;
 }
 
-static uint8_t _test_print_interval(intv_node_t* node, void* dt)
+
+static uint8_t _test_print_publisher(sub_publisher_t* pub, void* dt)
 {
-    packet_interval_t intv =  node->data;
-    int indent = (int) (uint64_t) dt;
-
-    printf("%*cInterval: %lu - %lu\n", indent*2, ' ', intv.first_pid, intv.last_pid);
-    return 1;
-}
-
-static uint8_t _test_print_interval_list(intv_list_t* list)
-{
-    puts("Interval:");
-    intv_list_for_each(list, _test_print_interval, (void*) 1);
-    return 1;
-}
-
-
-static uint8_t _test_print_publisher(sub_publisher_node_t* node, void* dt)
-{
-    sub_publisher_t* pub = node->data;
     int indent = (int) (uint64_t) dt;
 
     printf("%*cPublisher %p\n", indent*2, ' ', pub);
-    if (sub_packet_list_size(&pub->received) > 0) {
+    if (sub_packet_list_size(&pub->received_pid) > 0) {
         printf("%*cReceived packets:\n", indent*3, ' ');
-        sub_packet_list_for_each(&pub->received, _test_print_pending, (void*) ((uint64_t)indent + 2));
+        sub_packet_list_for_each(&pub->received_pid, _test_print_pending, (void*) ((uint64_t)indent + 2));
     } else
         printf("%*cReceived packets: [None]\n", indent*2, ' ');
 
@@ -60,29 +42,6 @@ static uint8_t _test_print_publisher(sub_publisher_node_t* node, void* dt)
     return 1;
 }
 
-void test_print_sub_context(sub_context_t* ctx)
-{
-    printf("Context           %p\n", ctx);
-    if (sub_packet_list_size(&ctx->dispatch_ready) > 0) {
-        printf("Dispatch-ready packets:\n");
-        sub_packet_list_for_each(&ctx->dispatch_ready, _test_print_pending, (void*) ((uint64_t) 1));
-    } else
-        printf("Dispatch-ready packets: [None]\n");
-
-    if (sub_packet_list_size(&ctx->ack_ready) > 0) {
-        printf("Acknowledge-ready packets:\n");
-        sub_packet_list_for_each(&ctx->ack_ready, _test_print_pending, (void*) ((uint64_t) 1));
-    } else
-        printf("Ackonwledge-ready packets: [None]\n");
-
-
-    if (sub_publisher_list_size(&ctx->publishers) > 0) {
-        printf("\nPublishers:\n");
-        sub_publisher_list_for_each(&ctx->publishers, _test_print_publisher, (void*) (uint64_t) 1);
-    } else
-        printf("Publishers: [None]\n");
-
-}
 
 static void test_sequence(char* test, sub_packet_list_t* list, packet_id_t start, packet_id_t stop)
 {
@@ -135,16 +94,16 @@ static void add_received_packets(sub_publisher_t* pub,
 }
 
 static void test_interval_list(char* test,
-                               intv_list_t* list,
+                               sub_publisher_t* pub,
                                ...)
 {
     va_list ap;
     packet_id_t start;
     packet_id_t stop;
-    intv_node_t* node = intv_list_head(list);
+    sub_pid_interval_node_t* node = sub_pid_interval_list_head(&pub->received_interval);
     uint32_t argc;
 
-    va_start(ap, list);
+    va_start(ap, pub);
 
     while(node) {
         start = va_arg(ap, packet_id_t);
@@ -153,7 +112,7 @@ static void test_interval_list(char* test,
         // Did we run out of arguments?
         if (!start || !stop) {
             printf("sub_test: failed  %s: Got %d interval tuples. List has %d elements",
-                   test, argc, intv_list_size(list));
+                   test, argc, sub_pid_interval_list_size(&pub->received_interval));
             exit(255);
         }
             
@@ -167,7 +126,7 @@ static void test_interval_list(char* test,
             exit(255);
         }
         argc++;
-        node = intv_list_next(node);
+        node = sub_pid_interval_list_next(node);
     }
     va_end(ap);
     // Do we still have args?
@@ -178,184 +137,87 @@ static void test_interval_list(char* test,
         printf("sub_test: failed  %s. %d interval tuples in argument. List size is %d\n",
                test,
                argc,
-               intv_list_size(list));
+               sub_pid_interval_list_size(&pub->received_interval));
         exit(255);
     }
 }
 
 
 
-void reset_context(sub_context_t* ctx)
-{
-    sub_packet_t* pack = 0;
-    sub_publisher_t* pub;
-    sub_publisher_node_t* p_node;
-    sub_publisher_list_t lst;
-    
-    sub_publisher_list_init(&lst, 0,0, 0);
-    p_node = sub_publisher_list_head(&ctx->publishers);
-    while(p_node) {
-        pub = p_node->data;
-        sub_reset_publisher(pub, 0);
-        sub_publisher_list_push_head(&lst, pub);
-        p_node = sub_publisher_list_head(&ctx->publishers);
-    }
-
-    while((pack = sub_get_next_dispatch_ready(ctx))) 
-        sub_packet_dispatched(pack);
-
-    while((pack = sub_get_next_acknowledge_ready(ctx))) 
-        sub_packet_acknowledged(pack);
-
-    while(sub_publisher_list_head(&lst))  {
-        sub_publisher_list_pop_head(&lst, &pub);
-        sub_init_publisher(pub, ctx);
-    }
-        
-        
-
-    return;
-}
-
-
 void test_sub(void)
 {
-    sub_context_t ctx;
     sub_publisher_t pub1;
     sub_publisher_t pub2;
     sub_publisher_t pub3;
     sub_packet_t* pack = 0;
     packet_id_t pid = 0;
-    intv_list_t holes;
     sub_packet_node_t* node = 0;
-    packet_interval_t intv = { .first_pid =0, .last_pid = 0};
+    sub_pid_interval_t intv = { .first_pid =0, .last_pid = 0};
     sub_packet_list_t lst;
+    sub_packet_list_t dispatch_ready;
 
-    sub_init_context(&ctx);
-    intv_list_init(&holes, 0, 0, 0);
+    sub_packet_list_init(&dispatch_ready, 0, 0, 0);
 
-    
-    sub_init_publisher(&pub1, &ctx);
-    sub_init_publisher(&pub2, &ctx);
-    sub_init_publisher(&pub3, &ctx);
-
-
+    sub_init_publisher(&pub1);
+    sub_init_publisher(&pub2);
+    sub_init_publisher(&pub3);
 
     //--------
     // Basic processing of packages
     //--------
-
     add_received_packets(&pub1, 0,
                          1, 5,
                          0, 0);
 
     // Check sequence
-    test_sequence("1.1", &pub1.received, 1, 5);
-    sub_process_received_packets(&pub1);
+    test_sequence("1.1", &pub1.received_pid, 1, 5);
+    sub_process_received_packets(&pub1, &dispatch_ready);
 
     // Received queue should be empty.
-    if (sub_packet_list_size(&pub1.received)) {
+    if (sub_packet_list_size(&pub1.received_pid)) {
         printf("sub_test: failed  1.2. Wanted size 0, got %d\n",
-               sub_packet_list_size(&pub1.received));
+               sub_packet_list_size(&pub1.received_pid));
         exit(255);
     }
         
-    test_sequence("1.3", &ctx.dispatch_ready, 1, 5);
+    test_sequence("1.3", &dispatch_ready, 1, 5);
 
     // Dispatch all packets and check that they disappear.
     // Packet 1.
-    pack = sub_get_next_dispatch_ready(&ctx);
-    sub_packet_dispatched(pack);
-    test_sequence("1.4", &ctx.dispatch_ready, 2, 5);
+    sub_packet_list_pop_head(&dispatch_ready, &pack);
+
+    test_sequence("1.4", &dispatch_ready, 2, 5);
 
     // Packet 2.
-    pack = sub_get_next_dispatch_ready(&ctx);
-    sub_packet_dispatched(pack);
-    test_sequence("1.5", &ctx.dispatch_ready, 3, 5);
+    sub_packet_list_pop_head(&dispatch_ready, &pack);
+    test_sequence("1.5", &dispatch_ready, 3, 5);
 
     // Packet 3.
-    pack = sub_get_next_dispatch_ready(&ctx);
-    sub_packet_dispatched(pack);
-    test_sequence("1.6", &ctx.dispatch_ready, 4, 5);
+    sub_packet_list_pop_head(&dispatch_ready, &pack);
+    test_sequence("1.6", &dispatch_ready, 4, 5);
 
     // Packet 4.
-    pack = sub_get_next_dispatch_ready(&ctx);
-    sub_packet_dispatched(pack);
-    test_sequence("1.7", &ctx.dispatch_ready, 5, 5);
+    sub_packet_list_pop_head(&dispatch_ready, &pack);
+    test_sequence("1.7", &dispatch_ready, 5, 5);
 
     // Packet 5.
-    pack = sub_get_next_dispatch_ready(&ctx);
-    sub_packet_dispatched(pack);
-    if (sub_packet_list_size(&ctx.dispatch_ready)) {
+    sub_packet_list_pop_head(&dispatch_ready, &pack);
+    if (sub_packet_list_size(&dispatch_ready)) {
         printf("sub_test: failed  1.8. Wanted size 0, got %d\n",
-               sub_packet_list_size(&ctx.dispatch_ready));
+               sub_packet_list_size(&dispatch_ready));
         exit(255);
     }
 
-    //
-    // Packet 1-5 should now be in the ack_ready list
-    //
-    test_sequence("1.9", &ctx.ack_ready, 1, 5);
+    // Packet 1-5 should be in the received list.
+    test_interval_list("1.9",
+                       &pub1,
+                       1, 5,
+                       0, 0);
 
-    // Validate packet 1
-    pack = sub_get_next_acknowledge_ready(&ctx);
-    if (pack->pid != 1) {
-        printf("sub_test: failed  1.10. Wanted pid 1, got %lu\n",
-               pack->pid);
-        exit(255);
-    }
-    sub_packet_acknowledged(pack);
-    test_sequence("1.11", &ctx.ack_ready, 2, 5);
-
-    // Validate packet 2
-    pack = sub_get_next_acknowledge_ready(&ctx);;
-    if (pack->pid != 2) {
-        printf("sub_test: failed  1.12. Wanted pid 2, got %lu\n",
-               pack->pid);
-        exit(255);
-    }
-    sub_packet_acknowledged(pack);
-    test_sequence("1.12", &ctx.ack_ready, 3, 5);
     
-    // Validate packet 3
-    pack = sub_get_next_acknowledge_ready(&ctx);;
-    if (pack->pid != 3) {
-        printf("sub_test: failed  1.13. Wanted pid 3, got %lu\n",
-               pack->pid);
-        exit(255);
-    }
-    sub_packet_acknowledged(pack);
-    test_sequence("1.14", &ctx.ack_ready, 4, 5);
-
-    // Validate packet 4
-    pack = sub_get_next_acknowledge_ready(&ctx);;
-    if (pack->pid != 4) {
-        printf("sub_test: failed  1.14. Wanted pid 4, got %lu\n",
-               pack->pid);
-        exit(255);
-    }
-    sub_packet_acknowledged(pack);
-    test_sequence("1.15", &ctx.ack_ready, 5, 5);
-
-    // Validate packet 5
-    pack = sub_get_next_acknowledge_ready(&ctx);;
-    if (pack->pid != 5) {
-        printf("sub_test: failed  1.16. Wanted pid 5, got %lu\n",
-               pack->pid);
-        exit(255);
-    }
-    sub_packet_acknowledged(pack);
-
-
-    // Ack ready should be empty
-    if (sub_packet_list_size(&ctx.ack_ready)) {
-        printf("sub_test: failed  1.17. Wanted size 0, got %d\n",
-               sub_packet_list_size(&ctx.ack_ready));
-        exit(255);
-    }
-    
-    // Reset pub1
-    reset_context(&ctx);
+    // Reset pub1 and dispatch_ready.
+    sub_reset_publisher(&pub1, 0);
+    sub_packet_list_empty(&dispatch_ready);
     
     //--------
     // Out of order packages.
@@ -370,14 +232,16 @@ void test_sub(void)
                          0, 0);
 
     // Check sequence
-    test_sequence("2.1", &pub1.received, 1, 4);
+    test_sequence("2.1", &pub1.received_pid, 1, 4);
 
-    sub_process_received_packets(&pub1);
-    test_sequence("2.2", &ctx.dispatch_ready, 1, 4);
+    sub_process_received_packets(&pub1, &dispatch_ready);
+    test_sequence("2.2", &dispatch_ready, 1, 4);
     
 
     // Start out-of-order packages
-    reset_context(&ctx);
+    sub_reset_publisher(&pub1, 0);
+    sub_packet_list_empty(&dispatch_ready);
+
     add_received_packets(&pub1, 0,
                          2, 2,
                          1, 1,
@@ -386,12 +250,13 @@ void test_sub(void)
                          0, 0);
 
     // Check sequence
-    test_sequence("2.3", &pub1.received, 1, 4);
+    test_sequence("2.3", &pub1.received_pid, 1, 4);
 
-    sub_process_received_packets(&pub1);
-    test_sequence("2.4", &ctx.dispatch_ready, 1, 4);
+    sub_process_received_packets(&pub1, &dispatch_ready);
+    test_sequence("2.4", &dispatch_ready, 1, 4);
     
-    reset_context(&ctx);
+    sub_reset_publisher(&pub1, 0);
+    sub_packet_list_empty(&dispatch_ready);
 
     // End out-of-order packages
     add_received_packets(&pub1, 0,
@@ -402,12 +267,13 @@ void test_sub(void)
                          0, 0);
 
     // Check sequence
-    test_sequence("2.5", &pub1.received, 1, 4);
+    test_sequence("2.5", &pub1.received_pid, 1, 4);
 
-    sub_process_received_packets(&pub1);
-    test_sequence("2.6", &ctx.dispatch_ready, 1, 4);
+    sub_process_received_packets(&pub1, &dispatch_ready);
+    test_sequence("2.6", &dispatch_ready, 1, 4);
 
-    reset_context(&ctx);
+    sub_reset_publisher(&pub1, 0);
+    sub_packet_list_empty(&dispatch_ready);
 
 
     //--------
@@ -420,12 +286,11 @@ void test_sub(void)
                          4, 5,
                          0, 0);
 
-    // Check if we get a "3" as a missing packet
-    sub_get_missing_packets(&pub1, &holes);
-
-    test_interval_list("3.1", &holes,
-                       3,3,
+    test_interval_list("3.1", &pub1,
+                       1,2,
+                       4,5,
                        0,0);
+/*
 
     //
     // Test multiple missing packages.
@@ -438,12 +303,12 @@ void test_sub(void)
                          6, 7,
                          0, 0);
 
-    while(intv_list_pop_head(&holes, &intv));
+    while(sub_pid_interval_list_pop_head(&pub1, &intv));
 
     // Check if we get a "3-5" as a missing packet
-    sub_get_missing_packets(&pub1, &holes);
+    sub_get_missing_packets(&pub1, &pub1);
 
-    test_interval_list("3.2", &holes,
+    test_interval_list("3.2", &pub1,
                        3,5,
                        0,0);
 
@@ -466,14 +331,14 @@ void test_sub(void)
                          20, 21,
                          0, 0);
 
-    while(intv_list_pop_head(&holes, &intv));
+    while(sub_pid_interval_list_pop_head(&pub1, &intv));
 
     // Check if we get a 3-5, 7-9, 11-13, 16-19 as a missing packets
 
-    sub_get_missing_packets(&pub1, &holes);
+    sub_get_missing_packets(&pub1, &pub1);
 
 
-    test_interval_list("3.3", &holes,
+    test_interval_list("3.3", &pub1,
                        3,5,
                        8,9,
                        11,13,
@@ -495,13 +360,13 @@ void test_sub(void)
                          103, 104,
                          0, 0);
 
-    while(intv_list_pop_head(&holes, &intv));
+    while(sub_pid_interval_list_pop_head(&pub1, &intv));
 
 
-    sub_get_missing_packets(&pub1, &holes);
+    sub_get_missing_packets(&pub1, &pub1);
 
     
-    test_interval_list("4.1", &holes,
+    test_interval_list("4.1", &pub1,
                        102, 102,
                        0,0);
 
@@ -515,13 +380,13 @@ void test_sub(void)
 
     add_received_packets(&pub1, 0,
                          1, 2,
-                         // 3-5
+                         // 3-5 missing
                          6, 7,
-                         // 8-9
+                         // 8-9 missing
                          10, 10,
-                         // 11-13
+                         // 11-13 missing
                          14, 15,
-                         // 16-19
+                         // 16-19 missing
                          20, 21,
                          0, 0);
 
@@ -531,12 +396,12 @@ void test_sub(void)
     
     test_sequence("5.1", &ctx.dispatch_ready, 1, 2);
 
-    while(intv_list_pop_head(&holes, &intv));
+    while(sub_pid_interval_list_pop_head(&pub1, &intv));
 
     // We should still have the same holes
-    sub_get_missing_packets(&pub1, &holes);
+    sub_get_missing_packets(&pub1, &pub1);
 
-    test_interval_list("5.2", &holes,
+    test_interval_list("5.2", &pub1,
                        3,5,
                        8,9,
                        11,13,
@@ -552,12 +417,12 @@ void test_sub(void)
     // need pid 3 and 5 to get a complete sequence from 1-7
     sub_process_received_packets(&pub1);
 
-    while(intv_list_pop_head(&holes, &intv));
+    while(sub_pid_interval_list_pop_head(&pub1, &intv));
 
     // We should still have the same holes
-    sub_get_missing_packets(&pub1, &holes);
+    sub_get_missing_packets(&pub1, &pub1);
 
-    test_interval_list("5.3", &holes,
+    test_interval_list("5.3", &pub1,
                        3,3,
                        5,5,
                        8,9,
@@ -573,16 +438,16 @@ void test_sub(void)
     // need pid 5 to get a complete sequence from 1-7
     sub_process_received_packets(&pub1);
 
-    while(intv_list_pop_head(&holes, &intv));
+    while(sub_pid_interval_list_pop_head(&pub1, &intv));
 
 
     // We should still have the same holes
-    sub_get_missing_packets(&pub1, &holes);
+    sub_get_missing_packets(&pub1, &pub1);
 
     // Ready packets should be 1-3
     test_sequence("5.4", &ctx.dispatch_ready, 1, 3);
 
-    test_interval_list("5.5", &holes,
+    test_interval_list("5.5", &pub1,
                        5,5,
                        8,9,
                        11,13,
@@ -604,13 +469,13 @@ void test_sub(void)
     // Ready queue is empty.
     // We are still lacking pid 5 before we can
     // move 1-7 to 
-    while(intv_list_pop_head(&holes, &intv));
+    while(sub_pid_interval_list_pop_head(&pub1, &intv));
 
 
     // We should still have the same holes
-    sub_get_missing_packets(&pub1, &holes);
+    sub_get_missing_packets(&pub1, &pub1);
 
-    test_interval_list("5.7", &holes,
+    test_interval_list("5.7", &pub1,
                        5,5,
                        8,9,
                        11,13,
@@ -627,16 +492,16 @@ void test_sub(void)
 
     sub_process_received_packets(&pub1);
 
-    while(intv_list_pop_head(&holes, &intv));
+    while(sub_pid_interval_list_pop_head(&pub1, &intv));
 
 
     // We should still have the same holes
-    sub_get_missing_packets(&pub1, &holes);
+    sub_get_missing_packets(&pub1, &pub1);
 
     // Ready packets should be 4-7
     test_sequence("5.8", &ctx.dispatch_ready, 4, 7);
 
-    test_interval_list("5.9", &holes,
+    test_interval_list("5.9", &pub1,
                        8,9,
                        11,13,
                        16,19,
@@ -652,17 +517,17 @@ void test_sub(void)
     // 8-9 
     sub_process_received_packets(&pub1);
 
-    while(intv_list_pop_head(&holes, &intv));
+    while(sub_pid_interval_list_pop_head(&pub1, &intv));
 
 
     // We should still have the same holes
-    sub_get_missing_packets(&pub1, &holes);
+    sub_get_missing_packets(&pub1, &pub1);
 
 
     // Ready packets should be 4-7
     test_sequence("5.10", &ctx.dispatch_ready, 4, 7);
 
-    test_interval_list("5.11", &holes,
+    test_interval_list("5.11", &pub1,
                        8,9,
                        0,0);
 
@@ -677,17 +542,17 @@ void test_sub(void)
     // received packages to ready
     sub_process_received_packets(&pub1);
 
-    while(intv_list_pop_head(&holes, &intv));
+    while(sub_pid_interval_list_pop_head(&pub1, &intv));
 
     // We should still have the same holes
-    sub_get_missing_packets(&pub1, &holes);
+    sub_get_missing_packets(&pub1, &pub1);
 
     // Ready packets should be 4-21
     test_sequence("5.12", &ctx.dispatch_ready, 4, 21);
 
-    if (intv_list_size(&holes)) {
+    if (sub_pid_interval_list_size(&pub1)) {
         printf("sub_test: failed  5.12 Wanted size 0, got %d\n",
-               intv_list_size(&holes));
+               sub_pid_interval_list_size(&pub1));
         exit(255);
     }
 
@@ -936,7 +801,7 @@ void test_sub(void)
     }
 
     reset_context(&ctx);
- 
+*/ 
 }
 
 

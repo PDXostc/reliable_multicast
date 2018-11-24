@@ -51,7 +51,6 @@
 //   **Please note that the caller still has to free packet->payload**
 //
 typedef struct sub_packet {
-    struct _sub_packet_node* owner_node;   // Parent node in 'received' or 'ready' of sub_publisher_t
     struct sub_publisher* publisher;   // Publisher that sent this packet.
 
     // Time stamp when packet was placed in received queue. Used
@@ -76,6 +75,10 @@ typedef struct sub_packet {
     // Provided by sub_packet_received()
     // Retrieved by sub_packet_user_data()
     user_data_t pkg_user_data;   
+
+    // Node referering to self in received_ts sub_publisher::list
+    // Allows for O(1) removal of self once we have been processed
+    struct _sub_packet_node* received_ts_entry;
 } sub_packet_t;
 
 
@@ -83,54 +86,43 @@ RMC_LIST(sub_packet_list, sub_packet_node, sub_packet_t*)
 typedef sub_packet_list sub_packet_list_t;
 typedef sub_packet_node sub_packet_node_t;
 
+
+// Used by sub_get_ack_sub_pid_intervals
+typedef struct sub_pid_interval {
+    packet_id_t first_pid; // First packet ID in interval
+    packet_id_t last_pid; // LAst packet ID in interval
+} sub_pid_interval_t;
+
+
+RMC_LIST(sub_pid_interval_list, sub_pid_interval_node, sub_pid_interval_t) 
+typedef sub_pid_interval_list sub_pid_interval_list_t;
+typedef sub_pid_interval_node sub_pid_interval_node_t;
+
 // A publisher is a feed from a single packet publisher that
 // is being processed. It contains the state necessary to drive
 // packets toward the cycle described in sub_packet_t aboce.
 //  
 typedef struct sub_publisher {
-    struct sub_context* owner;         // Owning context.
     packet_id_t max_pid_ready;         // Highest pid that is ready to be dispatched.
     packet_id_t max_pid_received;      // Maximum PID received.
-    sub_packet_list_t received;        // Packets received but need additional packets. 
+
+    // Packets received but need additional packets.
+    // Sorted on ascending pid
+    sub_packet_list_t received_pid;    
+
+    // Packets received but need additional packets.
+    // Sorted on ascending recived_ts
+    sub_packet_list_t received_ts;    
+
+    // Received packet intervals.
+    // Filled by sub_packet_received().
+    // Depletd by sub_interval_acknowledged()
+    //
+    sub_pid_interval_list received_interval;
 } sub_publisher_t; 
 
 
-RMC_LIST(sub_publisher_list, sub_publisher_node, sub_publisher_t*) 
-typedef sub_publisher_list sub_publisher_list_t;
-typedef sub_publisher_node sub_publisher_node_t;
-
-// Used by sub_get_ack_packet_intervals
-typedef struct packet_interval {
-    packet_id_t first_pid; // First packet ID in interval
-    packet_id_t last_pid; // LAst packet ID in interval
-} packet_interval_t;
-
-#include "rmc_list.h"
-
-RMC_LIST(intv_list, intv_node, packet_interval_t) 
-typedef intv_list intv_list_t;
-typedef intv_node intv_node_t;
-
-// A single subscriber context that collects the feeds
-// of multiple publishers into a single feed.
-// We move packdets that have been processed by sub_process_received_packets()
-// int dispatch_ready and ack_ready on a context level instead of a per-publisher level
-// since they can all be treated as a single pool of actionablke packets at this point.
-//
-// The packets in disaptch_ready are dropped in at the tail of the list, ensuring
-// that all packets from a single publisher are sorted on their publisher-specific ascending
-// pid.
-//
-// The packets in ack_ready are sorted on received_time, allowig for quick retrieval based
-// on when it is time to acknowledge them.
-//
-typedef struct sub_context {
-    sub_publisher_list_t publishers; // of sub_publisher_t for all publishers we are subscribing to.
-    sub_packet_list_t dispatch_ready;  // Packets ready to be dispatched.
-    sub_packet_list_t ack_ready;       // Packets ready to be acknowledged.
-} sub_context_t; 
-
-extern void sub_init_context(sub_context_t* ctx);
+extern void sub_init_publisher(sub_publisher_t* pub);
 
 extern int sub_packet_is_duplicate(sub_publisher_t* pub,
                                    packet_id_t pid);
@@ -146,38 +138,15 @@ extern int sub_packet_received(sub_publisher_t* pub,
 // Go through all received packets and move those that are ready to
 // be dispathed to the ready queue
 // Should be called after one or more calls to sub_receive_packet()
-extern void sub_process_received_packets(sub_publisher_t* pub);
+extern void sub_process_received_packets(sub_publisher_t* pub, sub_packet_list_t* dispatch_ready);
 
-extern void sub_get_missing_packets(sub_publisher_t* sub, intv_list_t* res);
-extern void sub_init_publisher(sub_publisher_t* pub, sub_context_t* ctx);
-extern sub_publisher_t* sub_find_publisher(sub_context_t* ctx, void* address, int address_len);
 extern void sub_reset_publisher(sub_publisher_t*,
                                 void (*)(void*, payload_len_t, user_data_t));;
 
-extern sub_packet_t* sub_get_next_dispatch_ready(sub_context_t* ctx);
-extern int sub_get_dispatch_ready_count(sub_context_t* ctx);
-extern void sub_packet_dispatched(sub_packet_t* pack);
-
-// Caller needs to free pack->payload once this call returns
-void sub_get_timed_out_packets(sub_context_t* ctx,
-                               usec_timestamp_t timeout_ts,
-                               sub_packet_list_t* result);
-
-
-extern int sub_get_acknowledge_ready_count(sub_context_t* ctx);
-extern sub_packet_t* sub_get_next_acknowledge_ready(sub_context_t* ctx);
-extern void sub_packet_acknowledged(sub_packet_t* pack);
 
 extern  user_data_t sub_packet_user_data(sub_packet_t* pack);
+extern int _sub_packet_add_to_received_interval(sub_publisher_t* pub, packet_id_t pid);
 
-// Get the timestamp when the oldest packet was received that we have
-// yet to send an acknowledgement back to the publisher for.
-extern int sub_get_oldest_unacknowledged_packet(sub_context_t* ctx,
-                                                usec_timestamp_t* received_ts);
 
-extern sub_packet_node_t* sub_get_packet_interval(sub_packet_node_t* start, packet_interval_t* interval);
-
-extern uint32_t sub_get_packet_intervals(sub_packet_list_t* list,
-                                         intv_list_t* result_intervals);
 
 #endif // __REL_MCAST_SUB__
