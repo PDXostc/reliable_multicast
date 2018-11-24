@@ -30,16 +30,10 @@ static int _process_cmd_ack_single(rmc_connection_t* conn, user_data_t user_data
     circ_buf_free(&conn->read_buf, sizeof(ack), 0);
     printf("_process_cmd_ack_single(): pid[%lu]\n", ack.packet_id);
 
-//    extern void test_print_pub_context(pub_context_t* ctx);
-//    puts("\nBEFORE");
-//    test_print_pub_context(&ctx->pub_ctx);
-
     // Mark the packet as acknwoledged, and call the payload free function
     // provided to rmc_pub_init_context(). If no function is
     // provided, free() will bre called.
     rmc_pub_packet_ack(ctx, conn, ack.packet_id) ;
-//    puts("\nAFTER");
-//    test_print_pub_context(&ctx->pub_ctx);
 
     return 0;
 }
