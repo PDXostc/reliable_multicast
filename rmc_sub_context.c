@@ -55,6 +55,8 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
     if (!ctx || !mcast_group_addr)
         return EINVAL;
 
+    sub_packet_list_init(&ctx->dispatch_ready, 0, 0, 0);
+
     // We can throw away seed result since we will only call rand here.
     ctx->context_id = context_id?context_id:rand_r(&seed);
     ctx->user_data = user_data;
@@ -109,7 +111,6 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
 
     ctx->ack_timeout = RMC_DEFAULT_ACK_TIMEOUT;
 
-    sub_init_context(&ctx->sub_ctx);
 
     // FIXME: Better memory management
     ctx->publishers = malloc(sizeof(sub_publisher_t) * conn_vec_size);
