@@ -80,7 +80,10 @@
                                           int (*compare_func)(DATATYPE new_elem, \
                                                               DATATYPE existing_elem)); \
                                                                         \
-                                                                        \
+    extern NODETYPE* LISTTYPE##_find_node_rev(LISTTYPE* list,           \
+                                          DATATYPE data,                \
+                                          int (*compare_func)(DATATYPE new_elem, \
+                                                              DATATYPE existing_elem)); \
     extern NODETYPE* LISTTYPE##_insert_sorted(LISTTYPE* list,           \
                                               DATATYPE new_elem,        \
                                               int (*compare_func)(DATATYPE new_elem, \

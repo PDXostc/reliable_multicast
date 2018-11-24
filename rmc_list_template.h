@@ -323,6 +323,25 @@
         return (NODETYPE*) 0;                                           \
     }                                                                   \
                                                                         \
+    NODETYPE* LISTTYPE##_find_node_rev(LISTTYPE* list,                  \
+                                   DATATYPE data,                       \
+                                   int (*compare_func)(DATATYPE new_elem, \
+                                                       DATATYPE existing_elem)) \
+    {                                                                   \
+        NODETYPE* node = 0;                                             \
+                                                                        \
+        assert(list);                                                   \
+        node = LISTTYPE##_tail(list);                                   \
+                                                                        \
+        while(node) {                                                   \
+            if ((*compare_func)(data, node->data) != 0)                 \
+                return node;                                            \
+                                                                        \
+            node = node->prev;                                          \
+        }                                                               \
+        return (NODETYPE*) 0;                                           \
+    }                                                                   \
+                                                                        \
                                                                         \
     NODETYPE* LISTTYPE##_insert_sorted_node(LISTTYPE* list,             \
                                             NODETYPE* new_node,         \
