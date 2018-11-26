@@ -25,7 +25,7 @@ static uint8_t _test_print_pending(pub_packet_node_t* node, void* dt)
 }
 
 static int _descriptor(rmc_pub_context_t* ctx,
-                       rmc_connection_index_t index)
+                       rmc_index_t index)
 {
     switch(index) {
     case RMC_MULTICAST_INDEX:
@@ -61,7 +61,7 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
     while(nfds--) {
         int res = 0;
         uint8_t op_res = 0;
-        rmc_connection_index_t c_ind = events[nfds].data.u32;
+        rmc_index_t c_ind = events[nfds].data.u32;
 
         printf("pub_poll_wait(%s:%d)%s%s%s\n",
                _index(c_ind, buf), _descriptor(ctx, c_ind),
@@ -99,7 +99,7 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
                   major, 10,
                   rmc_pub_write(ctx, c_ind, &op_res));
             
-            printf("op_res: %s\n", _op_res_string(op_res));
+//            printf("op_res: %s\n", _op_res_string(op_res));
 
             if (op_res == RMC_WRITE_MULTICAST)
                 *tick_ind = 1;
@@ -132,10 +132,16 @@ void queue_test_data(rmc_pub_context_t* ctx, rmc_test_data_t* td)
                                      if (pack->payload_len == strlen(td->payload) + 1 &&
                                          !memcmp(pack->payload, td->payload, pack->payload_len)) {
                                          pack->pid = td->pid;
-                                             return 0;
+                                         // If we are to drop this packet, mark it as falsely sent.
+                                         if (td->wait < 0) { 
+                                             printf("Dropping packet [%lu] as specified\n", pack->pid);
+                                             pub_packet_sent(&ctx->pub_ctx, pack, rmc_usec_monotonic_timestamp());
+                                         }
+                                         return 0;
                                      }
                                      return 1;
                                  }), 0);
+
 }
 
 
@@ -166,9 +172,9 @@ void test_rmc_proto_pub(char* mcast_group_addr,
         { "p3", 4, 0 },
         { "p2", 3, 0 },
         { "p4", 5, 0 }, 
-        // Dropped packagte.
-        { "d1", 6, 300000 },
-        { "exit", 7, 1000000 }, 
+        { "d1", 6, -1 }, // Drop
+        { "p5", 7, 300000}, 
+        { "exit", 8, 1000000 }, 
     };
 
 
@@ -204,7 +210,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
 
     for(ind = 0; ind < sizeof(td) / sizeof(td[0]); ) {
         usec_timestamp_t now =  rmc_usec_monotonic_timestamp();
-        usec_timestamp_t tout =  now + td[ind].wait;
+        usec_timestamp_t tout =  now + labs(td[ind].wait);
         int tick_ind = 0;
 
         queue_test_data(ctx, &td[ind]);
@@ -233,4 +239,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
     }
 
     puts("Done");
+
+    puts("TO TEST: Multiple publishers. Single subscriber");
+    puts("TO TEST: Multiple subscribers. Single publisher");
 }

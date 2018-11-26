@@ -4,7 +4,8 @@
 
 
 # OBJ=list.o interval.o time.o pub.o
-OBJ= 	pub.o \
+OBJ= 	common.o \
+	pub.o \
 	time.o \
 	sub.o \
 	circular_buffer.o \

@@ -52,7 +52,6 @@ int sub_packet_is_duplicate(sub_publisher_t* pub, packet_id_t pid)
 int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
                         void* payload,
                         payload_len_t payload_len,
-                        uint8_t skip_acknowledgement,
                         usec_timestamp_t current_ts,
                         user_data_t pkg_user_data)
 {
@@ -64,9 +63,7 @@ int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
     pack->payload = payload;
     pack->payload_len = payload_len;
     pack->publisher = pub;
-    pack->skip_acknowledgement = skip_acknowledgement;
     pack->pkg_user_data = pkg_user_data;
-    pack->received_ts = current_ts;
 
     if (pub->max_pid_received < pid)
         pub->max_pid_received = pid;
@@ -82,20 +79,17 @@ int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
                                                    0);
                                           }));
 
-    // Insert on ascending received_ts sort order, running from tail toward head
-    // since our received packet probably belongs closer to the tail of
-    // the received list than the beginning
-    // Save list node that was created for quick removal in sub_process_received_packets()
-    //
-    pack->received_ts_entry =
-        sub_packet_list_insert_sorted_rev(&pub->received_ts,
-                                          pack,
-                                          lambda(int, (sub_packet_t* n_dt, sub_packet_t* o_dt) {
-                                                  return (n_dt->received_ts < o_dt->received_ts)?-1:
-                                                      ((n_dt->received_ts > o_dt->received_ts)?1:
-                                                       0);
-                                              }));
+    // If we currently have no unackonwledged packets,
+    // Make a note of when we received this packet so that we know when
+    // we have to ack it (and all other unackonwledged packets for the publisher while
+    // we are at it).
+    // Insert the publisher in the argument-provided pub_ack_list that is sorted
+    // on oldest_unacked_ts. This list allows us to quickly determine
+    // which publishers we need to send out acks for.
+    if (!pub->oldest_unacked_ts) {
+        pub->oldest_unacked_ts = current_ts;
 
+    }
     _sub_packet_add_to_received_interval(pub, pid);
     return 1;
 }
@@ -124,13 +118,13 @@ void sub_process_received_packets(sub_publisher_t* pub, sub_packet_list_t* dispa
             node->data->pid != pub->max_pid_ready + 1) 
             break;
 
+        printf("Moving [%lu] to dispatched. max_pid_ready[%lu]\n",
+               node->data->pid, pub->max_pid_ready);
+        
         // Drop the packet in at the tail of provide dispatch_ready list.
         // Since the pub->received() queue we get the packts from is pre-sorted on pid,
         // we will guarantee that packets in dispatch_ready will be sorted on an ascending pid.
         sub_packet_list_unlink(node);
-
-        // Remove self from ts-sorted receive list.
-        sub_packet_list_unlink(node->data->received_ts_entry);
 
         sub_packet_list_push_tail_node(dispatch_ready, node);
         node = sub_packet_list_head(&pub->received_pid);
@@ -144,8 +138,8 @@ void sub_init_publisher(sub_publisher_t* pub)
 {
     pub->max_pid_received = 0;
     pub->max_pid_ready = 0;
+    pub->oldest_unacked_ts = 0;
     sub_packet_list_init(&pub->received_pid, 0, 0, 0);
-    sub_packet_list_init(&pub->received_ts, 0, 0, 0);
     sub_pid_interval_list_init(&pub->received_interval, 0, 0, 0);
     return;
 }
@@ -160,7 +154,6 @@ void sub_reset_publisher(sub_publisher_t* pub,
     // Go through all received packets and wipe them.
     // Do a callback to free the payload, if specified.
     while(sub_packet_list_pop_head(&pub->received_pid, &pack)) {
-        sub_packet_list_unlink(pack->received_ts_entry);
         if (payload_free_cb)
             (*payload_free_cb)(pack->payload, pack->payload_len, pack->pkg_user_data);
         _free_pending_packet(pack);
@@ -175,9 +168,16 @@ void sub_reset_publisher(sub_publisher_t* pub,
 
 inline user_data_t sub_packet_user_data(sub_packet_t* pack)
 {
-    return pack?(pack->pkg_user_data):(user_data_t) { .u64 = 0};
+    return pack?(pack->pkg_user_data):user_data_nil();
 }
 
+usec_timestamp_t sub_oldest_unacknowledged_packet(sub_publisher_t* pub)
+{
+    if (!pub)
+        return 0;
+
+    return pub->oldest_unacked_ts;
+}
 
 // Add the pid of a received packet to the number of
 // received packets.

@@ -40,10 +40,28 @@ static int _process_cmd_ack_single(rmc_connection_t* conn, user_data_t user_data
 
 static int _process_cmd_ack_interval(rmc_connection_t* conn, user_data_t user_data)
 {
+    cmd_ack_interval_t ack;
+    rmc_pub_context_t* ctx = (rmc_pub_context_t*) user_data.ptr;
+    packet_id_t pid = 0;
+    // Do we have enough data?
+    if (circ_buf_in_use(&conn->read_buf) < sizeof(ack))
+        return EAGAIN;
+
+
+    // Read and free.
+    circ_buf_read(&conn->read_buf, (uint8_t*) &ack, sizeof(ack), 0);
+    circ_buf_free(&conn->read_buf, sizeof(ack), 0);
+    printf("_process_cmd_ack_interval(): interval[%lu:%lu]\n", ack.first_pid, ack.last_pid);
+
+    // Mark all packets in the interval as acknwoledged, and call the
+    // payload free function provided to rmc_pub_init_context(). If no
+    // function is provided, free() will bre called.
+    for (pid = ack.first_pid; pid <= ack.last_pid; ++pid)
+        rmc_pub_packet_ack(ctx, conn, pid) ;
     return 0;
 }
 
-int rmc_pub_close_connection(rmc_pub_context_t* ctx, rmc_connection_index_t s_ind)
+int rmc_pub_close_connection(rmc_pub_context_t* ctx, rmc_index_t s_ind)
 {
     
     printf("rmc_pub_close_connection(): index[%d]\n", s_ind);
@@ -57,7 +75,7 @@ int rmc_pub_close_connection(rmc_pub_context_t* ctx, rmc_connection_index_t s_in
                              }));
 }
 
-int rmc_pub_read(rmc_pub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* op_res)
+int rmc_pub_read(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
 {
     int res = 0;
     uint8_t dummy_res = 0;
@@ -98,7 +116,6 @@ int rmc_pub_read(rmc_pub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* 
         socklen_t addr_len = sizeof(src_addr);
         ssize_t len = 0;
 
-        
         if (ctx->mcast_send_descriptor == -1) {
             *op_res = RMC_ERROR;
             return ENOTCONN;

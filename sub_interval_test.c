@@ -32,7 +32,7 @@ static uint8_t _test_print_interval_list(sub_publisher_t* pub)
 
 static void add_packet(sub_publisher_t* pub, packet_id_t pid)
 {
-    sub_packet_received(pub, pid, "", 0, 0, 0, user_data_nil());
+    sub_packet_received(pub, pid, "", 0, 0, user_data_nil());
 }
 
 static void reset_list(sub_packet_list_t* lst)

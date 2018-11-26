@@ -75,7 +75,7 @@ int _rmc_conn_process_tcp_write(rmc_connection_t* conn, uint32_t* bytes_left)
 // and it is the last command that is partial.
 //
 int _rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
-                               rmc_connection_index_t s_ind,
+                               rmc_index_t s_ind,
                                uint8_t* op_res,
                                rmc_conn_command_dispatch_t* dispatch_table, // Terminated by a null dispatch entry
                                user_data_t user_data)
@@ -150,7 +150,7 @@ int _rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
 
 
 int _rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
-                       rmc_connection_index_t s_ind,
+                       rmc_index_t s_ind,
                        uint8_t* op_res,
                        rmc_conn_command_dispatch_t* dispatch_table, // Terminated by a null dispatch entry
                        user_data_t user_data)

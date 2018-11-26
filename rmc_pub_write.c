@@ -197,7 +197,7 @@ int _rmc_pub_resend_packet(rmc_pub_context_t* ctx,
 }    
 
 
-int rmc_pub_write(rmc_pub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* op_res)
+int rmc_pub_write(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
 {
     int res = 0;
     int rearm_write = 0;

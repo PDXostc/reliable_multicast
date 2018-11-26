@@ -19,6 +19,7 @@
 
 typedef uint32_t rmc_context_id_t;
 
+
 typedef struct multicast_header {
     rmc_context_id_t context_id;
     payload_len_t payload_len;
@@ -31,8 +32,8 @@ typedef struct cmd_ack_single {
 } cmd_ack_single_t;
 
 typedef struct cmd_ack_interval {
-    packet_id_t first;    // ID of first packet ID
-    packet_id_t last;     // ID of last packet ID
+    packet_id_t first_pid;    // ID of first packet ID
+    packet_id_t last_pid;     // ID of last packet ID
 } cmd_ack_interval_t;
 
 
@@ -69,7 +70,7 @@ typedef struct cmd_packet_header {
 #define RMC_CONNECTION_MODE_CONNECTING 3
 
 
-typedef uint32_t rmc_connection_index_t;
+typedef uint32_t rmc_index_t;
 typedef uint16_t rmc_poll_action_t;
 
 // Called when a new connection is created by rmc.
@@ -88,7 +89,7 @@ typedef uint16_t rmc_poll_action_t;
 //
 typedef void (*rmc_poll_add_cb_t)(user_data_t user_data,
                                   int descriptor,
-                                  rmc_connection_index_t index,
+                                  rmc_index_t index,
                                   rmc_poll_action_t initial_action);
 
 // The poll action either needs to be re-armed 
@@ -100,7 +101,7 @@ typedef void (*rmc_poll_add_cb_t)(user_data_t user_data,
 //
 typedef void (*rmc_poll_modify_cb_t)(user_data_t user_data,
                                      int descriptor,
-                                     rmc_connection_index_t index,
+                                     rmc_index_t index,
                                      rmc_poll_action_t old_action,
                                      rmc_poll_action_t new_action);
 
@@ -109,7 +110,7 @@ typedef void (*rmc_poll_modify_cb_t)(user_data_t user_data,
 // Callback to remove a connection previously added with poll_add().
 typedef void (*rmc_poll_remove_cb_t)(user_data_t user_data,
                                      int descriptor,
-                                     rmc_connection_index_t index);
+                                     rmc_index_t index);
 
 typedef struct rmc_connection {
     // Index of owner rmc_connection_t struct in the master
@@ -118,7 +119,7 @@ typedef struct rmc_connection {
     // Special cases on RMC_MULTICAST_INDEX and RMC_LISTEN_INDEX
     // to identify the multicast and listen descriptors used
     // by rmc_context_t;x
-    rmc_connection_index_t connection_index;
+    rmc_index_t connection_index;
 
     // Action is a bitmask of RMC_POLLREAD and RMC_POLLWRITE
     rmc_poll_action_t action;
@@ -166,7 +167,7 @@ typedef struct rmc_connection_vector {
     uint32_t connection_count;
 
     // Top connection index currently in use.
-    rmc_connection_index_t max_connection_ind;  
+    rmc_index_t max_connection_ind;  
 
     // Array of connections.
     // Memory provided by rmc_init_connection_vector().
@@ -236,10 +237,13 @@ typedef struct rmc_pub_context {
 
 } rmc_pub_context_t;
 
+
+RMC_LIST(rmc_index_list, rmc_index_node, uint32_t) 
+typedef rmc_index_list rmc_index_list_t;
+typedef rmc_index_node rmc_index_node_t;
+
 // A single subscriber context
 typedef struct rmc_sub_context {
-    sub_context_t sub_ctx;
-
     rmc_connection_vector_t conn_vec;
 
     // Array of publishers maintained with the same index as conn_vec
@@ -252,6 +256,18 @@ typedef struct rmc_sub_context {
     // conn_vec struct.
     //
     sub_publisher_t* publishers;
+
+    // Packets ready to be dispatched.  These packets are collected
+    // from all publishers through calls to
+    // sub_process_received_packets().
+    sub_packet_list_t dispatch_ready;
+    
+
+    // List of indexes of publishers with pending packet acks that are
+    // yet to be sent out.  Sorted on ascending pub->oldest_unacked_ts
+    // so that we can look at head of list to see which publisher we
+    // need to ack next.
+    rmc_index_list_t pub_ack_list;
 
     user_data_t user_data;
 
@@ -267,17 +283,13 @@ typedef struct rmc_sub_context {
 
     int mcast_recv_descriptor;
 
+    // usec between us receiving a packet and when we have to acknowledge it.
+    uint32_t ack_timeout; 
     
     // Randomly genrated context ID allowing us to recognize and drop
     // looped back multicast messages.
     rmc_context_id_t context_id; 
 
-    // As a subscriber, how long can we sit on acknowledgements to be
-    // sent back to the publisher before we pack them all up
-    // and burst them back via tcp.
-    uint32_t ack_timeout;
-
-    
     // Called to alloc memory for incoming data.
     // that needs to be processed.
     void* (*payload_alloc)(payload_len_t payload_len,
@@ -426,9 +438,9 @@ extern user_data_t rmc_pub_user_data(rmc_pub_context_t* ctx);
 extern rmc_context_id_t rmc_pub_context_id(rmc_pub_context_t* ctx);
 extern int rmc_pub_get_next_timeout(rmc_pub_context_t* context, usec_timestamp_t* result);
 extern int rmc_pub_process_timeout(rmc_pub_context_t* context);
-extern int rmc_pub_read(rmc_pub_context_t* context, rmc_connection_index_t connection_index, uint8_t* op_res);
-extern int rmc_pub_write(rmc_pub_context_t* context, rmc_connection_index_t connection_index, uint8_t* op_res);
-extern int rmc_pub_close_connection(rmc_pub_context_t* ctx, rmc_connection_index_t s_ind);
+extern int rmc_pub_read(rmc_pub_context_t* context, rmc_index_t connection_index, uint8_t* op_res);
+extern int rmc_pub_write(rmc_pub_context_t* context, rmc_index_t connection_index, uint8_t* op_res);
+extern int rmc_pub_close_connection(rmc_pub_context_t* ctx, rmc_index_t s_ind);
 
 extern int rmc_pub_timeout_get_next(rmc_pub_context_t* ctx, usec_timestamp_t* result);
 extern int rmc_pub_timeout_process(rmc_pub_context_t* ctx);
@@ -442,13 +454,21 @@ extern int rmc_sub_deactivate_context(rmc_sub_context_t* context);
 extern int rmc_sub_set_user_data(rmc_sub_context_t* ctx, user_data_t user_data);
 extern user_data_t rmc_sub_user_data(rmc_sub_context_t* ctx);
 extern rmc_context_id_t rmc_sub_context_id(rmc_sub_context_t* ctx);
+
+extern int rmc_sub_packet_received(rmc_sub_context_t* ctx,
+                                   rmc_index_t index, 
+                                   packet_id_t pid,
+                                   void* payload,
+                                   payload_len_t payload_len,
+                                   usec_timestamp_t current_ts,
+                                   user_data_t pkg_user_data);
 extern int rmc_sub_get_next_timeout(rmc_sub_context_t* context, usec_timestamp_t* result);
 extern int rmc_sub_process_timeout(rmc_sub_context_t* context);
-extern int rmc_sub_read(rmc_sub_context_t* context, rmc_connection_index_t connection_index, uint8_t* op_res);
+extern int rmc_sub_read(rmc_sub_context_t* context, rmc_index_t connection_index, uint8_t* op_res);
 extern int _rmc_sub_write_single_acknowledgement(rmc_sub_context_t* ctx,
                                                  rmc_connection_t* conn,
                                                  packet_id_t);
-extern int rmc_sub_write(rmc_sub_context_t* context, rmc_connection_index_t connection_index, uint8_t* op_res);
+extern int rmc_sub_write(rmc_sub_context_t* context, rmc_index_t connection_index, uint8_t* op_res);
 extern int rmc_sub_timeout_get_next(rmc_sub_context_t* ctx, usec_timestamp_t* result);
 extern int rmc_sub_timeout_process(rmc_sub_context_t* ctx);
 
@@ -457,7 +477,15 @@ extern sub_packet_t* rmc_sub_get_next_dispatch_ready(rmc_sub_context_t* context)
 extern int rmc_sub_packet_dispatched(rmc_sub_context_t* context, sub_packet_t* packet);
 
 extern int _rmc_sub_single_packet_acknowledged(rmc_sub_context_t* context, sub_packet_t* packet);
-extern rmc_connection_index_t rmc_sub_packet_connection(sub_packet_t* packet);
+extern int _rmc_sub_write_interval_acknowledgement(rmc_sub_context_t* ctx,
+                                                   rmc_connection_t* conn,
+                                                   sub_pid_interval_t* interval);
+
+extern int _rmc_sub_packet_interval_acknowledged(rmc_sub_context_t* context,
+                                                 rmc_index_t index,
+                                                 sub_pid_interval_t* interval);
+
+extern rmc_index_t rmc_sub_packet_connection(sub_packet_t* packet);
 
 
 // If a valid pointer, res will be set to:
@@ -515,7 +543,7 @@ extern void _rmc_conn_init_connection_vector(rmc_connection_vector_t* conn_vec,
                                              rmc_poll_remove_cb_t poll_remove);
 
 extern rmc_connection_t* _rmc_conn_find_by_index(rmc_connection_vector_t* conn_vec,
-                                                 rmc_connection_index_t index);
+                                                 rmc_index_t index);
 
 extern rmc_connection_t* _rmc_conn_find_by_address(rmc_connection_vector_t* conn_vec,
                                                    uint32_t remote_address,
@@ -523,7 +551,7 @@ extern rmc_connection_t* _rmc_conn_find_by_address(rmc_connection_vector_t* conn
 
 extern int _rmc_conn_process_accept(int listen_descriptor,
                                     rmc_connection_vector_t* conn_vec,
-                                    rmc_connection_index_t* result_index);
+                                    rmc_index_t* result_index);
 
 extern int rmc_conn_get_poll_size(rmc_connection_vector_t* conn_vec, int *result);
 extern int rmc_conn_get_poll_vector(rmc_connection_vector_t* conn_vec, rmc_connection_t* result, int* len);
@@ -531,16 +559,16 @@ extern int rmc_conn_get_poll_vector(rmc_connection_vector_t* conn_vec, rmc_conne
 extern int _rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
                                             in_addr_t address,
                                             in_port_t port,
-                                            rmc_connection_index_t* result_index);
+                                            rmc_index_t* result_index);
 
 extern int _rmc_conn_connect_tcp_by_host(rmc_connection_vector_t* conn_vec,
                                          char* server_addr,
                                          in_port_t port,
-                                         rmc_connection_index_t* result_index);
+                                         rmc_index_t* result_index);
 
 
 extern int _rmc_conn_close_connection(rmc_connection_vector_t* conn_vec,
-                                      rmc_connection_index_t s_ind);
+                                      rmc_index_t s_ind);
 
 extern int _rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
                                          rmc_connection_t*conn);
@@ -552,14 +580,14 @@ extern int _rmc_pub_resend_packet(rmc_pub_context_t* ctx,
                                   pub_packet_t* pack);
 
 extern int _rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
-                              rmc_connection_index_t s_ind,
+                              rmc_index_t s_ind,
                               uint8_t* read_res,
                               rmc_conn_command_dispatch_t* dispatch_table, // Terminated by a null dispatch entry
                               user_data_t user_data);
 
 
 extern int _rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
-                                      rmc_connection_index_t s_ind,
+                                      rmc_index_t s_ind,
                                       uint8_t* read_res,
                                       rmc_conn_command_dispatch_t* dispatch_table, // Terminated by a null dispatch entry
                                       user_data_t user_data);

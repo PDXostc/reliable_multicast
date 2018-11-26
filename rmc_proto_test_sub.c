@@ -15,16 +15,14 @@ static uint8_t _test_print_pending(sub_packet_node_t* node, void* dt)
 
     printf("%*cPacket          %p\n", indent*2, ' ', pack);
     printf("%*c  PID             %lu\n", indent*2, ' ', pack->pid);
-    printf("%*c  Parent node     %p\n", indent*2, ' ', pack->owner_node);
     printf("%*c  Payload Length  %d\n", indent*2, ' ', pack->payload_len);
-    printf("%*c  Received time   %ld\n", indent*2, ' ', pack->received_ts);
     putchar('\n');
     return 1;
 }
 
 
 static int _descriptor(rmc_sub_context_t* ctx,
-                       rmc_connection_index_t index)
+                       rmc_index_t index)
 {
     switch(index) {
     case RMC_MULTICAST_INDEX:
@@ -63,42 +61,16 @@ static void process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, rm
     
         rmc_sub_packet_dispatched(ctx, pack);
         free(pack->payload);
-        sub_packet_acknowledged(pack);
         rmc_sub_deactivate_context(ctx); // Currently no-op
         puts("Done");
         exit(255);
     }
 
-    // Do we need to drop the packet without acking it to the publisher?
-    if (td->wait == -1) {
-        printf("rmc_proto_test_sub:process_incoming_data() ind[%d] pid[%lu] payload[%s]: ok - Dropped according to test spec\n",
-               ind, pack->pid, (char*) pack->payload);
-
-        // Patch the last received packet back to what we had
-        if (pack->publisher->max_pid_received == pack->pid)
-            pack->publisher->max_pid_received--;
-        else 
-            printf("rmc_proto_test_sub:process_incoming_data() ind[%d] pid[%lu] payload[%s]: Could not revert max_pid_received. Tcp resend will be marked as duplicate\n",
-                   ind, pack->pid, (char*) pack->payload);
-
-        // Patch the last received packet back to what we had
-        if (pack->publisher->max_pid_ready == pack->pid)
-            pack->publisher->max_pid_ready--;
-        else 
-            printf("rmc_proto_test_sub:process_incoming_data() ind[%d] pid[%lu] payload[%s]: Could not revert max_pid_rready. Tcp resend will be marked as duplicate\n",
-                   ind, pack->pid, (char*) pack->payload);
-
-        rmc_sub_packet_dispatched(ctx, pack);
-        free(pack->payload);
-        sub_packet_acknowledged(pack);
-        return;
-    }
-
     printf("rmc_proto_test_sub:process_incoming_data() ind[%d] pid[%lu] payload[%s]: ok\n",
            ind, pack->pid, (char*) pack->payload);
     
+    // Will free payload
     rmc_sub_packet_dispatched(ctx, pack);
-    free(pack->payload);
 
     return;
 }
@@ -118,7 +90,7 @@ static int process_events(rmc_sub_context_t* ctx, int epollfd, usec_timestamp_t 
 
     *tick_ind = 0;
 
-    nfds = epoll_wait(epollfd, events, RMC_MAX_CONNECTIONS, (timeout == -1)?-1:(timeout / 1000));
+    nfds = epoll_wait(epollfd, events, RMC_MAX_CONNECTIONS, (timeout == -1)?-1:(timeout / 1000) + 1);
     if (nfds == -1) {
         perror("epoll_wait");
         exit(255);
@@ -134,7 +106,7 @@ static int process_events(rmc_sub_context_t* ctx, int epollfd, usec_timestamp_t 
     while(nfds--) {
         int res = 0;
         uint8_t op_res = 0;
-        rmc_connection_index_t c_ind = events[nfds].data.u32;
+        rmc_index_t c_ind = events[nfds].data.u32;
 
 //        printf("poll_wait(%s:%d)%s%s%s\n",
 //               _index(c_ind, buf), _descriptor(ctx, c_ind),
@@ -207,9 +179,9 @@ void test_rmc_proto_sub(char* mcast_group_addr,
         { "p2", 3, 0 },
         { "p3", 4, 0 },
         { "p4", 5, 0 },
-        { "d1", 6, -1 }, // Drop and expect tcp retransmit
-        { "d1", 6, 0 },  // We will get resend via tcp.
-        { "exit", 7, 0 }, 
+        { "d1", 6, 0 }, 
+        { "p5", 7, 0 }, 
+        { "exit", 8, 0 }, 
     };
 
     signal(SIGHUP, SIG_IGN);
@@ -223,9 +195,9 @@ void test_rmc_proto_sub(char* mcast_group_addr,
     }
 
     ctx = malloc(sizeof(rmc_sub_context_t));
-
+    
     conn_vec_mem = malloc(sizeof(rmc_connection_t)*RMC_MAX_CONNECTIONS);
-
+    memset(conn_vec_mem, 0, sizeof(rmc_connection_t)*RMC_MAX_CONNECTIONS);
     rmc_sub_init_context(ctx,
                          0, // Assign random context id
                          mcast_group_addr,
@@ -242,6 +214,7 @@ void test_rmc_proto_sub(char* mcast_group_addr,
           1, 1,
           rmc_sub_activate_context(ctx));
 
+
     printf("rmc_proto_test_sub: context: ctx[%.9X]\n", rmc_sub_context_id(ctx));
 
 
@@ -250,7 +223,7 @@ void test_rmc_proto_sub(char* mcast_group_addr,
         sub_packet_t* pack = 0;
 
         rmc_sub_timeout_get_next(ctx, &t_out);
-
+        printf("Tout [%ld]\n", t_out);
         if (process_events(ctx, epollfd, t_out, 3, &tick_ind) == ETIME) {
             rmc_sub_timeout_process(ctx);
             continue;

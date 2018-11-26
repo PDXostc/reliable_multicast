@@ -59,16 +59,16 @@ static int _decode_multicast(rmc_sub_context_t* ctx,
         packet += cmd_pack->payload_len;
         len -= sizeof(cmd_packet_header_t) + cmd_pack->payload_len;
 
-        sub_packet_received(pub,
-                            cmd_pack->pid, payload, cmd_pack->payload_len,
-                            0, // We need to send an ack for this packet
-                            now, user_data_ptr(conn));
+        rmc_sub_packet_received(ctx, conn->connection_index,
+                                cmd_pack->pid,
+                                payload, cmd_pack->payload_len,
+                                now, user_data_u32(conn->connection_index));
 
     }
 
     // Process received packages, moving consectutive ones
     // over to the ready queue.
-    sub_process_received_packets(pub);
+    sub_process_received_packets(pub, &ctx->dispatch_ready);
     return 0;
 }
 
@@ -158,7 +158,6 @@ static int _process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
     if (!conn) {
         // Add an outbound tcp connection to the publisher.
         res = _rmc_conn_connect_tcp_by_address(&ctx->conn_vec, mcast_hdr->listen_ip, mcast_hdr->listen_port, &sock_ind);
-        
 
         if (read_res) {
             if (res)
@@ -235,19 +234,18 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
     circ_buf_read(&conn->read_buf, payload, pack_hdr.payload_len, 0);
     circ_buf_free(&conn->read_buf, pack_hdr.payload_len, 0);
 
-    sub_packet_received(&ctx->publishers[conn->connection_index],
-                        pack_hdr.pid,
-                        payload,
-                        pack_hdr.payload_len,
-                        1, // Skip ack for this packet since we have received it via reliable tcp.
-                        rmc_usec_monotonic_timestamp(),
-                        user_data_ptr(conn));
+
+    rmc_sub_packet_received(ctx, conn->connection_index,
+                            pack_hdr.pid,
+                            payload,pack_hdr.payload_len,
+                            rmc_usec_monotonic_timestamp(),
+                            user_data_u32(conn->connection_index));
 
     return 0;
 }
 
 
-int rmc_sub_close_connection(rmc_sub_context_t* ctx, rmc_connection_index_t s_ind)
+int rmc_sub_close_connection(rmc_sub_context_t* ctx, rmc_index_t s_ind)
 {
     
     printf("rmc_sub_close_connection(): index[%d]\n", s_ind);
@@ -263,7 +261,7 @@ int rmc_sub_close_connection(rmc_sub_context_t* ctx, rmc_connection_index_t s_in
 }
 
 
-int rmc_sub_read(rmc_sub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* op_res)
+int rmc_sub_read(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
 {
     int res = 0;
     uint8_t dummy_res = 0;
@@ -299,7 +297,7 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_connection_index_t s_ind, uint8_t* 
         return 0; // This is not an error, just regular maintenance.
     }
 
-    sub_process_received_packets(&ctx->publishers[s_ind]);
+    sub_process_received_packets(&ctx->publishers[s_ind], &ctx->dispatch_ready);
     *op_res = RMC_READ_TCP;
 
     // Read poll is always active. Callback to re-arm.

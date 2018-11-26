@@ -27,7 +27,7 @@ rmc_connection_t* _rmc_conn_find_by_address(rmc_connection_vector_t* conn_vec,
                                             uint32_t remote_address,
                                             uint16_t remote_port)
 {
-    rmc_connection_index_t ind = 0;
+    rmc_index_t ind = 0;
     char want_addr_str[80];
     char have_addr_str[80];
 
@@ -57,7 +57,7 @@ rmc_connection_t* _rmc_conn_find_by_address(rmc_connection_vector_t* conn_vec,
 }
 
 rmc_connection_t* _rmc_conn_find_by_index(rmc_connection_vector_t* conn_vec,
-                                          rmc_connection_index_t index)
+                                          rmc_index_t index)
 {
     if (!conn_vec)
         return 0;
@@ -72,9 +72,9 @@ rmc_connection_t* _rmc_conn_find_by_index(rmc_connection_vector_t* conn_vec,
     return &conn_vec->connections[index];
 }
 
-static rmc_connection_index_t _get_free_slot(rmc_connection_vector_t* conn_vec)
+static rmc_index_t _get_free_slot(rmc_connection_vector_t* conn_vec)
 {
-    rmc_connection_index_t ind = 0;
+    rmc_index_t ind = 0;
 
     while(ind < RMC_MAX_CONNECTIONS) {
         if (conn_vec->connections[ind].descriptor == -1) {
@@ -91,7 +91,7 @@ static rmc_connection_index_t _get_free_slot(rmc_connection_vector_t* conn_vec)
 
 static void _reset_max_connection_ind(rmc_connection_vector_t* conn_vec)
 {
-    rmc_connection_index_t ind = RMC_MAX_CONNECTIONS;
+    rmc_index_t ind = RMC_MAX_CONNECTIONS;
 
     while(ind--) {
         if (conn_vec->connections[ind].descriptor != -1) {
@@ -211,9 +211,9 @@ int _rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
 int _rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
                                      uint32_t address,
                                      in_port_t port,
-                                     rmc_connection_index_t* result_index)
+                                     rmc_index_t* result_index)
 {
-    rmc_connection_index_t c_ind = -1;
+    rmc_index_t c_ind = -1;
     int res = 0;
     int err = 0;
     struct sockaddr_in sock_addr;
@@ -285,7 +285,7 @@ int _rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
 int _rmc_conn_connect_tcp_by_host(rmc_connection_vector_t* conn_vec,
                                   char* server_addr,
                                   in_port_t port,
-                                  rmc_connection_index_t* result_index)
+                                  rmc_index_t* result_index)
 {
     struct hostent* host = 0;
 
@@ -304,11 +304,11 @@ int _rmc_conn_connect_tcp_by_host(rmc_connection_vector_t* conn_vec,
 
 int _rmc_conn_process_accept(int listen_descriptor,
                              rmc_connection_vector_t* conn_vec,
-                             rmc_connection_index_t* result_index)
+                             rmc_index_t* result_index)
 {
     struct sockaddr_in src_addr;
     socklen_t addr_len = sizeof(src_addr);
-    rmc_connection_index_t c_ind = -1;
+    rmc_index_t c_ind = -1;
 
     // Find a free slot.
     c_ind = _get_free_slot(conn_vec);
@@ -351,7 +351,7 @@ int _rmc_conn_process_accept(int listen_descriptor,
 
 
 
-int _rmc_conn_close_connection(rmc_connection_vector_t* conn_vec, rmc_connection_index_t s_ind)
+int _rmc_conn_close_connection(rmc_connection_vector_t* conn_vec, rmc_index_t s_ind)
 {
     rmc_connection_t* conn = 0;
     

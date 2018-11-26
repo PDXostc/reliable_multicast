@@ -23,7 +23,9 @@ int rmc_pub_queue_packet(rmc_pub_context_t* ctx,
 
     if (!ctx || !payload || !payload_len)
         return EINVAL;
-    
+     
+    // Check if we already have queued packets. If not, we need to enable RMC_POLLWRITE
+    // on the descriptor.
     pack = pub_next_queued_packet(&ctx->pub_ctx);    
  
     // FIXME: Upper limit to how many packets we can queue before
@@ -58,3 +60,4 @@ int rmc_pub_packet_ack(rmc_pub_context_t* ctx, rmc_connection_t* conn, packet_id
     return 0;
 }
 
+ 

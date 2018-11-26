@@ -10,6 +10,7 @@
 #define __RMC_COMMON_H__
 
 #include <stdint.h>
+#include "rmc_list.h"
 
 // FIXME: Split up into multiple files. Some available as library
 // headers, some as included by code that uses this library.
@@ -18,6 +19,12 @@
 //       rmc_xxx
 //
 typedef uint64_t packet_id_t;
+
+RMC_LIST(packet_id_list, packet_id_node, packet_id_t)
+
+typedef packet_id_list packet_id_list_t;
+typedef packet_id_node packet_id_node_t;
+
 typedef uint16_t payload_len_t;
 typedef int64_t usec_timestamp_t;
 

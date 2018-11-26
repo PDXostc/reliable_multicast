@@ -53,10 +53,6 @@
 typedef struct sub_packet {
     struct sub_publisher* publisher;   // Publisher that sent this packet.
 
-    // Time stamp when packet was placed in received queue. Used
-    // to calculate when we need to ack it.
-    usec_timestamp_t received_ts; 
-
     // Packet ID as received from network.
     packet_id_t pid;
 
@@ -75,10 +71,6 @@ typedef struct sub_packet {
     // Provided by sub_packet_received()
     // Retrieved by sub_packet_user_data()
     user_data_t pkg_user_data;   
-
-    // Node referering to self in received_ts sub_publisher::list
-    // Allows for O(1) removal of self once we have been processed
-    struct _sub_packet_node* received_ts_entry;
 } sub_packet_t;
 
 
@@ -110,17 +102,21 @@ typedef struct sub_publisher {
     // Sorted on ascending pid
     sub_packet_list_t received_pid;    
 
-    // Packets received but need additional packets.
-    // Sorted on ascending recived_ts
-    sub_packet_list_t received_ts;    
-
     // Received packet intervals.
     // Filled by sub_packet_received().
     // Depletd by sub_interval_acknowledged()
     //
     sub_pid_interval_list received_interval;
-} sub_publisher_t; 
 
+    // Oldest received packet that is covered in received_interval.
+    // The oldest_received_ts + timeout tells us when we have to acknowledge.
+    // the received packet to the publisher. When we do so, we ack all
+    // unacknowledged packets in one go.
+    // This timestamp is cleared when the last element from received_interval is
+    // removed after it being sent out to acknowledge all received packets.
+    //
+    usec_timestamp_t oldest_unacked_ts; 
+} sub_publisher_t; 
 
 extern void sub_init_publisher(sub_publisher_t* pub);
 
@@ -131,7 +127,6 @@ extern int sub_packet_received(sub_publisher_t* pub,
                                packet_id_t pid,
                                void* payload,
                                payload_len_t payload_len,
-                               uint8_t skip_acknowledgement, 
                                usec_timestamp_t current_ts,
                                user_data_t pkg_user_data);
 
@@ -143,10 +138,13 @@ extern void sub_process_received_packets(sub_publisher_t* pub, sub_packet_list_t
 extern void sub_reset_publisher(sub_publisher_t*,
                                 void (*)(void*, payload_len_t, user_data_t));;
 
+extern usec_timestamp_t sub_oldest_unacknowledged_packet(sub_publisher_t* pub);
 
 extern  user_data_t sub_packet_user_data(sub_packet_t* pack);
 extern int _sub_packet_add_to_received_interval(sub_publisher_t* pub, packet_id_t pid);
 
 
 
+
 #endif // __REL_MCAST_SUB__
+

@@ -11,7 +11,7 @@
 // We need user data that points out both
 // the pollset file descriptor and the context associated.
 
-char* _index(rmc_connection_index_t index, char* res)
+char* _index(rmc_index_t index, char* res)
 {
     switch(index) {
     case RMC_MULTICAST_INDEX:
@@ -40,7 +40,7 @@ void _test(char* fmt_string, int major, int minor, int error)
 
 void poll_add(user_data_t user_data,
               int descriptor,
-              rmc_connection_index_t index,
+              rmc_index_t index,
               rmc_poll_action_t action)
 {
     char buf[16];
@@ -73,7 +73,7 @@ void poll_add(user_data_t user_data,
 
 void poll_modify(user_data_t user_data,
                  int descriptor,
-                 rmc_connection_index_t index,
+                 rmc_index_t index,
                  rmc_poll_action_t old_action,
                  rmc_poll_action_t new_action)
 {
@@ -106,7 +106,7 @@ void poll_modify(user_data_t user_data,
 
 void poll_remove(user_data_t user_data,
                  int descriptor,
-                 rmc_connection_index_t index)
+                 rmc_index_t index)
 {
     char buf[16];
     int epollfd = user_data.i32;

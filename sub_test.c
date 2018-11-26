@@ -20,7 +20,6 @@ static uint8_t _test_print_pending(sub_packet_node_t* node, void* dt)
     printf("%*cPacket          %p\n", indent*2, ' ', pack);
     printf("%*c  PID             %lu\n", indent*2, ' ', pack->pid);
     printf("%*c  Payload Length  %d\n", indent*2, ' ', pack->payload_len);
-    printf("%*c  Received time   %ld\n", indent*2, ' ', pack->received_ts);
     putchar('\n');
     return 1;
 }
@@ -83,7 +82,9 @@ static void add_received_packets(sub_publisher_t* pub,
 
         for(pid = start; pid != stop + 1; ++pid) {
             sprintf(buf, "%lu", pid);
-            sub_packet_received(pub, pid, buf, strlen(buf)+1, 0, ts_current, user_data_nil());
+            sub_packet_received(pub, pid,
+                                buf, strlen(buf)+1,
+                                ts_current, user_data_nil());
         }
 
         start = va_arg(ap, packet_id_t);

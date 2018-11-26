@@ -7,6 +7,7 @@
 // Trivial double linked list.
 
 #include <assert.h>
+#include <stdlib.h>
 
 #define RMC_LIST_IMPL(LISTTYPE, NODETYPE, DATATYPE)                     \
     static inline NODETYPE* NODETYPE##_rmc_alloc_node(void* user_data)  \

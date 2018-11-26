@@ -14,6 +14,44 @@
 #include <stdio.h>
 
 
+int rmc_sub_packet_received(rmc_sub_context_t* ctx,
+                            rmc_index_t index, // Into ctx->connections and ctx->publishers
+                            packet_id_t pid,
+                            void* payload,
+                            payload_len_t payload_len,
+                            usec_timestamp_t current_ts,
+                            user_data_t pkg_user_data)
+{
+    sub_publisher_t* pub = &ctx->publishers[index];
+
+    
+    // If this packet is the first one that needs to be acked, then insert
+    // the index of the publisher (and connection) into the ctx->pub_ack_list.
+    // The list is sorted on 
+    //
+    if (!sub_oldest_unacknowledged_packet(pub))
+        rmc_index_list_insert_sorted_rev(&ctx->pub_ack_list,
+                                         index,
+                                         lambda(int, (rmc_index_t n_ind, rmc_index_t o_ind) {
+                                                 usec_timestamp_t n_oldest;
+                                                 usec_timestamp_t o_oldest;
+
+                                                 n_oldest = sub_oldest_unacknowledged_packet(&ctx->publishers[n_ind]);
+                                                 o_oldest = sub_oldest_unacknowledged_packet(&ctx->publishers[o_ind]);
+
+                                                 return (n_oldest < o_oldest)?-1:
+                                                     ((n_oldest > o_oldest)?1:0);
+                                                 
+                                                  }));
+
+    sub_packet_received(&ctx->publishers[index],
+                        pid,
+                        payload,
+                        payload_len,
+                        rmc_usec_monotonic_timestamp(),
+                        user_data_u32(index));
+
+}
 
 int rmc_sub_get_dispatch_ready_count(rmc_sub_context_t* ctx)
 {
@@ -55,6 +93,12 @@ int rmc_sub_packet_dispatched(rmc_sub_context_t* ctx, sub_packet_t* pack)
 
 
     sub_packet_list_delete(node);
+
+    if (ctx->payload_free)
+        (*ctx->payload_free)(pack->payload, pack->payload_len, ctx->user_data);
+    else
+        free(pack->payload);
+    
     return 0;
 }
 
@@ -68,63 +112,40 @@ int _rmc_sub_single_packet_acknowledged(rmc_sub_context_t* ctx, sub_packet_t* pa
     if (!ctx || !pack)
         return EINVAL;
     
-    conn = sub_packet_user_data(pack).ptr;
-
-    if (conn->mode != RMC_CONNECTION_MODE_SUBSCRIBER)
+    conn = &ctx->conn_vec.connections[sub_packet_user_data(pack).u32];
+    
+    if (!conn || conn->mode != RMC_CONNECTION_MODE_SUBSCRIBER)
         return EINVAL;
 
+    _rmc_sub_write_single_acknowledgement(ctx, conn, pack->pid);
 
-    // If we are to write an ack, then do so.
-    if (!pack->skip_acknowledgement)
-        _rmc_sub_write_single_acknowledgement(ctx, conn, pack->pid);
-
-//    sub_packet_acknowledged(pack);
-
-    if (ctx->payload_free)
-        (*ctx->payload_free)(pack->payload, pack->payload_len, ctx->user_data);
-    else
-        free(pack->payload);
-    
     return 0;
 }
 
 
-int _rmc_sub_packet_interval_acknowledged(rmc_sub_context_t* ctx, sub_pid_interval_t interval)
+int _rmc_sub_packet_interval_acknowledged(rmc_sub_context_t* ctx, rmc_index_t index, sub_pid_interval_t* interval)
 {
     rmc_connection_t* conn = 0;
 
-    if (!ctx)
+    if (!ctx || ! interval)
         return EINVAL;
     
-//    conn = sub_packet_user_data(pack).ptr;
-    
+    conn = &ctx->conn_vec.connections[index];
 
-//    if (conn->mode != RMC_CONNECTION_MODE_SUBSCRIBER)
-//        return EINVAL;
+    if (!conn || conn->mode != RMC_CONNECTION_MODE_SUBSCRIBER)
+        return EINVAL;
 
 
-    // If we are to write an ack, then do so.
-//    if (!pack->skip_acknowledgement)
-//        _rmc_sub_write_single_acknowledgement(ctx, conn, pack->pid);
+    _rmc_sub_write_interval_acknowledgement(ctx, conn, interval);
 
-//    sub_packet_acknowledged(pack);
-
-//    if (ctx->payload_free)
-//        (*ctx->payload_free)(pack->payload, pack->payload_len, ctx->user_data);
-//    else
-//        free(pack->payload);
-    
     return 0;
 }
 
 
-rmc_connection_index_t rmc_sub_packet_connection(sub_packet_t* pack)
+rmc_index_t rmc_sub_packet_index(sub_packet_t* pack)
 {
-    rmc_connection_t* conn = 0;
     if (!pack)
         return 0;
 
-    conn = (rmc_connection_t*) sub_packet_user_data(pack).ptr;
-
-    return conn->connection_index;
+    return sub_packet_user_data(pack).u32;
 }
