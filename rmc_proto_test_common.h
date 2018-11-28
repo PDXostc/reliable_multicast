@@ -20,15 +20,6 @@
 #include <unistd.h>
 #include <errno.h>
 
-typedef struct {
-    char* payload;
-    packet_id_t pid;
-    // For subscribers, how long to wait until we put out an ack. -1 = drop packet
-    //
-    // For publishers, how long to wait before we send out next packet.
-    usec_timestamp_t wait; // usec.
-} rmc_test_data_t;
-
 extern char* _index(rmc_index_t index, char* res);
 
 extern void* _test_proto_alloc(payload_len_t plen);

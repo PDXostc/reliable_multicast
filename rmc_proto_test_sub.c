@@ -7,6 +7,29 @@
 
 #include "rmc_proto_test_common.h"
 
+// Indexed by publisher node_id, as received in the
+// payload 
+typedef struct {
+    enum {
+        // We will not process traffic for this node_id.
+        // Any traffic received will trigger error.
+        RMC_TEST_SUB_INACTIVE = 0,  
+
+        // We expect traffic on this ctx-id (as provided by -e <ctx-id>,
+        // But haven't seen any yet.
+        RMC_TEST_SUB_NOT_STARTED = 1, 
+
+        // We are in the process of receiving traffic 
+        RMC_TEST_SUB_IN_PROGRESS = 2,
+
+        // We have received all expected traffic for the given ctx-id.
+        RMC_TEST_SUB_COMPLETED = 3
+    } status;    
+
+    uint64_t max_expected;
+    uint64_t max_received;
+} sub_expect_t;
+
 
 static uint8_t _test_print_pending(sub_packet_node_t* node, void* dt)
 {
@@ -34,61 +57,119 @@ static int _descriptor(rmc_sub_context_t* ctx,
     }
 }
 
-
-static void process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, rmc_test_data_t* td, int ind)
+static int check_exit_condition( sub_expect_t* expect, int expect_sz)
 {
+    int ind = expect_sz;
 
+    while(ind--) {
+        if (expect[ind].status == RMC_TEST_SUB_NOT_STARTED ||
+            expect[ind].status == RMC_TEST_SUB_IN_PROGRESS)
+            return 0;
+    }
+    return 1;
+}
+
+static int process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, sub_expect_t* expect, int expect_sz)
+{
+    rmc_context_id_t node_id = 0;
+    uint64_t max_expected = 0;
+    uint64_t current = 0;
+    
     _test("rmc_proto_test_sub[%d.%d] process_incoming_data(): %s", 3, 1, pack?0:ENODATA);
 
-    // Is PID as expected?
-    if (pack->pid != td->pid) {
-        printf("rmc_proto_test_sub[3.2] ind[%d] incoming pid[%lu] differs from expected pid [%lu]. payload[%s]\n",
-               ind, pack->pid, td->pid, (char*) pack->payload);
+    if (sscanf(pack->payload, "%u:%lu:%lu", &node_id, &current, &max_expected) != 3) {
+        printf("rmc_proto_test_sub(): Payload [%s] could not be scanned by [%%u:%%lu:%%lu]\n",
+               (char*) pack->payload);
         exit(255);
     }
 
-    // Is payload as expected?
-    if (strcmp((char*) pack->payload, td->payload)) {
-        printf("rmc_proto_test_sub[3.3] ind[%d] pid[%lu] incoming data[%s] differs from expected [%s]\n",
-               ind, pack->pid, (char*) pack->payload, td->payload);
-        exit(255);
-    }
-
-    // Is this a magic packet sent by publisher to get us to exit?
-    if (!strcmp((char*) pack->payload, "exit")) {
-        printf("rmc_proto_test_sub[3.4] ind[%d] pid[%lu] Got Exit packet.\n",
-               ind, pack->pid);
-    
-        rmc_sub_packet_dispatched(ctx, pack);
-        free(pack->payload);
-        rmc_sub_deactivate_context(ctx); // Currently no-op
-        puts("Done");
-        exit(255);
-    }
-
-    printf("rmc_proto_test_sub:process_incoming_data() ind[%d] pid[%lu] payload[%s]: ok\n",
-           ind, pack->pid, (char*) pack->payload);
-    
     // Will free payload
     rmc_sub_packet_dispatched(ctx, pack);
 
-    return;
+    // Is context ID within our expetcted range
+    if (node_id >= expect_sz) {
+        printf("rmc_proto_test_sub(): ContextID [%u] is out of range (0-%d)\n",
+               node_id, expect_sz);
+        exit(255);
+     }
+
+    // Is this context expected?
+    if (expect[node_id].status == RMC_TEST_SUB_INACTIVE) {
+        printf("rmc_proto_test_sub(): ContextID [%u] not expected. Use -e %u to setup subscriber expectations.\n",
+               node_id, node_id);
+        exit(255);
+    }
+
+    // Have we already completed all expected packages here?
+    if (expect[node_id].status == RMC_TEST_SUB_COMPLETED) {
+        printf("rmc_proto_test_sub(): ContextID [%u] have already processed its [%lu] packets. Got Current[%lu] Max[%lu].\n",
+               node_id, expect[node_id].max_received, current, max_expected);
+        exit(255);
+    }
+
+    // Check if this is the first packet from an expected source.
+    // If so, set things up.
+    if (expect[node_id].status == RMC_TEST_SUB_NOT_STARTED) {
+        expect[node_id].status = RMC_TEST_SUB_IN_PROGRESS;
+        expect[node_id].max_expected = max_expected;
+        expect[node_id].max_received = current;
+        
+        printf("rmc_proto_test_sub(): Activate: node_id[%u] current[%lu] max_expected[%lu].\n",
+               node_id, current, max_expected);
+        return 1;
+    }
+
+    // Check if we are in progress.
+    // If so, check that packets are correctly numbrered.
+
+    if (expect[node_id].status == RMC_TEST_SUB_IN_PROGRESS) {
+        // Check that max_expected hasn't changed.
+        if (max_expected != expect[node_id].max_expected) {
+            printf("rmc_proto_test_sub(): ContextID [%u] max_expected chagned from [%lu] to [%lu]\n",
+                   node_id, expect[node_id].max_expected, max_expected);
+            exit(255);
+        }
+
+        
+        // Check that packet is consecutive.
+        if (current != expect[node_id].max_received + 1) {
+            printf("rmc_proto_test_sub(): ContextID [%u] Wanted[%lu] Got[%lu]\n",
+                   node_id, expect[node_id].max_received + 1, max_expected);
+            exit(255);
+        }
+
+        expect[node_id].max_expected = current;
+        
+        // Check if we are complete
+        if (current == max_expected) {
+            printf("rmc_proto_test_sub(): ContextID [%u] Complete at[%lu]\n",
+                   node_id, current);
+            
+            expect[node_id].status = RMC_TEST_SUB_COMPLETED;
+            // Check if this is the last one out.
+            if (check_exit_condition(expect, expect_sz))
+                return 0;
+        }
+        
+        return 1;
+    }
+
+    printf("rmc_proto_test_sub(): Eh? expect[%u:%lu:%lu] status[%d]  data[%u:%lu:%lu]\n",
+           node_id, expect[node_id].max_received, expect[node_id].max_expected,
+           expect[node_id].status,
+           node_id, current, max_expected);
+
+    exit(255);
 }
 
-void* sub_alloc(payload_len_t payload_len,
-                user_data_t user_data)
-{
-    puts("sub_alloc(): called");
-}
 
-
-static int process_events(rmc_sub_context_t* ctx, int epollfd, usec_timestamp_t timeout, int major, int* tick_ind)
+static int process_events(rmc_sub_context_t* ctx,
+                          int epollfd,
+                          usec_timestamp_t timeout)
 {
     struct epoll_event events[RMC_MAX_CONNECTIONS];
     char buf[16];
     int nfds = 0;
-
-    *tick_ind = 0;
 
     nfds = epoll_wait(epollfd, events, RMC_MAX_CONNECTIONS, (timeout == -1)?-1:(timeout / 1000) + 1);
     if (nfds == -1) {
@@ -117,7 +198,7 @@ static int process_events(rmc_sub_context_t* ctx, int epollfd, usec_timestamp_t 
         // Figure out what to do.
         if (events[nfds].events & EPOLLHUP) {
             _test("rmc_proto_test[%d.%d] process_events():rmc_close_tcp(): %s\n",
-                  major, 11, _rmc_conn_close_connection(&ctx->conn_vec, c_ind));
+                  1, 1, _rmc_conn_close_connection(&ctx->conn_vec, c_ind));
             continue;
         }
 
@@ -129,19 +210,16 @@ static int process_events(rmc_sub_context_t* ctx, int epollfd, usec_timestamp_t 
             if (res == ELOOP)
                 continue;       
 
-            _test("rmc_proto_test[%d.%d] process_events():rmc_read(): %s\n", major, 1, res);
+            _test("rmc_proto_test[%d.%d] process_events():rmc_read(): %s\n", 1, 1, res);
                 
             // If this was a connection call processed, we can continue.
             if (op_res == RMC_READ_ACCEPT)
                 continue;
-
-            if (op_res == RMC_READ_MULTICAST || op_res == RMC_READ_TCP)
-                *tick_ind = 1;
         }
 
         if (events[nfds].events & EPOLLOUT) {
             _test("rmc_proto_test[%d.%d] process_events():rmc_write(): %s\n",
-                  major, 10,
+                  1, 10,
                   rmc_sub_write(ctx, c_ind, &op_res));
         }
     }
@@ -155,7 +233,10 @@ void test_rmc_proto_sub(char* mcast_group_addr,
                         char* mcast_if_addr,
                         char* control_addr,
                         int mcast_port,
-                        int control_port)
+                        int control_port,
+                        rmc_context_id_t node_id,
+                        uint8_t* node_id_map,
+                        int node_id_map_size)
 {
     rmc_sub_context_t* ctx = 0;
     int res = 0;
@@ -171,24 +252,24 @@ void test_rmc_proto_sub(char* mcast_group_addr,
     usec_timestamp_t t_out = 0;
     usec_timestamp_t exit_ts = 0;
     uint8_t *conn_vec_mem = 0;
+    int do_exit = 0;
 
-    static rmc_test_data_t td[] = {
-        // First packet sent by publisher, 'ping', will be dropped
-        // since it is used to trigger a ack socket setup.
-        { "p1", 2, 0 },
-        { "p2", 3, 0 },
-        { "p3", 4, 0 },
-        { "p4", 5, 0 },
-        { "d1", 6, 0 }, 
-        { "p5", 7, 0 }, 
-        { "exit", 8, 0 }, 
-    };
+    // Indexed by publisher node_id
+    sub_expect_t expect[node_id_map_size];
 
     signal(SIGHUP, SIG_IGN);
 
-
     epollfd = epoll_create1(0);
+    for (ind = 0; ind < node_id_map_size; ++ind) {
+        expect[ind].status = RMC_TEST_SUB_INACTIVE;
+        expect[ind].max_received = 0;
+        expect[ind].max_expected = 0;
 
+        // Check if we are expecting traffic on this one
+        if (node_id_map[ind]) 
+            expect[ind].status = RMC_TEST_SUB_NOT_STARTED;
+    }
+    
     if (epollfd == -1) {
         perror("epoll_create1");
         exit(255);
@@ -214,39 +295,40 @@ void test_rmc_proto_sub(char* mcast_group_addr,
           1, 1,
           rmc_sub_activate_context(ctx));
 
-
     printf("rmc_proto_test_sub: context: ctx[%.9X]\n", rmc_sub_context_id(ctx));
 
 
-    while(ind < sizeof(td) / sizeof(td[0])) {
-        int tick_ind = 0;
+    while(1) {
         sub_packet_t* pack = 0;
-
+        
         rmc_sub_timeout_get_next(ctx, &t_out);
         printf("Tout [%ld]\n", t_out);
-        if (process_events(ctx, epollfd, t_out, 3, &tick_ind) == ETIME) {
+        if (process_events(ctx, epollfd, t_out) == ETIME) {
             rmc_sub_timeout_process(ctx);
             continue;
         }
 
         // Process as many packets as possible.
-        while((pack = rmc_sub_get_next_dispatch_ready(ctx))) {
-            process_incoming_data(ctx, pack, &td[ind], ind);
-            if (tick_ind)
-                ++ind;
-        }
-    }
-        
+        while((pack = rmc_sub_get_next_dispatch_ready(ctx))) 
+            if (!process_incoming_data(ctx, pack, expect, node_id_map_size)) {
+                do_exit = 1;
+                break;
+            }
 
+        if (do_exit)
+            break;
+    }
+
+    puts("Shutting down");
     while(1) {
-        int tick_ind = 0;
-
         rmc_sub_timeout_get_next(ctx, &t_out);
-        if (process_events(ctx, epollfd, t_out, 2, &tick_ind) == ETIME) {
+
+        if (t_out == -1)
+            break;
+
+        if (process_events(ctx, epollfd, t_out) == ETIME) 
             rmc_sub_timeout_process(ctx);
-        }
-
     }
-
+    
     puts("Done");
 }

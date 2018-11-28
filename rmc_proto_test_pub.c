@@ -40,13 +40,11 @@ static int _descriptor(rmc_pub_context_t* ctx,
     }
 }
 
-static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t timeout, int major, int* tick_ind)
+static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t timeout, int major)
 {
     struct epoll_event events[RMC_MAX_CONNECTIONS];
     char buf[16];
     int nfds = 0;
-
-    *tick_ind = 0;
 
     nfds = epoll_wait(epollfd, events, RMC_MAX_CONNECTIONS, (timeout == -1)?-1:((timeout / 1000) + 1));
     if (nfds == -1) {
@@ -90,8 +88,6 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
             if (op_res == RMC_READ_ACCEPT)
                 continue;
 
-            if (op_res == RMC_READ_MULTICAST)
-                *tick_ind = 1;
         }
 
         if (events[nfds].events & EPOLLOUT) {
@@ -100,9 +96,6 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
                   rmc_pub_write(ctx, c_ind, &op_res));
             
 //            printf("op_res: %s\n", _op_res_string(op_res));
-
-            if (op_res == RMC_WRITE_MULTICAST)
-                *tick_ind = 1;
         }
     }
 
@@ -110,22 +103,21 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
 }
 
 
-void queue_test_data(rmc_pub_context_t* ctx, rmc_test_data_t* td)
+void queue_test_data(rmc_pub_context_t* ctx, char* buf, int drop_flag)
 {
     pub_packet_node *node = 0;
     int res = 0;
-    res = rmc_pub_queue_packet(ctx, td->payload, strlen(td->payload)+1);
+    res = rmc_pub_queue_packet(ctx, buf, strlen(buf)+1);
 
     if (res) {
-        printf("queue_test_data(payload[%s], pid[%lu]): %s",
-               td->payload,
-               td->pid,
-               strerror(res));
+        printf("queue_test_data(payload[%s]: %s",
+               buf, strerror(res));
         exit(255);
     }
 
     // Patch node with the correct pid.
     // Find the correct payload and update its pid
+    /* TO BE REINTRODUCED WHEN WE DO PACKET FLIPPING ON SENDER SIDE
     pub_packet_list_for_each(&ctx->pub_ctx.queued,
                              lambda (uint8_t, (pub_packet_node_t* node, void* dt) {
                                      pub_packet_t *pack = node->data;
@@ -133,7 +125,7 @@ void queue_test_data(rmc_pub_context_t* ctx, rmc_test_data_t* td)
                                          !memcmp(pack->payload, td->payload, pack->payload_len)) {
                                          pack->pid = td->pid;
                                          // If we are to drop this packet, mark it as falsely sent.
-                                         if (td->wait < 0) { 
+                                         if (drop_flag) { 
                                              printf("Dropping packet [%lu] as specified\n", pack->pid);
                                              pub_packet_sent(&ctx->pub_ctx, pack, rmc_usec_monotonic_timestamp());
                                          }
@@ -141,6 +133,7 @@ void queue_test_data(rmc_pub_context_t* ctx, rmc_test_data_t* td)
                                      }
                                      return 1;
                                  }), 0);
+    */
 
 }
 
@@ -150,7 +143,13 @@ void test_rmc_proto_pub(char* mcast_group_addr,
                         char* mcast_if_addr,
                         char* listen_if_addr,
                         int mcast_port,
-                        int listen_port)
+                        int listen_port,
+                        rmc_context_id_t node_id,
+                        uint64_t count,
+                        int seed,
+                        usec_timestamp_t send_interval, //usec
+                        int jitter, // usec
+                        float drop_rate)
 {
     rmc_pub_context_t* ctx = 0;
     int res = 0;
@@ -161,21 +160,10 @@ void test_rmc_proto_pub(char* mcast_group_addr,
     int epollfd = -1;
     pid_t sub_pid = 0;
     user_data_t ud = { .u64 = 0 };
-    int ind = 0;
-    int countdown = 10;
+    uint64_t ind = 0;
     usec_timestamp_t t_out = 0;
     uint8_t *conn_vec_mem = 0;
-    static rmc_test_data_t td[] = { 
-        // Wait for 0.01 seconds for return tcp connection coming back in from subscriber
-        { "ping", 1, 100000 }, 
-        { "p1", 2, 0 },
-        { "p3", 4, 0 },
-        { "p2", 3, 0 },
-        { "p4", 5, 0 }, 
-        { "d1", 6, -1 }, // Drop
-        { "p5", 7, 300000}, 
-        { "exit", 8, 1000000 }, 
-    };
+    char buf[128];
 
 
     signal(SIGHUP, SIG_IGN);
@@ -189,9 +177,10 @@ void test_rmc_proto_pub(char* mcast_group_addr,
 
     ctx = malloc(sizeof(rmc_pub_context_t));
     conn_vec_mem = malloc(sizeof(rmc_connection_t)*RMC_MAX_CONNECTIONS);
+    memset(conn_vec_mem, 0, sizeof(rmc_connection_t)*RMC_MAX_CONNECTIONS);
 
     rmc_pub_init_context(ctx,
-                         0, // assign random context id.
+                         0, // Random context id
                          mcast_group_addr, mcast_port,
                          listen_if_addr, listen_port,
                          (user_data_t) { .i32 = epollfd },
@@ -208,19 +197,36 @@ void test_rmc_proto_pub(char* mcast_group_addr,
 
     printf("rmc_proto_test_pub: context: ctx[%.9X]\n", rmc_pub_context_id(ctx));
 
-    for(ind = 0; ind < sizeof(td) / sizeof(td[0]); ) {
-        usec_timestamp_t now =  rmc_usec_monotonic_timestamp();
-        usec_timestamp_t tout =  now + labs(td[ind].wait);
-        int tick_ind = 0;
+    // Seed with a predefined value, allowing us to generate the exact same random sequence
+    // every time for packet drops, etc.
+    srand(seed);
+    for(ind = 0; ind < count; ++ind) {
+        usec_timestamp_t now = rmc_usec_monotonic_timestamp();
+        float rnd = (float) (rand() % 1000000);
+        int drop_flag = 0;
+        usec_timestamp_t tout = 0;
 
-        queue_test_data(ctx, &td[ind]);
-        printf("rmc_proto_test_pub: queue_test_data(%ld)\n", td[ind].pid);
+        // Check if we are to drop the packet.
+        if (rnd / 1000000.0 < drop_rate)  
+            drop_flag = 1;
+
+        // Check what the wait should be after we sent the packet until we send the next.
+
+        tout = now + send_interval;
+        if (jitter > 0) 
+             tout += (rand() % jitter) * 2 - jitter;
+        else
+
+        sprintf(buf, "%u:%lu:%lu", node_id, ind, count);
+        queue_test_data(ctx, buf, drop_flag);
+
+        printf("rmc_proto_test_pub: queue_test_data(%s): drop[%c] wait[%ld]\n", buf, drop_flag?'x':' ', tout-now);
 
         // Make sure we run the loop at least one.
         if (now > tout)
             now = tout;
 
-        tick_ind = 0;
+        // Process events until it is time to send the next packet.
         while(now < tout) {
             usec_timestamp_t event_tout = 0;
 
@@ -228,18 +234,36 @@ void test_rmc_proto_pub(char* mcast_group_addr,
 
             if (event_tout == -1 || event_tout > tout - now)
                 event_tout = tout - now;
-
-            if ((res = process_events(ctx, epollfd, event_tout, 2, &tick_ind)) == ETIME) 
+            
+            if ((res = process_events(ctx, epollfd, event_tout, 2)) == ETIME) 
                 rmc_pub_timeout_process(ctx);
 
             now = rmc_usec_monotonic_timestamp();
         }        
-        ++ind;
-        
+    }
+
+    puts("Shutting down");
+    
+    while(1) {
+            usec_timestamp_t tout = 0;
+
+            rmc_pub_timeout_get_next(ctx, &tout);
+
+            if (tout == -1)
+                tout = 500001;
+            
+            if ((res = process_events(ctx, epollfd, tout, 2)) == ETIME) {
+                rmc_pub_timeout_process(ctx);
+                if (tout == 500001)
+                    break;
+            }
     }
 
     puts("Done");
 
     puts("TO TEST: Multiple publishers. Single subscriber");
+
     puts("TO TEST: Multiple subscribers. Single publisher");
+    puts("TO TEST: Publishers that repeatedly connects and disconnects");
+    puts("TO TEST: Subscribers that repeatedly connects and disconnects");
 }
