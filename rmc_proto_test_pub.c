@@ -107,7 +107,7 @@ void queue_test_data(rmc_pub_context_t* ctx, char* buf, int drop_flag)
 {
     pub_packet_node *node = 0;
     int res = 0;
-    res = rmc_pub_queue_packet(ctx, buf, strlen(buf)+1);
+    res = rmc_pub_queue_packet(ctx, buf, strlen(buf)+1, 0);
 
     if (res) {
         printf("queue_test_data(payload[%s]: %s",
@@ -146,6 +146,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
                         int listen_port,
                         rmc_context_id_t node_id,
                         uint64_t count,
+                        int expected_subscriber_count,
                         int seed,
                         usec_timestamp_t send_interval, //usec
                         int jitter, // usec
@@ -164,6 +165,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
     usec_timestamp_t t_out = 0;
     uint8_t *conn_vec_mem = 0;
     char buf[128];
+    int subscriber_count = 0;
 
 
     signal(SIGHUP, SIG_IGN);
@@ -190,6 +192,40 @@ void test_rmc_proto_pub(char* mcast_group_addr,
                          lambda(void, (void* pl, payload_len_t len, user_data_t dt) { }));
 
 
+    rmc_pub_set_subscriber_connect_callback(ctx,
+                                            lambda(uint8_t, (rmc_pub_context_t*ctx,
+                                                             char* remote_addr,
+                                                             in_port_t remote_port) {
+                                                       printf("Subscriber [%s:%d] connected\n", remote_addr, remote_port); 
+                                                       subscriber_count++;
+                                                       return 1;
+                                                   }));
+
+
+    rmc_pub_set_subscriber_disconnect_callback(ctx,
+                                               lambda(void, (rmc_pub_context_t*ctx,
+                                                             char* remote_addr,
+                                                             in_port_t remote_port) {
+                                                          printf("Subscriber %s:%d disconnected\n", remote_addr, remote_port);
+                                                          subscriber_count--;
+                                                          return;
+                                                      }));
+
+    // Send an announcement every 1 second.
+    rmc_pub_set_announce_interval(ctx, 1000000);
+
+    // Wait for the correct number of subscribers to connect before we start sending.
+
+    while(subscriber_count < expected_subscriber_count) {
+        usec_timestamp_t event_tout = 0;
+
+        rmc_pub_timeout_get_next(ctx, &event_tout);
+        printf("tout[%lu]\n", event_tout);
+
+
+        if (process_events(ctx, epollfd, event_tout, 2) == ETIME) 
+            rmc_pub_timeout_process(ctx);
+    }
 
     _test("rmc_proto_test_pub[%d.%d] activate_context(): %s",
           1, 1,
@@ -237,7 +273,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
             
             if ((res = process_events(ctx, epollfd, event_tout, 2)) == ETIME) 
                 rmc_pub_timeout_process(ctx);
-
+ 
             now = rmc_usec_monotonic_timestamp();
         }        
     }
