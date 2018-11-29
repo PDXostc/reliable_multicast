@@ -83,7 +83,7 @@ static int _process_subscriber_timeout(rmc_pub_context_t* ctx,
 
 int rmc_pub_timeout_process(rmc_pub_context_t* ctx)
 {
-    usec_timestamp_t now = rmc_usec_monotonic_timestamp();
+    usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
     pub_sub_list_t subs;
     pub_subscriber_t* sub = 0;
     int res = 0;
@@ -91,11 +91,38 @@ int rmc_pub_timeout_process(rmc_pub_context_t* ctx)
     if (!ctx)
         return EINVAL;
 
+    // Check if we need to send an announce packet.
+    if (ctx->announce_next_send_ts != 0 && ctx->announce_next_send_ts - current_ts <= 0) {
+        char buffer[RMC_MAX_PAYLOAD];
+        payload_len_t len = 0;
+        uint8_t send_announce = 1;
+            
+        // Invoke the callback, if specified, to retrieve a payload to send with the
+        // announcement packet.
+        // If callback returns 0, do not send announce
+        if (ctx->announce_cb) 
+            send_announce = (*ctx->announce_cb)(ctx, buffer, sizeof(buffer), &len);
+                
+        if (len > sizeof(buffer))
+            len = sizeof(buffer);
+            
+        if (send_announce) {
+            puts("Sendning out announcement");
+            rmc_pub_queue_packet(ctx, buffer, len, 1);
+        }
+
+        // Setup next announce.
+        if (ctx->announce_send_interval) 
+            ctx->announce_next_send_ts = current_ts + ctx->announce_send_interval;
+        else
+            ctx->announce_next_send_ts = 0; // Disable announce sends.
+    }
+
     pub_sub_list_init(&subs, 0, 0, 0);
-    pub_get_timed_out_subscribers(&ctx->pub_ctx, now, ctx->resend_timeout, &subs);
+    pub_get_timed_out_subscribers(&ctx->pub_ctx, current_ts, ctx->resend_timeout, &subs);
 
     while(pub_sub_list_pop_head(&subs, &sub)) {
-        res = _process_subscriber_timeout(ctx, sub, now);
+        res = _process_subscriber_timeout(ctx, sub, current_ts);
 
         if (res) {
             // Clean up the list.
@@ -114,9 +141,39 @@ int rmc_pub_timeout_get_next(rmc_pub_context_t* ctx, usec_timestamp_t* result)
 {
     usec_timestamp_t oldest_sent_ts = 0;
     usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
+    usec_timestamp_t announce_timeout = -1;
+    usec_timestamp_t ack_timeout = -1;
+
     if (!ctx || !result)
         return EINVAL;
     
+
+    // Check if we are to send out announce packets.
+    if (ctx->announce_next_send_ts != 0) {
+        announce_timeout =  ctx->announce_next_send_ts - current_ts;
+        if (announce_timeout < 0)
+            announce_timeout = 0;
+    }
+
+    // Figure out which timeout value to use.
+    if (announce_timeout == -1 && ack_timeout == -1) {
+        *result = -1;
+        return 0;
+    }
+
+    if (announce_timeout != -1 && ack_timeout == -1) {
+        *result = announce_timeout;
+        return 0;
+    }
+
+    if (announce_timeout == -1 && ack_timeout != -1) {
+        *result = ack_timeout;
+        return 0;
+    }
+
+    // Both timeout values specified, use the lesser value.
+    *result = (ack_timeout < announce_timeout)?ack_timeout:announce_timeout;
+
     // Get the send timestamp of the oldest packet we have yet to
     // receive an acknowledgement for from the subscriber.
     pub_get_oldest_unackowledged_packet(&ctx->pub_ctx, &oldest_sent_ts);
