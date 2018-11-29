@@ -100,6 +100,12 @@ int rmc_pub_init_context(rmc_pub_context_t* ctx,
 
     ctx->resend_timeout = RMC_DEFAULT_PACKET_TIMEOUT;
 
+    ctx->subscriber_connect_cb = 0;
+    ctx->subscriber_disconnect_cb = 0;
+    ctx->announce_cb = 0;
+    ctx->announce_send_interval = 0;
+    ctx->announce_next_send_ts = 0;
+    
     // outgoing_payload_free() will be called when
     // pub_acket_ack() is called, which happens when a
     // subscriber sends an ack back for the given pid.
@@ -199,6 +205,66 @@ error:
 
     return errno;
 }
+
+int rmc_pub_set_announce_interval(rmc_pub_context_t* ctx, uint32_t send_interval_usec)
+{
+    if (!ctx)
+        return EINVAL;
+
+    // If not currently set, do setup a timestamp.
+    // If we already have a send timestamp, let it run its course per the old
+    // interval, and then use the new send inteval once it has expired.
+    if (!ctx->announce_next_send_ts)
+        ctx->announce_next_send_ts = rmc_usec_monotonic_timestamp() + send_interval_usec;
+
+    ctx->announce_send_interval = send_interval_usec;
+}
+
+int rmc_pub_set_announce_callback(rmc_pub_context_t* ctx,
+                                         uint8_t (*announce_cb)(struct rmc_pub_context* ctx,
+                                                                void* payload,
+                                                                payload_len_t max_payload_len,
+                                                                payload_len_t* result_payload_len))
+{
+    if (!ctx)
+        return EINVAL;
+
+    ctx->announce_cb = announce_cb;
+
+    return 0;
+}
+
+
+
+
+int rmc_pub_set_subscriber_connect_callback(rmc_pub_context_t* ctx,
+                                            uint8_t (*connect_cb)(struct rmc_pub_context* ctx,
+                                                                             char* remote_ip, // "1.2.3.4"
+                                                                             uint16_t remote_port))
+{
+    if (!ctx)
+        return EINVAL;
+
+    ctx->subscriber_connect_cb = connect_cb;
+
+    return 0;
+}
+
+
+
+int rmc_pub_set_subscriber_disconnect_callback(rmc_pub_context_t* ctx,
+                                               void (*disconnect_cb)(struct rmc_pub_context* ctx,
+                                                                     char* remote_ip, // "1.2.3.4"
+                                                                     uint16_t remote_port))
+{
+    if (!ctx)
+        return EINVAL;
+
+    ctx->subscriber_disconnect_cb = disconnect_cb;
+
+    return 0;
+}
+
 
 int rmc_pub_deactivate_context(rmc_pub_context_t* ctx)
 {
