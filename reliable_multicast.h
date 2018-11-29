@@ -227,6 +227,42 @@ typedef struct rmc_pub_context {
     // since they weren't acked when we sent them out via multicast
     uint32_t resend_timeout;
     
+    // Interval, in usec, in which to send announcement packets that
+    // trigger subscribers to connect back to the TCP control socket
+    // and setup a subscription.
+    // If set to 0, no announcements will be sent out.
+    uint32_t announce_send_interval;
+
+    // Next timestamp when we need to send out an announcement
+    usec_timestamp_t announce_next_send_ts;
+
+    // Callback invoked every time we are about to send out an announcement.
+    // payload is to be filled with the data to send with the announcement.
+    // The number of bytes copied into payload cannot be more than
+    // max_payload_len.
+    // *result_payload_len must be set by the callback to the actual number
+    // of bytes copied into payload.
+    // If callback_cb is zero, then no payload will be sent out together
+    // with the announce packet.
+    uint8_t (*announce_cb)(struct rmc_pub_context* ctx,
+                           void* payload,
+                           payload_len_t max_payload_len,
+                           payload_len_t* result_payload_len);
+
+    // Callback invoked every time a subscriber connects to us using
+    // a tcp control channel. The connection happens in response to
+    // an announce packet being sent out.
+    // If this subscriber is to be accepted, the callback shall return 1
+    // If this subscriber is to be rejected, the callback shall return 0
+    uint8_t (*subscriber_connect_cb)(struct rmc_pub_context* ctx,
+                                     char* remote_ip, // "1.2.3.4"
+                                     in_port_t remote_port);
+
+    // Callback invoked when a subscriber disconnects.
+    void (*subscriber_disconnect_cb)(struct rmc_pub_context* ctx,
+                                     char* remote_ip, // "1.2.3.4"
+                                     in_port_t remote_port);   // In host format.
+
     // Callback to free memory for packets that has been
     // successfully sent out. Memory is originally
     // provided as an argument to rmc_pub_queue_packet().
@@ -432,6 +468,29 @@ extern int rmc_sub_init_context(rmc_sub_context_t* context,
 
 
 extern int rmc_pub_activate_context(rmc_pub_context_t* context);
+extern int rmc_pub_set_announce_interval(rmc_pub_context_t* context, uint32_t send_interval_usec);
+extern int rmc_pub_set_announce_callback(rmc_pub_context_t* context,
+                                         uint8_t (*announce_cb)(struct rmc_pub_context* ctx,
+                                                                void* payload,
+                                                                payload_len_t max_payload_len,
+                                                                payload_len_t* result_payload_len));
+
+// Set callback to be invoked when subscriber connects.
+// Return 1 if connection is allowed. 0 if rejected.
+// If callback is set to 0 (default) all incoming connections will be accepted.,
+extern int rmc_pub_set_subscriber_connect_callback(rmc_pub_context_t* ctx,
+                                                   uint8_t (*connect_cb)(struct rmc_pub_context* ctx,
+                                                                             char* remote_ip, // "1.2.3.4"
+                                                                             in_port_t remote_port));
+
+// Set callback to be invoked when subscriber disconnects.
+// Return 1 if connection is allowed. 0 if rejected.
+// If callback is set to 0 (default) all incoming connections will be accepted.,
+extern int rmc_pub_set_subscriber_disconnect_callback(rmc_pub_context_t* ctx,
+                                                      void (*disconnect_cb)(struct rmc_pub_context* ctx,
+                                                                            char* remote_ip, // "1.2.3.4"
+                                                                            in_port_t remote_port));
+
 extern int rmc_pub_deactivate_context(rmc_pub_context_t* context);
 extern int rmc_pub_set_user_data(rmc_pub_context_t* ctx, user_data_t user_data);
 extern user_data_t rmc_pub_user_data(rmc_pub_context_t* ctx);
@@ -445,7 +504,11 @@ extern int rmc_pub_close_connection(rmc_pub_context_t* ctx, rmc_index_t s_ind);
 extern int rmc_pub_timeout_get_next(rmc_pub_context_t* ctx, usec_timestamp_t* result);
 extern int rmc_pub_timeout_process(rmc_pub_context_t* ctx);
 
-extern int rmc_pub_queue_packet(rmc_pub_context_t* context, void* payload, payload_len_t payload_len);
+extern int rmc_pub_queue_packet(rmc_pub_context_t* ctx,
+                                void* payload,
+                                payload_len_t payload_len,
+                                uint8_t announce_flag);
+
 extern int rmc_pub_packet_ack(rmc_pub_context_t* ctx, rmc_connection_t* conn, packet_id_t pid);
 
 
