@@ -27,6 +27,7 @@ extern void test_rmc_proto_pub(char* mcast_group_addr,
                                int listen_port,
                                rmc_context_id_t ctx_id,
                                uint64_t count,
+                               int expected_subscribers,
                                int seed,
                                usec_timestamp_t send_interval, //usec
                                int jitter, // usec
@@ -67,6 +68,7 @@ void usage(char* prog)
     fprintf(stderr, "       -d <drop-rate> Chance of sender dropping packet. 0.0 - never. 1.0 - always. Default 0.0\n");
     fprintf(stderr, "       -s <interval>  Time, in usec, to wait between each packet send. \n");
     fprintf(stderr, "       -j <jitter>    Max jitter, in usec, for send interval. Actual interval will be send-interval +- (0.0-1.0)*jitter. Default 0. \n");
+    fprintf(stderr, "       -E <subscriber-count> Expected number of subscribers to connect before we start sending. Publisher only \n");
     fprintf(stderr, "       -e <ctx-id>    Expect packets from node_id. Legal value 1-1000. Susbscriber only. \n");
 }
 
@@ -90,13 +92,14 @@ int main(int argc, char* argv[])
     int jitter = 0;
     uint8_t expected_node_id[1024];
     int expect_node_id = 0;
+    int expected_subscriber_count = 0;
 
     strcpy(mcast_if_addr, MULTICAST_IF_ADDR_DEFAULT);
     strcpy(listen_if_addr, LISTEN_IF_ADDR_DEFAULT);
     strcpy(mcast_group_addr, MULTICAST_ADDR_DEFAULT);
     memset(expected_node_id, 0, sizeof(expected_node_id));
 
-    while ((opt = getopt(argc, argv, "SP:M:m:l:p:c:n:r:s:j:d:e:")) != -1) {
+    while ((opt = getopt(argc, argv, "SP:M:m:l:p:c:n:r:s:j:d:e:E:")) != -1) {
         switch (opt) {
 
         case 'S':
@@ -147,6 +150,9 @@ int main(int argc, char* argv[])
             drop_rate = atof(optarg);
             break;
 
+        case 'E':
+            expected_subscriber_count = atoi(optarg);
+
         case 'e':
             expect_node_id = atoi(optarg);
             if (expect_node_id < 1 || expect_node_id >= 1024) {
@@ -194,6 +200,7 @@ int main(int argc, char* argv[])
                        listen_port,
                        node_id,
                        packet_count,
+                       expected_subscriber_count,
                        rand_seed,
                        send_interval,
                        jitter,
