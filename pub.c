@@ -91,10 +91,11 @@ void pub_reset_subscriber(pub_subscriber_t* sub,
 }
 
 
-packet_id_t pub_queue_packet(pub_context_t* ctx,
-                             void* payload,
-                             payload_len_t payload_len,
-                             user_data_t pkg_user_data)
+packet_id_t pub_queue_packet_with_pid(pub_context_t* ctx,
+                                      packet_id_t pid,
+                                      void* payload,
+                                      payload_len_t payload_len,
+                                      user_data_t pkg_user_data)
 {
     pub_packet_node_t *node = 0;
     pub_packet_t* ppack = 0;
@@ -102,8 +103,7 @@ packet_id_t pub_queue_packet(pub_context_t* ctx,
     assert(payload);
 
     ppack = _alloc_pending_packet();
-
-    ppack->pid = _next_pid(ctx);
+    ppack->pid = pid;
     ppack->payload = payload;
     ppack->payload_len = payload_len;
     ppack->ref_count = 0;
@@ -129,6 +129,20 @@ packet_id_t pub_queue_packet(pub_context_t* ctx,
 
     return ppack->pid;
 }
+
+packet_id_t pub_queue_packet(pub_context_t* ctx,
+                             void* payload,
+                             payload_len_t payload_len,
+                             user_data_t pkg_user_data)
+{
+    return pub_queue_packet_with_pid(ctx,
+                                     _next_pid(ctx),
+                                     payload,
+                                     payload_len,
+                                     pkg_user_data);
+        
+}
+
 
 pub_packet_t* pub_next_queued_packet(pub_context_t* ctx)
 {

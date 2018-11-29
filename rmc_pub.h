@@ -80,11 +80,11 @@ typedef pub_sub_node pub_sub_node_t;
 //
 // When a packet is acked by a subscriber via a pub_packet_ack() call,
 // the corresponding pending_packet_t struct will be removed from the
-// subscriber's 'inflight_packets' list, and the pending packets
+// subscriber's 'inflight' list, and the pending packets
 // reference counter is decreased by 1.
 //
 // When the reference counter reaches zero, all subscribers have acked
-// the packet and the pending_packet_t is removed from the 'pending'
+// the packet and the packet is removed from the 'inflight'
 // list and is freed.
 //
 typedef struct pub_context {
@@ -122,6 +122,12 @@ extern packet_id_t pub_queue_packet(pub_context_t* ctx,
                                     payload_len_t payload_len,
                                     user_data_t pkg_user_data);
 
+// Used to send out pid=0 announcement packets
+extern packet_id_t pub_queue_packet_with_pid(pub_context_t* ctx,
+                                             packet_id_t pid,
+                                             void* payload,
+                                             payload_len_t payload_len,
+                                             user_data_t pkg_user_data);
 
 extern pub_packet_t* pub_next_queued_packet(pub_context_t* ctx);
 extern user_data_t pub_packet_user_data(pub_packet_t* ppack);
