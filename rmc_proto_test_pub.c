@@ -6,6 +6,7 @@
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
 #include "rmc_proto_test_common.h"
+#include <stdlib.h>
 
 
 static uint8_t _test_print_pending(pub_packet_node_t* node, void* dt)
@@ -46,6 +47,13 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
     char buf[16];
     int nfds = 0;
 
+    if (timeout != -1) {
+        timeout -= rmc_usec_monotonic_timestamp();
+        if (timeout < 0)
+            timeout = 0;
+    }
+            
+
     nfds = epoll_wait(epollfd, events, RMC_MAX_CONNECTIONS, (timeout == -1)?-1:((timeout / 1000) + 1));
     if (nfds == -1) {
         perror("epoll_wait");
@@ -61,16 +69,17 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
         uint8_t op_res = 0;
         rmc_index_t c_ind = events[nfds].data.u32;
 
-        printf("pub_poll_wait(%s:%d)%s%s%s\n",
-               _index(c_ind, buf), _descriptor(ctx, c_ind),
-               ((events[nfds].events & EPOLLIN)?" read":""),
-               ((events[nfds].events & EPOLLOUT)?" write":""),
-               ((events[nfds].events & EPOLLHUP)?" disconnect":""));
+//        printf("pub_poll_wait(%s:%d)%s%s%s\n",
+//               _index(c_ind, buf), _descriptor(ctx, c_ind),
+//             ((events[nfds].events & EPOLLIN)?" read":""),
+//               ((events[nfds].events & EPOLLOUT)?" write":""),
+//               ((events[nfds].events & EPOLLHUP)?" disconnect":""));
 
         // Figure out what to do.
         if (events[nfds].events & EPOLLHUP) {
+            puts("POLLHUP");
             _test("rmc_proto_test[%d.%d] process_events():rmc_close_tcp(): %s\n",
-                  major, 11, rmc_pub_close_connection(ctx, c_ind));
+                  major, 11, rmc_pub_shutdown_connection(ctx, c_ind));
             continue;
         }
 
@@ -78,7 +87,7 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
             errno = 0;
             res = rmc_pub_read(ctx, c_ind, &op_res);
             // Did we read a loopback message we sent ourselves?
-            printf("process_events(%s):%s\n", _op_res_string(op_res), strerror(res));
+//            printf("process_events(%s):%s\n", _op_res_string(op_res), strerror(res));
             if (res == ELOOP)
                 continue;       
 
@@ -107,7 +116,7 @@ void queue_test_data(rmc_pub_context_t* ctx, char* buf, int drop_flag)
 {
     pub_packet_node *node = 0;
     int res = 0;
-    res = rmc_pub_queue_packet(ctx, buf, strlen(buf)+1, 0);
+    res = rmc_pub_queue_packet(ctx, memcpy(malloc(strlen(buf+1)), buf, strlen(buf)+1), strlen(buf)+1, 0);
 
     if (res) {
         printf("queue_test_data(payload[%s]: %s",
@@ -166,8 +175,10 @@ void test_rmc_proto_pub(char* mcast_group_addr,
     uint8_t *conn_vec_mem = 0;
     char buf[128];
     int subscriber_count = 0;
-
-
+    usec_timestamp_t exit_ts = 0;
+    usec_timestamp_t current_ts = 0;
+    packet_id_t debug_output_pid = 0;
+    
     signal(SIGHUP, SIG_IGN);
 
     epollfd = epoll_create1(0);
@@ -189,7 +200,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
                          poll_add, poll_modify, poll_remove,
                          conn_vec_mem,
                          RMC_MAX_CONNECTIONS,
-                         lambda(void, (void* pl, payload_len_t len, user_data_t dt) { }));
+                         lambda(void, (void* pl, payload_len_t len, user_data_t dt) { free(pl); }));
 
 
     rmc_pub_set_subscriber_connect_callback(ctx,
@@ -211,8 +222,8 @@ void test_rmc_proto_pub(char* mcast_group_addr,
                                                           return;
                                                       }));
 
-    // Send an announcement every 1 second.
-    rmc_pub_set_announce_interval(ctx, 1000000);
+    // Send an announcement every 0.3 second.
+    rmc_pub_set_announce_interval(ctx, 300000);
 
     _test("rmc_proto_test_pub[%d.%d] activate_context(): %s",
           1, 1,
@@ -226,7 +237,6 @@ void test_rmc_proto_pub(char* mcast_group_addr,
         usec_timestamp_t event_tout = 0;
 
         rmc_pub_timeout_get_next(ctx, &event_tout);
-        printf("tout[%lu]\n", event_tout);
 
 
         if (process_events(ctx, epollfd, event_tout, 2) == ETIME) 
@@ -237,19 +247,19 @@ void test_rmc_proto_pub(char* mcast_group_addr,
     // Seed with a predefined value, allowing us to generate the exact same random sequence
     // every time for packet drops, etc.
     srand(seed);
-    for(ind = 0; ind < count; ++ind) {
-        usec_timestamp_t now = rmc_usec_monotonic_timestamp();
+    debug_output_pid = 1;
+    for(ind = 1; ind <= count; ++ind) {
         float rnd = (float) (rand() % 1000000);
         int drop_flag = 0;
         usec_timestamp_t tout = 0;
 
-        // Check if we are to drop the packet.
+        current_ts = rmc_usec_monotonic_timestamp();        // Check if we are to drop the packet.
         if (rnd / 1000000.0 < drop_rate)  
             drop_flag = 1;
 
         // Check what the wait should be after we sent the packet until we send the next.
 
-        tout = now + send_interval;
+        tout = current_ts + send_interval;
         if (jitter > 0) 
              tout += (rand() % jitter) * 2 - jitter;
         else
@@ -257,43 +267,55 @@ void test_rmc_proto_pub(char* mcast_group_addr,
         sprintf(buf, "%u:%lu:%lu", node_id, ind, count);
         queue_test_data(ctx, buf, drop_flag);
 
-        printf("rmc_proto_test_pub: queue_test_data(%s): drop[%c] wait[%ld]\n", buf, drop_flag?'x':' ', tout-now);
+        if (drop_flag) 
+            printf("dropped packet [%lu]\n", ind);
+
+        if (ind % 1000 == 0) {
+            printf("queued packet [%lu-%lu]\n", debug_output_pid, ind);
+            debug_output_pid = ind + 1;
+        }
+
+//        printf("rmc_proto_test_pub: queue_test_data(%s): drop[%c] wait[%ld]\n", buf, drop_flag?'x':' ', tout-current_ts);
 
         // Make sure we run the loop at least one.
-        if (now > tout)
-            now = tout;
+        if (current_ts > tout)
+            current_ts = tout;
 
+        //
         // Process events until it is time to send the next packet.
-        while(now < tout) {
+        //
+        while(current_ts < tout) {
             usec_timestamp_t event_tout = 0;
 
             rmc_pub_timeout_get_next(ctx, &event_tout);
 
-            if (event_tout == -1 || event_tout > tout - now)
-                event_tout = tout - now;
+            if (event_tout == -1 || event_tout > tout)
+                event_tout = tout;
             
             if ((res = process_events(ctx, epollfd, event_tout, 2)) == ETIME) 
                 rmc_pub_timeout_process(ctx);
  
-            now = rmc_usec_monotonic_timestamp();
-        }        
+            current_ts = rmc_usec_monotonic_timestamp();
+        }  
     }
 
     puts("Shutting down");
     
+    rmc_pub_shutdown_context(ctx);
+
+    // Disable announce.
+    rmc_pub_set_announce_interval(ctx, 0);
+    
     while(1) {
-            usec_timestamp_t tout = 0;
+        usec_timestamp_t tout = 0;
 
-            rmc_pub_timeout_get_next(ctx, &tout);
+        rmc_pub_timeout_get_next(ctx, &tout);
+        if (tout == -1)
+            break;
 
-            if (tout == -1)
-                tout = 500001;
-            
-            if ((res = process_events(ctx, epollfd, tout, 2)) == ETIME) {
-                rmc_pub_timeout_process(ctx);
-                if (tout == 500001)
-                    break;
-            }
+        if ((res = process_events(ctx, epollfd, tout, 2)) == ETIME) 
+            rmc_pub_timeout_process(ctx);
+
     }
 
     puts("Done");

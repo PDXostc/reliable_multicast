@@ -24,70 +24,6 @@
 // =============
 
 
-int _rmc_sub_write_single_acknowledgement(rmc_sub_context_t* ctx,
-                                          rmc_connection_t* conn,
-                                          packet_id_t pid)
-{
-        ssize_t res = 0;
-        uint8_t *seg1 = 0;
-        uint32_t seg1_len = 0;
-        uint8_t *seg2 = 0;
-        uint32_t seg2_len = 0;
-        cmd_ack_single_t ack = {
-            .packet_id = pid
-        };
-        uint32_t available = 0;
-        uint32_t old_in_use = 0;
-        rmc_poll_action_t old_action = 0;
-        char group_addr[80];
-        char remote_addr[80];
-
-        if (!conn || conn->mode != RMC_CONNECTION_MODE_SUBSCRIBER)
-            return ENOTCONN;
-
-        available = circ_buf_available(&conn->write_buf);
-        old_in_use = circ_buf_in_use(&conn->write_buf);
-        old_action = conn->action;
-
-        strcpy(group_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }));
-        strcpy(remote_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(conn->remote_address) }));
-        printf("_rmc_sub_write_single_acknowledgement(): pid[%lu] mcast[%s:%d] remote[%s:%d]\n",
-               pid,
-               group_addr,
-               ctx->mcast_port,
-               remote_addr,
-               conn->remote_port);
-
-        // Allocate memory for command
-        circ_buf_alloc(&conn->write_buf, 1,
-                       &seg1, &seg1_len,
-                       &seg2, &seg2_len);
-
-
-        *seg1 = RMC_CMD_ACK_SINGLE;
-
-        // Allocate memory for packet header
-        circ_buf_alloc(&conn->write_buf, sizeof(ack) ,
-                       &seg1, &seg1_len,
-                       &seg2, &seg2_len);
-
-        // Copy in packet header
-        memcpy(seg1, (uint8_t*) &ack, seg1_len);
-        if (seg2_len) 
-            memcpy(seg2, ((uint8_t*) &ack) + seg1_len, seg2_len);
-
-
-        // We always want to read from the tcp  socket.
-        conn->action |= RMC_POLLWRITE;
-
-        if (ctx->conn_vec.poll_modify)
-            (*ctx->conn_vec.poll_modify)(ctx->user_data,
-                                         conn->descriptor,
-                                         conn->connection_index,
-                                         old_action,
-                                         conn->action);
-}
-
 int _rmc_sub_write_interval_acknowledgement(rmc_sub_context_t* ctx,
                                             rmc_connection_t* conn,
                                             sub_pid_interval_t* interval)
@@ -110,7 +46,7 @@ int _rmc_sub_write_interval_acknowledgement(rmc_sub_context_t* ctx,
         if (!ctx || !conn || !interval)
             return EINVAL;
         
-        if (conn->mode != RMC_CONNECTION_MODE_SUBSCRIBER)
+        if (conn->mode != RMC_CONNECTION_MODE_CONNECTED)
             return ENOTCONN;
 
         available = circ_buf_available(&conn->write_buf);
@@ -168,7 +104,7 @@ int rmc_sub_write(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
 
     assert(ctx);
 
-    conn = _rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
+    conn = rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
     // Is s_ind within our connection vector?
     if (!conn) {
         if (op_res)
@@ -183,7 +119,7 @@ int rmc_sub_write(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
             *op_res = RMC_COMPLETE_CONNECTION;
 
         sub_init_publisher(&ctx->publishers[s_ind]);
-        _rmc_conn_complete_connection(&ctx->conn_vec, conn);
+        rmc_conn_complete_connection(&ctx->conn_vec, conn);
         return 0;
     }
 
@@ -200,7 +136,7 @@ int rmc_sub_write(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
     if (op_res)
         *op_res = RMC_WRITE_TCP;
     
-    res = _rmc_conn_process_tcp_write(conn, &bytes_left_after);
+    res = rmc_conn_process_tcp_write(conn, &bytes_left_after);
     
     if (bytes_left_after == 0) 
         conn->action &= ~RMC_POLLWRITE;

@@ -103,26 +103,6 @@ int rmc_sub_packet_dispatched(rmc_sub_context_t* ctx, sub_packet_t* pack)
 }
 
 
-// Called by rmc_sub_process_timeout() to
-// write packet acks back to the sender.
-int _rmc_sub_single_packet_acknowledged(rmc_sub_context_t* ctx, sub_packet_t* pack)
-{
-    rmc_connection_t* conn = 0;
-
-    if (!ctx || !pack)
-        return EINVAL;
-    
-    conn = &ctx->conn_vec.connections[sub_packet_user_data(pack).u32];
-    
-    if (!conn || conn->mode != RMC_CONNECTION_MODE_SUBSCRIBER)
-        return EINVAL;
-
-    _rmc_sub_write_single_acknowledgement(ctx, conn, pack->pid);
-
-    return 0;
-}
-
-
 int _rmc_sub_packet_interval_acknowledged(rmc_sub_context_t* ctx, rmc_index_t index, sub_pid_interval_t* interval)
 {
     rmc_connection_t* conn = 0;
@@ -132,7 +112,7 @@ int _rmc_sub_packet_interval_acknowledged(rmc_sub_context_t* ctx, rmc_index_t in
     
     conn = &ctx->conn_vec.connections[index];
 
-    if (!conn || conn->mode != RMC_CONNECTION_MODE_SUBSCRIBER)
+    if (!conn || conn->mode != RMC_CONNECTION_MODE_CONNECTED)
         return EINVAL;
 
 

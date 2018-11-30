@@ -39,15 +39,39 @@ int sub_packet_is_duplicate(sub_publisher_t* pub, packet_id_t pid)
     // FIXME: Setup hash table for pub->received so that we
     // can find dups faster
     //
-    return ((pub->max_pid_ready != 0 && pid < pub->max_pid_ready) ||
-            sub_packet_list_find_node(&pub->received_pid,
+    if (pub->max_pid_ready != 0 && pid < pub->max_pid_ready) {
+        printf("sub_packet_is_dup(): pid[%ld] max_pid_ready[%ld] - Already processed\n", pid, pub->max_pid_ready);
+        return 1;
+    }
+
+    if (sub_packet_list_find_node_rev(&pub->received_pid,
                                       &cmp_pack,
                                       lambda(int, (sub_packet_t* dt1,
                                                    sub_packet_t* dt2) {
+                                                 if (dt1->pid == dt2->pid)
+                                                     puts("HIT");
                                                  return dt1->pid == dt2->pid;
-                                             })))?1:0;
+                                             }))) {
+        printf("sub_packet_is_dup(): pid[%ld] max_pid_ready[%ld] - Already received\n", pid, pub->max_pid_ready);
+    }
 }
 
+static uint8_t _test_print_interval(sub_pid_interval_node_t* node, void* dt)
+{
+    sub_pid_interval_t intv =  node->data;
+    int indent = (int) (uint64_t) dt;
+
+    printf("%*cInterval: %lu - %lu\n", indent*2, ' ', intv.first_pid, intv.last_pid);
+    return 1;
+}
+
+static uint8_t _test_print_interval_list(sub_publisher_t* pub)
+{
+
+    puts("Interval:");
+    sub_pid_interval_list_for_each(&pub->received_interval, _test_print_interval, (void*) 1);
+    return 1;
+}
 
 int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
                         void* payload,
@@ -91,6 +115,7 @@ int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
 
     }
     _sub_packet_add_to_received_interval(pub, pid);
+    _test_print_interval_list(pub);
     return 1;
 }
 
@@ -118,9 +143,6 @@ void sub_process_received_packets(sub_publisher_t* pub, sub_packet_list_t* dispa
             node->data->pid != pub->max_pid_ready + 1) 
             break;
 
-        printf("Moving [%lu] to dispatched. max_pid_ready[%lu]\n",
-               node->data->pid, pub->max_pid_ready);
-        
         // Drop the packet in at the tail of provide dispatch_ready list.
         // Since the pub->received() queue we get the packts from is pre-sorted on pid,
         // we will guarantee that packets in dispatch_ready will be sorted on an ascending pid.

@@ -23,7 +23,7 @@
 // SOCKET SLOT MANAGEMENT
 // =============
 
-rmc_connection_t* _rmc_conn_find_by_address(rmc_connection_vector_t* conn_vec,
+rmc_connection_t* rmc_conn_find_by_address(rmc_connection_vector_t* conn_vec,
                                             uint32_t remote_address,
                                             uint16_t remote_port)
 {
@@ -56,7 +56,7 @@ rmc_connection_t* _rmc_conn_find_by_address(rmc_connection_vector_t* conn_vec,
     return 0;
 }
 
-rmc_connection_t* _rmc_conn_find_by_index(rmc_connection_vector_t* conn_vec,
+rmc_connection_t* rmc_conn_find_by_index(rmc_connection_vector_t* conn_vec,
                                           rmc_index_t index)
 {
     if (!conn_vec)
@@ -66,7 +66,7 @@ rmc_connection_t* _rmc_conn_find_by_index(rmc_connection_vector_t* conn_vec,
     if (index >= conn_vec->size)
         return 0;
 
-    if (conn_vec->connections[index].descriptor == -1)
+    if (conn_vec->connections[index].mode == RMC_CONNECTION_MODE_CLOSED)
         return 0;
 
     return &conn_vec->connections[index];
@@ -104,19 +104,19 @@ static void _reset_max_connection_ind(rmc_connection_vector_t* conn_vec)
 }
 
 
-static void _rmc_conn_reset_connection(rmc_connection_t* conn, uint32_t index)
+static void rmc_conn_reset_connection(rmc_connection_t* conn, uint32_t index)
 {
     conn->action = 0;
     conn->connection_index = index;
     conn->descriptor = -1;
-    conn->mode = RMC_CONNECTION_MODE_UNUSED;
+    conn->mode = RMC_CONNECTION_MODE_CLOSED;
     circ_buf_init(&conn->read_buf, conn->read_buf_data, sizeof(conn->read_buf_data));
     circ_buf_init(&conn->write_buf, conn->write_buf_data, sizeof(conn->write_buf_data));
     memset(&conn->remote_address, 0, sizeof(conn->remote_address));
     conn->remote_port = 0;
 }
 
-void _rmc_conn_init_connection_vector(rmc_connection_vector_t* conn_vec,
+void rmc_conn_init_connection_vector(rmc_connection_vector_t* conn_vec,
                                       uint8_t* buffer,
                                       uint32_t elem_count,
                                       user_data_t user_data,
@@ -138,12 +138,12 @@ void _rmc_conn_init_connection_vector(rmc_connection_vector_t* conn_vec,
 
     ind = conn_vec->size;
     while(ind--) 
-        _rmc_conn_reset_connection(&conn_vec->connections[ind], ind);
+        rmc_conn_reset_connection(&conn_vec->connections[ind], ind);
 }
 
 
 // Complete async connect. Called from rmc_write().
-int _rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
+int rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
                                   rmc_connection_t* conn)
 {
     rmc_poll_action_t old_action = 0;
@@ -159,7 +159,7 @@ int _rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
                    SO_ERROR,
                    &sock_err,
                    &len) == -1) {
-        printf("_rmc_conn_complete_connection(): ind[%d] addr[%s:%d]: getsockopt(): %s\n",
+        printf("rmc_conn_complete_connection(): ind[%d] addr[%s:%d]: getsockopt(): %s\n",
                conn->connection_index,
                inet_ntoa( (struct in_addr) {
                        .s_addr = htonl(conn->remote_address)
@@ -167,11 +167,11 @@ int _rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
                conn->remote_port,
                strerror(errno));
         sock_err = errno; // Save it.
-        _rmc_conn_close_connection(conn_vec, conn->connection_index);
+        rmc_conn_close_connection(conn_vec, conn->connection_index, 1);
         return sock_err;
     }
 
-    printf("_rmc_conn_complete_connection(): ind[%d] addr[%s:%d]: %s\n",
+    printf("rmc_conn_complete_connection(): ind[%d] addr[%s:%d]: %s\n",
            conn->connection_index,
            inet_ntoa( (struct in_addr) {.s_addr = htonl(conn->remote_address) }),
            conn->remote_port,
@@ -180,7 +180,7 @@ int _rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
     if (sock_err != 0 && conn_vec->poll_remove) {
         (*conn_vec->poll_remove)(conn_vec->user_data, conn->descriptor, conn->connection_index);
 
-        _rmc_conn_close_connection(conn_vec, conn->connection_index);
+        rmc_conn_close_connection(conn_vec, conn->connection_index, 1);
         return sock_err;
     }
     
@@ -188,13 +188,13 @@ int _rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
     // out acks.
     if (setsockopt( conn->descriptor, IPPROTO_TCP, TCP_NODELAY, (void *)&tr, sizeof(tr))) {
         sock_err = errno;
-        _rmc_conn_close_connection(conn_vec, conn->connection_index);
+        rmc_conn_close_connection(conn_vec, conn->connection_index, 1);
         return sock_err;
     }
 
     // We are subscribing to data from the publisher, which
     // will resend failed multicast packets via tcp
-    conn->mode = RMC_CONNECTION_MODE_SUBSCRIBER;
+    conn->mode = RMC_CONNECTION_MODE_CONNECTED;
     old_action = conn->action;
     conn->action = RMC_POLLREAD;
 
@@ -209,7 +209,7 @@ int _rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
     return 0;
 }
                                
-int _rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
+int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
                                      uint32_t address,
                                      in_port_t port,
                                      rmc_index_t* result_index)
@@ -283,7 +283,7 @@ int _rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
 }
 
 
-int _rmc_conn_connect_tcp_by_host(rmc_connection_vector_t* conn_vec,
+int rmc_conn_connect_tcp_by_host(rmc_connection_vector_t* conn_vec,
                                   char* server_addr,
                                   in_port_t port,
                                   rmc_index_t* result_index)
@@ -294,7 +294,7 @@ int _rmc_conn_connect_tcp_by_host(rmc_connection_vector_t* conn_vec,
     if (!host)
         return ENOENT;
 
-    return _rmc_conn_connect_tcp_by_address(conn_vec,
+    return rmc_conn_connect_tcp_by_address(conn_vec,
                                             ntohl(*(uint32_t*) host->h_addr_list[0]),
                                             port,
                                             result_index);
@@ -303,7 +303,7 @@ int _rmc_conn_connect_tcp_by_host(rmc_connection_vector_t* conn_vec,
 
 
 
-int _rmc_conn_process_accept(int listen_descriptor,
+int rmc_conn_process_accept(int listen_descriptor,
                              rmc_connection_vector_t* conn_vec,
                              rmc_index_t* result_index)
 {
@@ -327,7 +327,7 @@ int _rmc_conn_process_accept(int listen_descriptor,
     printf("rmc_process_accept(): %s:%d -> index %d\n",
            inet_ntoa(src_addr.sin_addr), ntohs(src_addr.sin_port), c_ind);
 
-    conn_vec->connections[c_ind].mode = RMC_CONNECTION_MODE_PUBLISHER;
+    conn_vec->connections[c_ind].mode = RMC_CONNECTION_MODE_CONNECTED;
     conn_vec->connections[c_ind].remote_address = src_addr.sin_addr.s_addr;
 
     conn_vec->connections[c_ind].action = RMC_POLLREAD;
@@ -351,8 +351,7 @@ int _rmc_conn_process_accept(int listen_descriptor,
 }
 
 
-
-int _rmc_conn_close_connection(rmc_connection_vector_t* conn_vec, rmc_index_t s_ind)
+int rmc_conn_close_connection(rmc_connection_vector_t* conn_vec, rmc_index_t s_ind, uint8_t force_close)
 {
     rmc_connection_t* conn = 0;
     
@@ -364,14 +363,23 @@ int _rmc_conn_close_connection(rmc_connection_vector_t* conn_vec, rmc_index_t s_
     conn = &conn_vec->connections[s_ind];
 
     // Are we connected
-    if (conn->descriptor == -1)
+    if (conn->mode == RMC_CONNECTION_MODE_CLOSED)
         return ENOTCONN;
     
-    // Shutdown any completed connection.
-    if (conn->mode != RMC_CONNECTION_MODE_CONNECTING &&
-        shutdown(conn->descriptor, SHUT_RDWR) != 0)
-        return errno;
+    // If we are called without a prior call to rmc_conn_shutdown_connection()
+    // then issue a shutdown to get a somewhat clean socket disconnect.
+    if (conn->mode == RMC_CONNECTION_MODE_CONNECTED) 
+        shutdown(conn->descriptor, SHUT_RDWR);
 
+
+    if (circ_buf_in_use(&conn->write_buf) > 0 && !force_close) {
+        printf("rmc_conn_close_connection(): Still have [%d] bytes to write.\n",
+               circ_buf_in_use(&conn->write_buf));
+        return EBUSY;
+    }
+
+    puts("Completing close");
+    // Finalize connection shutdown.
     // Delete from caller's poll vector.
     if (conn_vec->poll_remove)
         (*conn_vec->poll_remove)(conn_vec->user_data,
@@ -381,7 +389,7 @@ int _rmc_conn_close_connection(rmc_connection_vector_t* conn_vec, rmc_index_t s_
     if (close(conn->descriptor) != 0)
         return errno;
 
-    _rmc_conn_reset_connection(conn, s_ind);
+    rmc_conn_reset_connection(conn, s_ind);
 
     if (s_ind == conn_vec->max_connection_ind)
         _reset_max_connection_ind(conn_vec);
@@ -389,6 +397,57 @@ int _rmc_conn_close_connection(rmc_connection_vector_t* conn_vec, rmc_index_t s_
     return 0;
 }
 
+
+int rmc_conn_shutdown_connection(rmc_connection_vector_t* conn_vec, rmc_index_t s_ind)
+{
+    rmc_connection_t* conn = 0;
+    
+    // Is s_ind within our connection vector?
+
+    if (s_ind >= RMC_MAX_CONNECTIONS)
+        return EINVAL;
+
+    conn = &conn_vec->connections[s_ind];
+
+    // Are we connected
+    if (conn->mode == RMC_CONNECTION_MODE_CLOSED)
+        return ENOTCONN;
+    
+    // If we are in closing mode, then complete the disconnect.
+    if (conn->mode == RMC_CONNECTION_MODE_CLOSING) {
+        puts("rmc_conn_shutdown_connection(): Shutdown already in progress - completing close");
+        return rmc_conn_close_connection(conn_vec, s_ind, 0);
+    }        
+
+    // If we are still connecting then just terminate the conneciton.
+    if (conn->mode == RMC_CONNECTION_MODE_CONNECTING) {
+        puts("rmc_conn_shutdown_connection(): Aborting ongoing connection setup");
+        return rmc_conn_close_connection(conn_vec, s_ind, 1);
+    }
+
+    // We are connected. Shut down the socket for read and write
+    // If shutdown fails, then just terminate the connection.
+    if (shutdown(conn->descriptor, SHUT_RDWR) != 0)  {
+        printf("rmc_conn_shutdown_connection(): shutdown failed: %s\n", strerror(errno));
+        return rmc_conn_close_connection(conn_vec, s_ind, 1);
+    }
+    
+    printf("rmc_conn_shutdown_connection(): Connection shut down in progress. [%d] bytes left to send.\n",
+         circ_buf_in_use(&conn->write_buf));
+
+    conn->mode = RMC_CONNECTION_MODE_CLOSING;
+
+    return 0;
+}
+
+
+int rmc_conn_get_max_index_in_use(rmc_connection_vector_t* conn_vec, rmc_index_t *result)
+{
+    if (!conn_vec || !result)
+        return EINVAL;
+
+    *result = conn_vec->max_connection_ind;
+}
 
 int rmc_conn_get_poll_size(rmc_connection_vector_t* conn_vec, int *result)
 {

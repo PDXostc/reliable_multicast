@@ -60,7 +60,7 @@ void usage(char* prog)
     fprintf(stderr, "       -P <port>      Multicast port (default: %d)\n", PORT_DEFAULT);
     fprintf(stderr, "       -p <port>      Listen  port (default: %d)\n\n", PORT_DEFAULT);
     
-    fprintf(stderr, "       -n <count>     Number of packets to transmit (publisher only). Default 1\n");
+    fprintf(stderr, "       -c <count>     Number of packets to transmit (publisher only). Default 1\n");
     fprintf(stderr, "       -i <id>        Unique node ID among all publishers and subscribers. Legal value 1-1000. Default = 1\n");
     fprintf(stderr, "       -r <seed>      Random seed number. Default 1\n");
     fprintf(stderr, "       -d <drop-rate> Chance of sender dropping packet. 0.0 - never. 1.0 - always. Default 0.0\n");
@@ -129,7 +129,7 @@ int main(int argc, char* argv[])
             node_id = atoi(optarg);
             break;
 
-        case 'n':
+        case 'c':
             packet_count = atoll(optarg);
             break;
 
@@ -182,7 +182,7 @@ int main(int argc, char* argv[])
     setlinebuf(stderr);
 
     if (!publisher) {
-        puts("\n\n\n\n\n\n\n\nSUBSCRIBER\n");
+        puts("SUBSCRIBER\n");
         test_rmc_proto_sub(mcast_group_addr,
                            mcast_if_addr,
                            mcast_port,
@@ -192,9 +192,10 @@ int main(int argc, char* argv[])
         exit(0);
     }
 
+
     setlinebuf(stdout);
     setlinebuf(stderr);
-    puts("\n\n\n\n\n\n\n\nPUBLISHER\n");
+    puts("PUBLISHER\n");
     test_rmc_proto_pub(mcast_group_addr,
                        mcast_if_addr,
                        listen_if_addr,

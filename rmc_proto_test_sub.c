@@ -135,11 +135,11 @@ static int process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, sub
         // Check that packet is consecutive.
         if (current != expect[node_id].max_received + 1) {
             printf("rmc_proto_test_sub(): ContextID [%u] Wanted[%lu] Got[%lu]\n",
-                   node_id, expect[node_id].max_received + 1, max_expected);
+                   node_id, expect[node_id].max_received + 1, current);
             exit(255);
         }
 
-        expect[node_id].max_expected = current;
+        expect[node_id].max_received = current;
         
         // Check if we are complete
         if (current == max_expected) {
@@ -166,13 +166,13 @@ static int process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, sub
 
 static int process_events(rmc_sub_context_t* ctx,
                           int epollfd,
-                          usec_timestamp_t timeout)
+                          usec_timestamp_t timeout_ts)
 {
     struct epoll_event events[RMC_MAX_CONNECTIONS];
     char buf[16];
     int nfds = 0;
 
-    nfds = epoll_wait(epollfd, events, RMC_MAX_CONNECTIONS, (timeout == -1)?-1:(timeout / 1000) + 1);
+    nfds = epoll_wait(epollfd, events, RMC_MAX_CONNECTIONS, (timeout_ts == -1)?-1:(timeout_ts / 1000) + 1);
     if (nfds == -1) {
         perror("epoll_wait");
         exit(255);
@@ -199,7 +199,7 @@ static int process_events(rmc_sub_context_t* ctx,
         // Figure out what to do.
         if (events[nfds].events & EPOLLHUP) {
             _test("rmc_proto_test[%d.%d] process_events():rmc_close_tcp(): %s\n",
-                  1, 1, _rmc_conn_close_connection(&ctx->conn_vec, c_ind));
+                  1, 1, rmc_conn_shutdown_connection(&ctx->conn_vec, c_ind));
             continue;
         }
 
@@ -207,7 +207,7 @@ static int process_events(rmc_sub_context_t* ctx,
             errno = 0;
             res = rmc_sub_read(ctx, c_ind, &op_res);
             // Did we read a loopback message we sent ourselves?
-            printf("process_events(%s):%s\n", _op_res_string(op_res), strerror(res));
+//            printf("process_events(%s):%s\n", _op_res_string(op_res), strerror(res));
             if (res == ELOOP)
                 continue;       
 
@@ -248,7 +248,7 @@ void test_rmc_proto_sub(char* mcast_group_addr,
     user_data_t ud = { .u64 = 0 };
     int mode = 0;
     int ind = 0;
-    usec_timestamp_t t_out = 0;
+    usec_timestamp_t timeout_ts = 0;
     usec_timestamp_t exit_ts = 0;
     uint8_t *conn_vec_mem = 0;
     int do_exit = 0;
@@ -299,33 +299,53 @@ void test_rmc_proto_sub(char* mcast_group_addr,
 
     while(1) {
         sub_packet_t* pack = 0;
+        packet_id_t first_pid = 0;
+        packet_id_t last_pid = 0;
+        usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
         
-        rmc_sub_timeout_get_next(ctx, &t_out);
-        if (process_events(ctx, epollfd, t_out) == ETIME) {
+        rmc_sub_timeout_get_next(ctx, &timeout_ts);
+        printf("timeout[%ld]\n", (timeout_ts == -1)?-1:timeout_ts  - current_ts);
+        if (process_events(ctx, epollfd, timeout_ts) == ETIME) {
+            puts("Yep");
             rmc_sub_timeout_process(ctx);
-            continue;
         }
+        rmc_sub_timeout_process(ctx);
 
         // Process as many packets as possible.
-        while((pack = rmc_sub_get_next_dispatch_ready(ctx))) 
+        puts("Intro");
+        
+        while((pack = rmc_sub_get_next_dispatch_ready(ctx))) {
+            if (!first_pid)
+                first_pid = pack->pid;
+
+            last_pid = pack->pid;
             if (!process_incoming_data(ctx, pack, expect, node_id_map_size)) {
                 do_exit = 1;
+                puts("EXIT");
                 break;
             }
+        }
+        printf("Pid[%lu:%lu]\n", first_pid, last_pid);
+        puts("Exit");
 
         if (do_exit)
             break;
     }
 
     puts("Shutting down");
-    while(1) {
-        rmc_sub_timeout_get_next(ctx, &t_out);
+    rmc_sub_shutdown_context(ctx);
 
-        if (t_out == -1)
+    while(1) {
+        rmc_sub_timeout_get_next(ctx, &timeout_ts);
+        printf("timeout_ts[%ld]\n", timeout_ts - rmc_usec_monotonic_timestamp());
+
+        if (timeout_ts == -1) 
             break;
 
-        if (process_events(ctx, epollfd, t_out) == ETIME) 
+        if (process_events(ctx, epollfd, timeout_ts) == ETIME)  {
+            puts("Timed out");
             rmc_sub_timeout_process(ctx);
+        }
     }
     
     puts("Done");

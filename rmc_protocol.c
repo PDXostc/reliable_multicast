@@ -15,7 +15,7 @@
 #include <sys/uio.h>
 
 
-int _rmc_conn_process_tcp_write(rmc_connection_t* conn, uint32_t* bytes_left)
+int rmc_conn_process_tcp_write(rmc_connection_t* conn, uint32_t* bytes_left)
 {
     uint8_t *seg1 = 0;
     uint32_t seg1_len = 0;
@@ -74,13 +74,13 @@ int _rmc_conn_process_tcp_write(rmc_connection_t* conn, uint32_t* bytes_left)
 // EAGAIN can be returned if one or more commands have been executed
 // and it is the last command that is partial.
 //
-int _rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
+int rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
                                rmc_index_t s_ind,
                                uint8_t* op_res,
                                rmc_conn_command_dispatch_t* dispatch_table, // Terminated by a null dispatch entry
                                user_data_t user_data)
 {
-    rmc_connection_t* conn = _rmc_conn_find_by_index(conn_vec, s_ind);
+    rmc_connection_t* conn = rmc_conn_find_by_index(conn_vec, s_ind);
     uint32_t in_use = circ_buf_in_use(&conn->read_buf);
     uint8_t command = 0;
     int sock_err = 0;
@@ -149,13 +149,13 @@ int _rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
 }
 
 
-int _rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
+int rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
                        rmc_index_t s_ind,
                        uint8_t* op_res,
                        rmc_conn_command_dispatch_t* dispatch_table, // Terminated by a null dispatch entry
                        user_data_t user_data)
 {
-    rmc_connection_t* conn = _rmc_conn_find_by_index(conn_vec, s_ind);
+    rmc_connection_t* conn = rmc_conn_find_by_index(conn_vec, s_ind);
     ssize_t res = 0;
     uint8_t *seg1 = 0;
     uint32_t seg1_len = 0;
@@ -198,6 +198,6 @@ int _rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
     // bytes read.
     circ_buf_trim(&conn->read_buf, res);
 
-    return _rmc_conn_process_tcp_read(conn_vec, s_ind, op_res,
-                                      dispatch_table, user_data);
+    return rmc_conn_process_tcp_read(conn_vec, s_ind, op_res,
+                                     dispatch_table, user_data);
 }

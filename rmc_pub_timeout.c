@@ -36,6 +36,20 @@ static int _process_sent_packet_timeout(rmc_pub_context_t* ctx,
 
     strcpy(group_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }));
     strcpy(remote_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(conn->remote_address) }));
+
+    if (conn->mode != RMC_CONNECTION_MODE_CONNECTED) {
+        printf("process_sent_packet_timeout(): pid[%lu] mcast[%s:%d] listen[%s:%d] -> Disconnected. Dropped resend attempt\n",
+               pack->pid,
+               group_addr,
+               ctx->mcast_port,
+               remote_addr,
+               ctx->control_listen_port);
+
+        rmc_pub_packet_ack(ctx, conn, pack->pid) ;
+        return 0;
+
+    }
+
     printf("process_sent_packet_timeout(): pid[%lu] mcast[%s:%d] listen[%s:%d]\n",
            pack->pid,
            group_addr,
@@ -43,7 +57,7 @@ static int _process_sent_packet_timeout(rmc_pub_context_t* ctx,
            remote_addr,
            ctx->control_listen_port);
     
-    if (!conn || conn->mode != RMC_CONNECTION_MODE_PUBLISHER)
+    if (!conn || conn->mode != RMC_CONNECTION_MODE_CONNECTED)
         return EINVAL;
         
     res = _rmc_pub_resend_packet(ctx, conn, pack);
@@ -63,6 +77,7 @@ static int _process_subscriber_timeout(rmc_pub_context_t* ctx,
 
     pub_packet_list_init(&packets, 0, 0, 0);
     pub_get_timed_out_packets(sub, current_ts, ctx->resend_timeout, &packets);
+    printf("Got [%d] timed out packets to process\n", pub_packet_list_size(&packets));
 
     // Traverse packets and send them for timeout. Start
     // with oldest packet first.
@@ -74,7 +89,6 @@ static int _process_subscriber_timeout(rmc_pub_context_t* ctx,
 
         // We were successful in queuing the packet transmission.
         pub_packet_list_pop_tail(&packets, &pack);
-
     }
 
     return 0;
@@ -139,59 +153,52 @@ int rmc_pub_timeout_process(rmc_pub_context_t* ctx)
 }
 
 
-int rmc_pub_timeout_get_next(rmc_pub_context_t* ctx, usec_timestamp_t* result)
+int rmc_pub_timeout_get_next(rmc_pub_context_t* ctx, usec_timestamp_t* result_ts)
 {
     usec_timestamp_t oldest_sent_ts = 0;
     usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
-    usec_timestamp_t announce_timeout = -1;
-    usec_timestamp_t ack_timeout = -1;
+    usec_timestamp_t announce_timeout_ts = -1; // Default is infinite.
+    usec_timestamp_t ack_timeout_ts = -1;
 
-    if (!ctx || !result)
+
+    if (!ctx || !result_ts)
         return EINVAL;
     
+    // Default. Not really needed since we will catch
+    // all four timeout combos below.
+    *result_ts = -1; 
+
+    // Get the send timestamp of the oldest packet we have yet to
+    // receive an acknowledgement for from the subscriber.
+    pub_get_oldest_unackowledged_packet(&ctx->pub_ctx, &ack_timeout_ts);
+
+    // Calculate time stamp of when we need to see an ack by.
+    if (ack_timeout_ts != -1)
+        ack_timeout_ts += ctx->resend_timeout; 
 
     // Check if we are to send out announce packets.
-    if (ctx->announce_next_send_ts != 0) {
-        announce_timeout =  ctx->announce_next_send_ts - current_ts;
-        if (announce_timeout < 0)
-            announce_timeout = 0;
-    }
+    if (ctx->announce_next_send_ts != 0) 
+        announce_timeout_ts = ctx->announce_next_send_ts;
+
 
     // Figure out which timeout value to use.
-    if (announce_timeout == -1 && ack_timeout == -1) {
-        *result = -1;
+    if (announce_timeout_ts == -1 && ack_timeout_ts == -1) {
+        *result_ts = -1;
         return 0;
     }
 
-    if (announce_timeout != -1 && ack_timeout == -1) {
-        *result = announce_timeout;
+    if (announce_timeout_ts != -1 && ack_timeout_ts == -1) {
+        *result_ts = announce_timeout_ts;
         return 0;
     }
 
-    if (announce_timeout == -1 && ack_timeout != -1) {
-        *result = ack_timeout;
+    if (announce_timeout_ts == -1 && ack_timeout_ts != -1) {
+        *result_ts = ack_timeout_ts;
         return 0;
     }
 
     // Both timeout values specified, use the lesser value.
-    *result = (ack_timeout < announce_timeout)?ack_timeout:announce_timeout;
+    *result_ts = (ack_timeout_ts < announce_timeout_ts)?ack_timeout_ts:announce_timeout_ts;
 
-    // Get the send timestamp of the oldest packet we have yet to
-    // receive an acknowledgement for from the subscriber.
-    pub_get_oldest_unackowledged_packet(&ctx->pub_ctx, &oldest_sent_ts);
-
-    
-    // Did we have infinite timeout?
-    if (oldest_sent_ts == -1) {
-        *result = -1;
-        return 0;
-    }
-        
-    // Convert to millisecond from now that it times out
-    oldest_sent_ts = oldest_sent_ts + ctx->resend_timeout - current_ts;
-    if (oldest_sent_ts < 0)
-        oldest_sent_ts = 0;
-    
-    *result = oldest_sent_ts;
     return 0;
 }

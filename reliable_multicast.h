@@ -46,7 +46,8 @@ typedef struct cmd_packet_header {
 // Max UDP size is 0xFFE3 (65507). Subtract 0x20 (32) bytes for RMC
 // header data.
 #define RMC_MAX_PACKET 0xFFE3
-#define RMC_MAX_PAYLOAD 0xFFC3
+// #define RMC_MAX_PAYLOAD 0xFFC3
+#define RMC_MAX_PAYLOAD 64
 
 
 // Probably needs to be a lot bigger in high
@@ -63,11 +64,10 @@ typedef struct cmd_packet_header {
 
 
 
-#define RMC_CONNECTION_MODE_UNUSED 0
-#define RMC_CONNECTION_MODE_SUBSCRIBER 1
-#define RMC_CONNECTION_MODE_PUBLISHER 2
-// Socket is being connected.
-#define RMC_CONNECTION_MODE_CONNECTING 3
+#define RMC_CONNECTION_MODE_CLOSED 0
+#define RMC_CONNECTION_MODE_CONNECTING 1
+#define RMC_CONNECTION_MODE_CONNECTED 2
+#define RMC_CONNECTION_MODE_CLOSING 3
 
 
 typedef uint32_t rmc_index_t;
@@ -108,6 +108,8 @@ typedef void (*rmc_poll_modify_cb_t)(user_data_t user_data,
 
 
 // Callback to remove a connection previously added with poll_add().
+
+
 typedef void (*rmc_poll_remove_cb_t)(user_data_t user_data,
                                      int descriptor,
                                      rmc_index_t index);
@@ -140,10 +142,20 @@ typedef struct rmc_connection {
     circ_buf_t write_buf;
     uint8_t write_buf_data[RMC_MAX_TCP_PENDING_WRITE]; 
 
-    // RMC_CONNECTION_MODE_PUBLISHER   The connection is used to publish acks and resend packets 
-    // RMC_CONNECTION_MODE_SUBSCRIBER  The connection is used to subscribe to acks and resends
-    // RMC_CONNECTION_MODE_OTHER       The connection is used for multicast or TCP listen.
-    // RMC_CONNECTION_MODE_CONNECTING  The outbound connection is being setup.
+    // RMC_CONNECTION_MODE_CLOSED
+    //  The connection is inactive.
+    //
+    // RMC_CONNECTION_MODE_CONNECTING
+    //  The outbound connection is being setup, and we are waiting for
+    //  connect() to complete.
+    //
+    // RMC_CONNECTION_MODE_CONNECTED
+    //   The connection is up and running
+    //
+    // RMC_CONNECTION_MODE_CLOSING
+    //  The connection has been shutdown(2), and we are waiting for
+    //  recv to return 0 before closing.
+    //
     uint8_t mode;
 
     in_port_t remote_port;    // In host format
@@ -485,6 +497,7 @@ extern int rmc_sub_init_context(rmc_sub_context_t* context,
 
 
 extern int rmc_pub_activate_context(rmc_pub_context_t* context);
+extern int rmc_pub_shutdown_context(rmc_pub_context_t* context);
 extern int rmc_pub_set_announce_interval(rmc_pub_context_t* context, uint32_t send_interval_usec);
 extern int rmc_pub_set_announce_callback(rmc_pub_context_t* context,
                                          uint8_t (*announce_cb)(struct rmc_pub_context* ctx,
@@ -516,6 +529,7 @@ extern int rmc_pub_get_next_timeout(rmc_pub_context_t* context, usec_timestamp_t
 extern int rmc_pub_process_timeout(rmc_pub_context_t* context);
 extern int rmc_pub_read(rmc_pub_context_t* context, rmc_index_t connection_index, uint8_t* op_res);
 extern int rmc_pub_write(rmc_pub_context_t* context, rmc_index_t connection_index, uint8_t* op_res);
+extern int rmc_pub_shutdown_connection(rmc_pub_context_t* ctx, rmc_index_t s_ind);
 extern int rmc_pub_close_connection(rmc_pub_context_t* ctx, rmc_index_t s_ind);
 
 extern int rmc_pub_timeout_get_next(rmc_pub_context_t* ctx, usec_timestamp_t* result);
@@ -530,8 +544,11 @@ extern int rmc_pub_packet_ack(rmc_pub_context_t* ctx, rmc_connection_t* conn, pa
 
 
 extern int rmc_sub_activate_context(rmc_sub_context_t* context);
+extern int rmc_sub_shutdown_context(rmc_sub_context_t* context);
 extern int rmc_sub_deactivate_context(rmc_sub_context_t* context);
 
+extern int rmc_sub_shutdown_connection(rmc_sub_context_t* ctx, rmc_index_t s_ind);
+extern int rmc_sub_close_connection(rmc_sub_context_t* ctx, rmc_index_t s_ind);
 
 extern int rmc_sub_set_announce_callback(rmc_sub_context_t* context,
                                          uint8_t (*announce_cb)(struct rmc_sub_context* ctx,
@@ -623,61 +640,66 @@ typedef struct rmc_conn_command_dispatch {
 } rmc_conn_command_dispatch_t;
 
 
-extern void _rmc_conn_init_connection_vector(rmc_connection_vector_t* conn_vec,
-                                             uint8_t* buffer,
-                                             uint32_t element_count,
-                                             user_data_t user_data,
-                                             rmc_poll_add_cb_t poll_add,
-                                             rmc_poll_modify_cb_t poll_modify,
-                                             rmc_poll_remove_cb_t poll_remove);
+extern void rmc_conn_init_connection_vector(rmc_connection_vector_t* conn_vec,
+                                            uint8_t* buffer,
+                                            uint32_t element_count,
+                                            user_data_t user_data,
+                                            rmc_poll_add_cb_t poll_add,
+                                            rmc_poll_modify_cb_t poll_modify,
+                                            rmc_poll_remove_cb_t poll_remove);
 
-extern rmc_connection_t* _rmc_conn_find_by_index(rmc_connection_vector_t* conn_vec,
-                                                 rmc_index_t index);
+extern rmc_connection_t* rmc_conn_find_by_index(rmc_connection_vector_t* conn_vec,
+                                                rmc_index_t index);
 
-extern rmc_connection_t* _rmc_conn_find_by_address(rmc_connection_vector_t* conn_vec,
-                                                   uint32_t remote_address,
-                                                   uint16_t remote_port);
+extern rmc_connection_t* rmc_conn_find_by_address(rmc_connection_vector_t* conn_vec,
+                                                  uint32_t remote_address,
+                                                  uint16_t remote_port);
 
-extern int _rmc_conn_process_accept(int listen_descriptor,
-                                    rmc_connection_vector_t* conn_vec,
-                                    rmc_index_t* result_index);
+extern int rmc_conn_process_accept(int listen_descriptor,
+                                   rmc_connection_vector_t* conn_vec,
+                                   rmc_index_t* result_index);
 
+extern int rmc_conn_get_max_index_in_use(rmc_connection_vector_t* conn_vec, rmc_index_t *result);
 extern int rmc_conn_get_poll_size(rmc_connection_vector_t* conn_vec, int *result);
 extern int rmc_conn_get_poll_vector(rmc_connection_vector_t* conn_vec, rmc_connection_t* result, int* len);
 
-extern int _rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
-                                            in_addr_t address,
-                                            in_port_t port,
-                                            rmc_index_t* result_index);
+extern int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
+                                           in_addr_t address,
+                                           in_port_t port,
+                                           rmc_index_t* result_index);
 
-extern int _rmc_conn_connect_tcp_by_host(rmc_connection_vector_t* conn_vec,
-                                         char* server_addr,
-                                         in_port_t port,
-                                         rmc_index_t* result_index);
+extern int rmc_conn_connect_tcp_by_host(rmc_connection_vector_t* conn_vec,
+                                        char* server_addr,
+                                        in_port_t port,
+                                        rmc_index_t* result_index);
 
 
-extern int _rmc_conn_close_connection(rmc_connection_vector_t* conn_vec,
-                                      rmc_index_t s_ind);
+extern int rmc_conn_shutdown_connection(rmc_connection_vector_t* conn_vec,
+                                        rmc_index_t s_ind);
 
-extern int _rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
-                                         rmc_connection_t*conn);
+extern int rmc_conn_close_connection(rmc_connection_vector_t* conn_vec,
+                                     rmc_index_t s_ind,
+                                     uint8_t force_close);
 
-extern int _rmc_conn_process_tcp_write(rmc_connection_t* conn, uint32_t* bytes_left);
+extern int rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
+                                        rmc_connection_t*conn);
+
+extern int rmc_conn_process_tcp_write(rmc_connection_t* conn, uint32_t* bytes_left);
 
 extern int _rmc_pub_resend_packet(rmc_pub_context_t* ctx,
                                   rmc_connection_t* conn,
                                   pub_packet_t* pack);
 
-extern int _rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
-                              rmc_index_t s_ind,
-                              uint8_t* read_res,
-                              rmc_conn_command_dispatch_t* dispatch_table, // Terminated by a null dispatch entry
-                              user_data_t user_data);
+extern int rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
+                             rmc_index_t s_ind,
+                             uint8_t* read_res,
+                             rmc_conn_command_dispatch_t* dispatch_table, // Terminated by a null dispatch entry
+                             user_data_t user_data);
 
 
-extern int _rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
-                                      rmc_index_t s_ind,
-                                      uint8_t* read_res,
-                                      rmc_conn_command_dispatch_t* dispatch_table, // Terminated by a null dispatch entry
-                                      user_data_t user_data);
+extern int rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
+                                     rmc_index_t s_ind,
+                                     uint8_t* read_res,
+                                     rmc_conn_command_dispatch_t* dispatch_table, // Terminated by a null dispatch entry
+                                     user_data_t user_data);
 #endif // __RMC_PROTO_H__

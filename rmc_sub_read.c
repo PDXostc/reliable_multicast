@@ -45,10 +45,10 @@ static int _decode_unsubscribed_multicast(rmc_sub_context_t* ctx,
             goto dump_payload;
         }
             
-        // Add an outbound tcp connection to the publisher.
         printf("_decode_unsubscribed_multicast(): Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s] - Announce!\n",
-               len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
+        len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
             
+        // Add an outbound tcp connection to the publisher.
         
         // If set, invoke callback and determine if we are to setup subscription to
         // publisher.
@@ -60,7 +60,7 @@ static int _decode_unsubscribed_multicast(rmc_sub_context_t* ctx,
         }
 
         if (res)
-            _rmc_conn_connect_tcp_by_address(&ctx->conn_vec, listen_ip, listen_port, &sock_ind);
+            rmc_conn_connect_tcp_by_address(&ctx->conn_vec, listen_ip, listen_port, &sock_ind);
         
 dump_payload:
         packet += cmd_pack->payload_len;
@@ -103,8 +103,8 @@ static int _decode_subscribed_multicast(rmc_sub_context_t* ctx,
         }
 
 
-        printf("_decode_subscribed_multicast(): Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s]\n",
-               len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
+//        printf("_decode_subscribed_multicast(): Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s]\n",
+//               len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
 
         // Use the provided memory allocator to reserve memory for
         // incoming payload.
@@ -217,7 +217,7 @@ static int _process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
 
 
     // Find the socket we use to ack received packets back to the publisher.
-    conn = _rmc_conn_find_by_address(&ctx->conn_vec, mcast_hdr->listen_ip, mcast_hdr->listen_port);
+    conn = rmc_conn_find_by_address(&ctx->conn_vec, mcast_hdr->listen_ip, mcast_hdr->listen_port);
 
     // If no socket is setup, initiate the connection to the publisher.
     // Drop the recived packet
@@ -273,7 +273,7 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
     
     if (sub_packet_is_duplicate(&ctx->publishers[conn->connection_index], pack_hdr.pid)) {
         circ_buf_free(&conn->read_buf, pack_hdr.payload_len, 0);
-        printf("_process_cmd_packet(%lu): Duplicate or pre-connect straggler\n",
+        printf("_process_cmd_packet(%lu): Duplicate\n",
                pack_hdr.pid);
 
         return 0; // Dups are ok.
@@ -304,11 +304,13 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
 }
 
 
-int rmc_sub_close_connection(rmc_sub_context_t* ctx, rmc_index_t s_ind)
+int rmc_sub_shutdown_connection(rmc_sub_context_t* ctx, rmc_index_t s_ind)
 {
+    if (!ctx)
+        return EINVAL;
     
-    printf("rmc_sub_close_connection(): index[%d]\n", s_ind);
-    _rmc_conn_close_connection(&ctx->conn_vec, s_ind);
+    printf("rmc_sub_shutdown_connection(): index[%d]\n", s_ind);
+    rmc_conn_shutdown_connection(&ctx->conn_vec, s_ind);
 
     sub_reset_publisher(&ctx->publishers[s_ind],
                          lambda(void, (void* payload, payload_len_t payload_len, user_data_t user_data) {
@@ -317,6 +319,20 @@ int rmc_sub_close_connection(rmc_sub_context_t* ctx, rmc_index_t s_ind)
                                  else
                                      free(payload);
                              }));
+    return 0;
+}
+
+int rmc_sub_close_connection(rmc_sub_context_t* ctx, rmc_index_t s_ind)
+{
+    if (!ctx)
+        return EINVAL;
+    
+    printf("rmc_sub_close_connection(): index[%d]\n", s_ind);
+    if (rmc_conn_close_connection(&ctx->conn_vec, s_ind, 0) == EBUSY) {
+        printf("rmc_sub_close_connection(): index[%d] - Still have data to write\n", s_ind);
+        return EBUSY;
+    }
+    return 0;
 }
 
 
@@ -339,7 +355,7 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
     if (s_ind == RMC_MULTICAST_INDEX) 
         return _process_multicast_read(ctx, op_res);
 
-    conn = _rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
+    conn = rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
 
     if (!conn) {
         *op_res = RMC_ERROR;
@@ -347,7 +363,7 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
         return ENOTCONN;
     }
 
-    res = _rmc_conn_tcp_read(&ctx->conn_vec, s_ind, op_res,
+    res = rmc_conn_tcp_read(&ctx->conn_vec, s_ind, op_res,
                              dispatch_table, user_data_ptr(ctx));
 
     if (res == EPIPE) {

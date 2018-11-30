@@ -34,6 +34,7 @@ int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
     // and process those whose acks are due to be sent.
     //
     inode = rmc_index_list_head(&ctx->pub_ack_list);
+    puts("Going through pubs");
 
     while(inode) {
         sub_publisher_t* pub = &ctx->publishers[inode->data];
@@ -46,6 +47,7 @@ int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
         
         // For each publisher that we have a timed out ack  for, we will ack
         // all pending packets in one go.
+        puts("Processing ack timeout");
         while(sub_pid_interval_list_pop_head(&pub->received_interval, &pid_intv))
             _rmc_sub_packet_interval_acknowledged(ctx, inode->data, &pid_intv);
 
@@ -76,10 +78,12 @@ int rmc_sub_timeout_get_next(rmc_sub_context_t* ctx, usec_timestamp_t* result)
     ind = rmc_index_list_head(&ctx->pub_ack_list)->data;
     pub = &ctx->publishers[ind];
 
-    if (pub->oldest_unacked_ts + ctx->ack_timeout >= current_ts)
-        *result = pub->oldest_unacked_ts + ctx->ack_timeout - current_ts;
-    else
-        *result = 0;
+    if (pub->oldest_unacked_ts + ctx->ack_timeout >= current_ts) {
+        *result = pub->oldest_unacked_ts + ctx->ack_timeout;
+    }
+    else {
+        *result = current_ts;
+    }
 
     return 0;
 }

@@ -57,13 +57,13 @@ int rmc_pub_init_context(rmc_pub_context_t* ctx,
     ctx->context_id = context_id?context_id:rand_r(&seed);
     ctx->user_data = user_data;
 
-    _rmc_conn_init_connection_vector(&ctx->conn_vec,
-                                     conn_vec,
-                                     conn_vec_size,
-                                     ctx->user_data,
-                                     poll_add,
-                                     poll_modify,
-                                     poll_remove);
+    rmc_conn_init_connection_vector(&ctx->conn_vec,
+                                    conn_vec,
+                                    conn_vec_size,
+                                    ctx->user_data,
+                                    poll_add,
+                                    poll_modify,
+                                    poll_remove);
     
     
 
@@ -204,6 +204,28 @@ error:
     }
 
     return errno;
+}
+
+
+int rmc_pub_shutdown_context(rmc_pub_context_t* ctx)
+{
+    rmc_index_t ind = 0;
+    rmc_index_t max = 0;
+
+    if (!ctx)
+        return EINVAL;
+
+    rmc_conn_get_max_index_in_use(&ctx->conn_vec, &max);
+    for(ind = 0; ind <= max; ++ind) {
+        rmc_connection_t* conn = rmc_conn_find_by_index(&ctx->conn_vec,
+                                                        ind);
+        // Don't opereate on closed connections.
+        if (!conn) 
+            continue;
+
+        rmc_pub_shutdown_connection(ctx, ind);
+    }
+    return 0;
 }
 
 int rmc_pub_set_announce_interval(rmc_pub_context_t* ctx, uint32_t send_interval_usec)

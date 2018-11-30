@@ -30,6 +30,8 @@ static int _process_multicast_write(rmc_pub_context_t* ctx)
     multicast_header_t *mcast_hdr = (multicast_header_t*) packet_ptr;
     char listen_addr[128];
     char mcast_addr[128];
+    packet_id_t first_sent = 0;
+    packet_id_t last_sent = 0;
     struct sockaddr_in sock_addr = (struct sockaddr_in) {
         .sin_family = AF_INET,
         .sin_port = htons(ctx->mcast_port),
@@ -55,14 +57,16 @@ static int _process_multicast_write(rmc_pub_context_t* ctx)
     strcpy(listen_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->control_listen_if_addr) }));
     strcpy(mcast_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }));
 
-    printf("mcast_tx(): mcast[%s:%d] listen[%s:%d]",
-           mcast_addr, ntohs(sock_addr.sin_port),
-           listen_addr, mcast_hdr->listen_port);
 
-    while(pack && mcast_hdr->payload_len <= RMC_MAX_PAYLOAD) {
+    first_sent = pack->pid;
+    while(pack && mcast_hdr->payload_len + sizeof(cmd_packet_header_t) + pack->payload_len <= RMC_MAX_PAYLOAD) {
         pub_packet_node_t* pnode = 0;
         cmd_packet_header_t* cmd_pack = (cmd_packet_header_t*) packet_ptr;
-
+//        printf("Payload: [%s] mcast_hdr->payload_len[%d] + sizeof(cmd_packet_header_t)[%lu] + pack->payload_len[%d] == %lu <= RMC_MAX_PAYLOAD[%d]\n",
+//               (char*) pack->payload,
+//               mcast_hdr->payload_len, sizeof(cmd_packet_header_t),  pack->payload_len,
+//               mcast_hdr->payload_len + sizeof(cmd_packet_header_t) + pack->payload_len,
+//               RMC_MAX_PAYLOAD);
         cmd_pack->pid = pack->pid;
         cmd_pack->payload_len = pack->payload_len;
         packet_ptr += sizeof(cmd_packet_header_t);
@@ -75,13 +79,17 @@ static int _process_multicast_write(rmc_pub_context_t* ctx)
         mcast_hdr->payload_len += sizeof(cmd_packet_header_t) + pack->payload_len;
         pub_packet_list_push_head(&snd_list, pack);
 
-        printf(" pid[%lu]", pack->pid);
+        last_sent = pack->pid;
+
         // FIXME: Maybe add a specific API call to traverse queued packages?
         pnode = pub_packet_list_prev(pack->parent_node);
         pack = pnode?pnode->data:0;
     }
 
-    printf(" - len[%.5d]\n", mcast_hdr->payload_len);
+    printf("mcast_tx(): mcast[%s:%d] listen[%s:%d] pid[%lu:%lu] - len[%.5d]\n",
+           mcast_addr, ntohs(sock_addr.sin_port),
+           listen_addr, mcast_hdr->listen_port,
+           first_sent, last_sent, mcast_hdr->payload_len);
 
     res = sendto(ctx->mcast_send_descriptor,
                  packet,
@@ -197,7 +205,7 @@ int rmc_pub_write(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
     int rearm_write = 0;
     uint32_t bytes_left_before = 0;
     uint32_t bytes_left_after = 0;
-    rmc_poll_action_t old_action;
+    rmc_poll_action_t old_action = 0;
     rmc_connection_t* conn = 0;
     assert(ctx);
 
@@ -215,9 +223,9 @@ int rmc_pub_write(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
         return EINVAL;
     }
 
-    conn = _rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
+    conn = rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
 
-    if (conn->descriptor == -1) {
+    if (conn->mode == RMC_CONNECTION_MODE_CLOSED) {
         if (op_res)
             *op_res = RMC_ERROR;
 
@@ -238,7 +246,7 @@ int rmc_pub_write(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
     if (op_res)
         *op_res = RMC_WRITE_TCP;
     
-    res = _rmc_conn_process_tcp_write(conn, &bytes_left_after);
+    res = rmc_conn_process_tcp_write(conn, &bytes_left_after);
     
     if (bytes_left_after == 0) 
         conn->action &= ~RMC_POLLWRITE;

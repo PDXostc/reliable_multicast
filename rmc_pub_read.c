@@ -62,19 +62,18 @@ static int _process_cmd_ack_interval(rmc_connection_t* conn, user_data_t user_da
     return 0;
 }
 
-int rmc_pub_close_connection(rmc_pub_context_t* ctx, rmc_index_t s_ind)
+int rmc_pub_shutdown_connection(rmc_pub_context_t* ctx, rmc_index_t s_ind)
 {
     rmc_connection_t* conn = 0;
     
     if (!ctx)
         return EINVAL;
 
-    conn = _rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
+    conn = rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
     if (!conn)
         return EINVAL;
 
-
-    printf("rmc_pub_close_connection(): index[%d]\n", s_ind);
+    printf("rmc_pub_shutdown_connection(): index[%d]\n", s_ind);
 
     // Disconnect callback, if specified.
     if (ctx->subscriber_disconnect_cb) {
@@ -83,7 +82,27 @@ int rmc_pub_close_connection(rmc_pub_context_t* ctx, rmc_index_t s_ind)
         (*ctx->subscriber_disconnect_cb)(ctx, remote_addr, conn->remote_port);
     }
 
-    _rmc_conn_close_connection(&ctx->conn_vec, s_ind);
+    rmc_conn_shutdown_connection(&ctx->conn_vec, s_ind);
+}
+
+int rmc_pub_close_connection(rmc_pub_context_t* ctx, rmc_index_t s_ind)
+{
+    rmc_connection_t* conn = 0;
+    
+    if (!ctx)
+        return EINVAL;
+
+    conn = rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
+    if (!conn)
+        return EINVAL;
+
+    if (rmc_conn_close_connection(&ctx->conn_vec, s_ind, 0) == EBUSY) {
+        printf("rmc_pub_close_connection(): index[%d] - Still have data to write\n", s_ind);
+        return EBUSY;
+    }
+
+
+    printf("rmc_pub_close_connection(): index[%d] - ok\n", s_ind);
     pub_reset_subscriber(&ctx->subscribers[s_ind],
                          lambda(void, (void* payload, payload_len_t payload_len, user_data_t user_data) {
                                  if (ctx->payload_free)
@@ -112,7 +131,7 @@ int rmc_pub_read(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
     
     if (s_ind == RMC_LISTEN_INDEX)  {
         rmc_connection_t* conn = 0;
-        res = _rmc_conn_process_accept(ctx->listen_descriptor, &ctx->conn_vec, &s_ind);
+        res = rmc_conn_process_accept(ctx->listen_descriptor, &ctx->conn_vec, &s_ind);
 
 
         if (res) {
@@ -121,7 +140,7 @@ int rmc_pub_read(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
         }
 
         // Setup the subscriber struct
-        conn = _rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
+        conn = rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
 
 
         assert(conn);
@@ -171,7 +190,7 @@ int rmc_pub_read(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
         return 0;
     }
 
-    conn = _rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
+    conn = rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
 
     if (!conn) {
         *op_res = RMC_ERROR;
@@ -179,10 +198,14 @@ int rmc_pub_read(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
         return ENOTCONN;
     }
 
-    res = _rmc_conn_tcp_read(&ctx->conn_vec, s_ind, op_res,
+    res = rmc_conn_tcp_read(&ctx->conn_vec, s_ind, op_res,
                              dispatch_table, user_data_ptr(ctx));
     
-    if (res == EPIPE) {
+    // rmc_conn_tcp_read will return EPIPE if we get
+    // zero bytes in a read (happens after we issued a close).
+    // or read return -1. In both cases we close the conneciton.
+    if (res == EPIPE) { 
+        puts("tcp read returned EPIPE");
         rmc_pub_close_connection(ctx, s_ind);
         return 0; // This is not an error, just regular maintenance.
     }
