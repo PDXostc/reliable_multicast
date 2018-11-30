@@ -112,11 +112,12 @@ static int process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, sub
     if (expect[node_id].status == RMC_TEST_SUB_NOT_STARTED) {
         expect[node_id].status = RMC_TEST_SUB_IN_PROGRESS;
         expect[node_id].max_expected = max_expected;
-        expect[node_id].max_received = current;
+        expect[node_id].max_received = 0; 
         
         printf("rmc_proto_test_sub(): Activate: node_id[%u] current[%lu] max_expected[%lu].\n",
                node_id, current, max_expected);
-        return 1;
+
+        // Fall through to the next if statement
     }
 
     // Check if we are in progress.
@@ -300,7 +301,6 @@ void test_rmc_proto_sub(char* mcast_group_addr,
         sub_packet_t* pack = 0;
         
         rmc_sub_timeout_get_next(ctx, &t_out);
-        printf("Tout [%ld]\n", t_out);
         if (process_events(ctx, epollfd, t_out) == ETIME) {
             rmc_sub_timeout_process(ctx);
             continue;
