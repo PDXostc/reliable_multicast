@@ -214,8 +214,14 @@ void test_rmc_proto_pub(char* mcast_group_addr,
     // Send an announcement every 1 second.
     rmc_pub_set_announce_interval(ctx, 1000000);
 
-    // Wait for the correct number of subscribers to connect before we start sending.
+    _test("rmc_proto_test_pub[%d.%d] activate_context(): %s",
+          1, 1,
+          rmc_pub_activate_context(ctx));
 
+    printf("rmc_proto_test_pub: context: ctx[%.9X] mcast_addr[%s] mcast_port[%d] \n",
+           rmc_pub_context_id(ctx), mcast_group_addr, mcast_port);
+
+    // Wait for the correct number of subscribers to connect before we start sending.
     while(subscriber_count < expected_subscriber_count) {
         usec_timestamp_t event_tout = 0;
 
@@ -227,11 +233,6 @@ void test_rmc_proto_pub(char* mcast_group_addr,
             rmc_pub_timeout_process(ctx);
     }
 
-    _test("rmc_proto_test_pub[%d.%d] activate_context(): %s",
-          1, 1,
-          rmc_pub_activate_context(ctx));
-
-    printf("rmc_proto_test_pub: context: ctx[%.9X]\n", rmc_pub_context_id(ctx));
 
     // Seed with a predefined value, allowing us to generate the exact same random sequence
     // every time for packet drops, etc.
