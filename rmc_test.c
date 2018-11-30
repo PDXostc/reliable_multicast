@@ -35,9 +35,7 @@ extern void test_rmc_proto_pub(char* mcast_group_addr,
 
 extern void test_rmc_proto_sub(char* mcast_addr,
                                char* mcast_if_addr,
-                               char* listen_if_addr,
                                int mcast_port,
-                               int listen_port,
                                rmc_context_id_t ctx_id,
                                uint8_t* ctx_id_map,
                                int ctx_id_map_size);
@@ -68,8 +66,8 @@ void usage(char* prog)
     fprintf(stderr, "       -d <drop-rate> Chance of sender dropping packet. 0.0 - never. 1.0 - always. Default 0.0\n");
     fprintf(stderr, "       -s <interval>  Time, in usec, to wait between each packet send. \n");
     fprintf(stderr, "       -j <jitter>    Max jitter, in usec, for send interval. Actual interval will be send-interval +- (0.0-1.0)*jitter. Default 0. \n");
-    fprintf(stderr, "       -E <subscriber-count> Expected number of subscribers to connect before we start sending. Publisher only \n");
-    fprintf(stderr, "       -e <ctx-id>    Expect packets from node_id. Legal value 1-1000. Susbscriber only. \n");
+    fprintf(stderr, "       -E <subscriber-count> Expected number of subscribers to connect before we start sending. Publisher only. Default 1 \n");
+    fprintf(stderr, "       -e <node-id>   Expect packets from node_id. Legal value 1-1000. Susbscriber only. Can be repeated. Default 1 \n");
 }
 
 
@@ -85,14 +83,15 @@ int main(int argc, char* argv[])
     int mcast_port = PORT_DEFAULT;
     pid_t ch_pid = 0;
     int rand_seed = 1;
-    uint64_t packet_count = 0;
+    uint64_t packet_count = 1;
     rmc_context_id_t node_id = 1;
     float drop_rate = 0.0;
     int send_interval = 0;
     int jitter = 0;
     uint8_t expected_node_id[1024];
     int expect_node_id = 0;
-    int expected_subscriber_count = 0;
+    int expected_subscriber_count = 1;
+    int e_arg_set = 0;
 
     strcpy(mcast_if_addr, MULTICAST_IF_ADDR_DEFAULT);
     strcpy(listen_if_addr, LISTEN_IF_ADDR_DEFAULT);
@@ -160,6 +159,7 @@ int main(int argc, char* argv[])
                 exit(1);
             }
             expected_node_id[expect_node_id] = 1;
+            e_arg_set = 1;
             break;
 
         default: /* '?' */
@@ -169,6 +169,10 @@ int main(int argc, char* argv[])
     }
     
            
+    // Default 
+    if (!e_arg_set)
+        expected_node_id[1] = 1;
+    
     run_list_tests();
     test_packet_interval();
     test_circular_buffer();
@@ -181,9 +185,7 @@ int main(int argc, char* argv[])
         puts("\n\n\n\n\n\n\n\nSUBSCRIBER\n");
         test_rmc_proto_sub(mcast_group_addr,
                            mcast_if_addr,
-                           listen_if_addr,
                            mcast_port,
-                           listen_port,
                            node_id,
                            expected_node_id,
                            sizeof(expected_node_id) / sizeof(expected_node_id[0]));
