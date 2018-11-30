@@ -116,6 +116,8 @@ int rmc_pub_timeout_process(rmc_pub_context_t* ctx)
             ctx->announce_next_send_ts = current_ts + ctx->announce_send_interval;
         else
             ctx->announce_next_send_ts = 0; // Disable announce sends.
+
+        return 0;
     }
 
     pub_sub_list_init(&subs, 0, 0, 0);
