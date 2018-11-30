@@ -17,11 +17,6 @@
 // FIXME: If we see timed out (== lost) packets from subscribers, we should
 //        switch them to TCP for a period of time in order
 //        to use TCP's flow control until congestion has eased.
-
-
-// =============
-// SOCKET WRITE
-// =============
 static int _process_multicast_write(rmc_pub_context_t* ctx)
 {
     pub_context_t* pctx = &ctx->pub_ctx;
@@ -33,8 +28,8 @@ static int _process_multicast_write(rmc_pub_context_t* ctx)
     pub_packet_list_t snd_list;
     ssize_t res = 0;
     multicast_header_t *mcast_hdr = (multicast_header_t*) packet_ptr;
-    char* listen_addr = 0;
-    char* mcast_addr = 0;
+    char listen_addr[128];
+    char mcast_addr[128];
     struct sockaddr_in sock_addr = (struct sockaddr_in) {
         .sin_family = AF_INET,
         .sin_port = htons(ctx->mcast_port),
@@ -57,8 +52,8 @@ static int _process_multicast_write(rmc_pub_context_t* ctx)
 
     pub_packet_list_init(&snd_list, 0, 0, 0);
 
-    listen_addr = inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->control_listen_if_addr) });
-    mcast_addr = inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) });
+    strcpy(listen_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->control_listen_if_addr) }));
+    strcpy(mcast_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }));
 
     printf("mcast_tx(): mcast[%s:%d] listen[%s:%d]",
            mcast_addr, ntohs(sock_addr.sin_port),
@@ -115,7 +110,6 @@ static int _process_multicast_write(rmc_pub_context_t* ctx)
     // sent in the multicast message as sent.
     // pub_packet_sent will call free_o
     while(pub_packet_list_pop_tail(&snd_list, &pack))  {
-        printf("pid[%lu] sent\n", pack->pid);
         pub_packet_sent(pctx, pack, ts);
     }
 
