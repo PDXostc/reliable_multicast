@@ -30,11 +30,6 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
                          char* mcast_if_addr, 
                          int multicast_port,
 
-                         // IP address to listen to for incoming subscription
-                         // connection from subscribers receiving multicast packets
-                         // Default: "0.0.0.0" (IFADDR_ANY)
-                         char* control_addr, 
-                         int control_port,
                          user_data_t user_data,
 
                          rmc_poll_add_cb_t poll_add,
@@ -63,6 +58,7 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
     // We can throw away seed result since we will only call rand here.
     ctx->context_id = context_id?context_id:rand_r(&seed);
     ctx->user_data = user_data;
+    ctx->announce_cb = 0;
     _rmc_conn_init_connection_vector(&ctx->conn_vec,
                                      conn_vec,
                                      conn_vec_size,
@@ -74,8 +70,6 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
     if (!mcast_if_addr)
         mcast_if_addr = "0.0.0.0";
 
-    if (!control_addr)
-        control_addr = "0.0.0.0";
 
     if (!inet_aton(mcast_group_addr, &addr)) {
         fprintf(stderr, "rmc_activate_context(multicast_group_addr): Could not resolve %s to IP address\n",
@@ -91,17 +85,9 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
     }
     ctx->mcast_if_addr = ntohl(addr.s_addr);
     
-    if (!inet_aton(control_addr, &addr)) {
-        fprintf(stderr, "rmc_activate_context(_interface_addr): Could not resolve %s to IP address\n",
-                control_addr);
-        
-        return EINVAL;
-    }
 
-    ctx->control_address = ntohl(addr.s_addr);
 
     ctx->mcast_port = multicast_port;
-    ctx->control_port = control_port;
 
     ctx->mcast_recv_descriptor = -1;
 
@@ -214,6 +200,19 @@ int rmc_sub_deactivate_context(rmc_sub_context_t* ctx)
     return 0;
 }
 
+int rmc_sub_set_announce_callback(rmc_sub_context_t* ctx,
+                                  uint8_t (*announce_cb)(struct rmc_sub_context* ctx,
+                                                         char* listen_ip, // "1.2.3.4"
+                                                         in_port_t listen_port,
+                                                         void* payload,
+                                                         payload_len_t payload_len))
+{
+    if (!ctx)
+        return EINVAL;
+
+    ctx->announce_cb = announce_cb;
+    return 0;
+}
 
 user_data_t rmc_sub_user_data(rmc_sub_context_t* ctx)
 {

@@ -307,8 +307,6 @@ typedef struct rmc_sub_context {
 
     user_data_t user_data;
 
-    in_addr_t control_address; // Address of control channel
-    int control_port; 
     in_addr_t mcast_if_addr; // In host format (little endian)
     in_addr_t mcast_group_addr; // In host format
     int mcast_port; // Must be same for all particants.
@@ -325,6 +323,31 @@ typedef struct rmc_sub_context {
     // Randomly genrated context ID allowing us to recognize and drop
     // looped back multicast messages.
     rmc_context_id_t context_id; 
+
+    // Callback invoked every time we receive an announce packet
+    // from an unsubscribed-to publisher. 
+    //
+    // Payload is the payload provided to the announce packet by a
+    // callback to the publishers side's pub_context_t::annouce_cb()
+    // callback.
+    //
+    // Listen ip and port is the end point of the tcp control channel to
+    // that the publisher accepts subscription connections to.
+    // This is the address that will be connected to by subscriber
+    // if announce_cb returns non-zero. (See below).
+    //
+    // If announce_cb returns a non-zero value, then a subscription will
+    // be setup to the publisher that sent the announce packet.
+    // If announce_cb returns 0 no subscription will be setup, and
+    // announce_cb will be invoked again the next time an announce packet
+    // is received from the same publisher.
+    //
+    // If announce_cb is not set then the subscription will always be setup.
+    uint8_t (*announce_cb)(struct rmc_sub_context* ctx,
+                           char* listen_ip, // "1.2.3.4"
+                           in_port_t listen_port,
+                           void* payload,
+                           payload_len_t payload_len);
 
     // Called to alloc memory for incoming data.
     // that needs to be processed.
@@ -404,12 +427,6 @@ extern int rmc_sub_init_context(rmc_sub_context_t* context,
                                 // Default if 0 ptr: "0.0.0.0" (IFADDR_ANY)
                                 char* multicast_iface_addr, 
                                 int multicast_port, 
-
-                                // IP address to listen to for incoming subscription
-                                // connection from subscribers receiving multicast packets
-                                // Default if 0 ptr: "0.0.0.0" (IFADDR_ANY)
-                                char* control_addr, 
-                                int control_port, 
 
                                 // User data that can be extracted with rmc_user_data(.                            
                                 // Typical application is for the poll and memory callbacks below
@@ -514,6 +531,15 @@ extern int rmc_pub_packet_ack(rmc_pub_context_t* ctx, rmc_connection_t* conn, pa
 
 extern int rmc_sub_activate_context(rmc_sub_context_t* context);
 extern int rmc_sub_deactivate_context(rmc_sub_context_t* context);
+
+
+extern int rmc_sub_set_announce_callback(rmc_sub_context_t* context,
+                                         uint8_t (*announce_cb)(struct rmc_sub_context* ctx,
+                                                                char* listen_ip, // "1.2.3.4"
+                                                                in_port_t listen_port,
+                                                                void* payload,
+                                                                payload_len_t payload_len));
+
 extern int rmc_sub_set_user_data(rmc_sub_context_t* ctx, user_data_t user_data);
 extern user_data_t rmc_sub_user_data(rmc_sub_context_t* ctx);
 extern rmc_context_id_t rmc_sub_context_id(rmc_sub_context_t* ctx);
