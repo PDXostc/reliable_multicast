@@ -13,10 +13,66 @@
 #include <stdlib.h>
 #include <arpa/inet.h>
 
-static int _decode_multicast(rmc_sub_context_t* ctx,
-                             uint8_t* packet,
-                             ssize_t packet_len,
-                             rmc_connection_t* conn)
+static int _decode_unsubscribed_multicast(rmc_sub_context_t* ctx,
+                                          rmc_connection_t* conn,
+                                          uint8_t* packet,
+                                          ssize_t packet_len,
+                                          uint32_t listen_ip,
+                                          uint16_t listen_port)
+{
+    payload_len_t len = (payload_len_t) packet_len;
+
+    // Traverse the received datagram and extract all packets
+    while(len) {
+        cmd_packet_header_t* cmd_pack = (cmd_packet_header_t*) packet;
+        int sock_ind = 0;
+        int res = 1;
+
+        packet += sizeof(cmd_packet_header_t);
+
+        if (cmd_pack->pid) {
+            printf("_decode_unsubscribed_multicast(): Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s] - Ignored.\n",
+                   len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
+
+            goto dump_payload;
+        }
+        
+        // If conn is set, then it will always be RMC_CONNECTION_MODE_CONNECTING
+        // In that case, just dump the packet and continue.
+        if (conn) {
+            printf("_decode_unsubscribed_multicast(): Len[%d] Hdr Len[%lu] Payload Len[%d] Payload[%s] - Announce: connection already in progress\n",
+                   len, sizeof(cmd_packet_header_t), cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
+            goto dump_payload;
+        }
+            
+        // Add an outbound tcp connection to the publisher.
+        printf("_decode_unsubscribed_multicast(): Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s] - Announce!\n",
+               len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
+            
+        
+        // If set, invoke callback and determine if we are to setup subscription to
+        // publisher.
+        if (ctx->announce_cb) {
+            char listen_ip_str[128];
+            strcpy(listen_ip_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(listen_ip) }));
+
+            res = (*ctx->announce_cb)(ctx, listen_ip_str, listen_port, packet, cmd_pack->payload_len);
+        }
+
+        if (res)
+            _rmc_conn_connect_tcp_by_address(&ctx->conn_vec, listen_ip, listen_port, &sock_ind);
+        
+dump_payload:
+        packet += cmd_pack->payload_len;
+        len -= sizeof(cmd_packet_header_t) + cmd_pack->payload_len;
+    }
+}
+
+
+static int _decode_subscribed_multicast(rmc_sub_context_t* ctx,
+                                        uint8_t* packet,
+                                        ssize_t packet_len,
+                                        rmc_connection_t* conn)
 {
     payload_len_t len = (payload_len_t) packet_len;
     uint8_t* payload = 0;
@@ -28,8 +84,14 @@ static int _decode_multicast(rmc_sub_context_t* ctx,
     while(len) {
         cmd_packet_header_t* cmd_pack = (cmd_packet_header_t*) packet;
 
-        printf("_decode_multicast(): Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s]\n",
-               len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
+
+        // Skip announce packets.
+        if (!cmd_pack->pid) {
+            printf("_decode_multicast(): Ignoring announce\n");
+            packet += sizeof(cmd_packet_header_t) + cmd_pack->payload_len;
+            len -= sizeof(cmd_packet_header_t) + cmd_pack->payload_len;
+            continue;
+        }
 
         // Check that we do not have a duplicate
         if (sub_packet_is_duplicate(pub, cmd_pack->pid)) {
@@ -39,6 +101,10 @@ static int _decode_multicast(rmc_sub_context_t* ctx,
             len -= sizeof(cmd_packet_header_t) + cmd_pack->payload_len;
             continue;
         }
+
+
+        printf("_decode_subscribed_multicast(): Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s]\n",
+               len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
 
         // Use the provided memory allocator to reserve memory for
         // incoming payload.
@@ -155,26 +221,19 @@ static int _process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
 
     // If no socket is setup, initiate the connection to the publisher.
     // Drop the recived packet
-    if (!conn) {
-        // Add an outbound tcp connection to the publisher.
-        res = _rmc_conn_connect_tcp_by_address(&ctx->conn_vec, mcast_hdr->listen_ip, mcast_hdr->listen_port, &sock_ind);
 
-        if (read_res) {
-            if (res)
-                *read_res = RMC_ERROR;
-            else
-                *read_res = RMC_READ_MULTICAST_NOT_READY;
-        }
-        goto rearm;
-    }
+    if (!conn || conn->mode == RMC_CONNECTION_MODE_CONNECTING) {
+        res = _decode_unsubscribed_multicast(ctx,
+                                             conn,
+                                             data, mcast_hdr->payload_len,
+                                             mcast_hdr->listen_ip, mcast_hdr->listen_port);
 
-    // Drop the packet if we are still setting up the packet
-    if (conn->mode == RMC_CONNECTION_MODE_CONNECTING) {
-        res = 0;
         if (read_res)
             *read_res = RMC_READ_MULTICAST_NOT_READY;
+
         goto rearm;
     }
+
 
     // We have a valid ack socket back to the server.
     // Processs the packet
@@ -185,7 +244,7 @@ static int _process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
     // Record if we have any packets ready to ack prior
     // to decoding additional packets.
 
-    res = _decode_multicast(ctx, data, mcast_hdr->payload_len, conn);
+    res = _decode_subscribed_multicast(ctx, data, mcast_hdr->payload_len, conn);
         
 
 rearm:
