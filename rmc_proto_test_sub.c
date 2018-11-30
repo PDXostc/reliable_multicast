@@ -125,7 +125,7 @@ static int process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, sub
     if (expect[node_id].status == RMC_TEST_SUB_IN_PROGRESS) {
         // Check that max_expected hasn't changed.
         if (max_expected != expect[node_id].max_expected) {
-            printf("rmc_proto_test_sub(): ContextID [%u] max_expected chagned from [%lu] to [%lu]\n",
+            printf("rmc_proto_test_sub(): ContextID [%u] max_expected changed from [%lu] to [%lu]\n",
                    node_id, expect[node_id].max_expected, max_expected);
             exit(255);
         }
@@ -231,9 +231,7 @@ static int process_events(rmc_sub_context_t* ctx,
 
 void test_rmc_proto_sub(char* mcast_group_addr,
                         char* mcast_if_addr,
-                        char* control_addr,
                         int mcast_port,
-                        int control_port,
                         rmc_context_id_t node_id,
                         uint8_t* node_id_map,
                         int node_id_map_size)
@@ -284,8 +282,6 @@ void test_rmc_proto_sub(char* mcast_group_addr,
                          mcast_group_addr,
                          mcast_if_addr,
                          mcast_port,
-                         control_addr,
-                         control_port,
                          (user_data_t) { .i32 = epollfd },
                          poll_add, poll_modify, poll_remove,
                          conn_vec_mem, RMC_MAX_CONNECTIONS,
@@ -295,7 +291,9 @@ void test_rmc_proto_sub(char* mcast_group_addr,
           1, 1,
           rmc_sub_activate_context(ctx));
 
-    printf("rmc_proto_test_sub: context: ctx[%.9X]\n", rmc_sub_context_id(ctx));
+    
+    printf("rmc_proto_test_sub: context: ctx[%.9X] mcast_addr[%s] mcast_port[%d] \n",
+           rmc_sub_context_id(ctx), mcast_group_addr, mcast_port);
 
 
     while(1) {
