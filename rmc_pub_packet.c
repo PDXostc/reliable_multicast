@@ -23,7 +23,7 @@ int rmc_pub_queue_packet(rmc_pub_context_t* ctx,
 {
     pub_packet_t *pack;
 
-    if (!ctx || !payload || !payload_len)
+    if (!ctx || !payload)
         return EINVAL;
      
     // Check if we already have queued packets. If not, we need to enable RMC_POLLWRITE
