@@ -113,6 +113,7 @@ static void _rmc_conn_reset_connection(rmc_connection_t* conn, uint32_t index)
     circ_buf_init(&conn->read_buf, conn->read_buf_data, sizeof(conn->read_buf_data));
     circ_buf_init(&conn->write_buf, conn->write_buf_data, sizeof(conn->write_buf_data));
     memset(&conn->remote_address, 0, sizeof(conn->remote_address));
+    conn->remote_port = 0;
 }
 
 void _rmc_conn_init_connection_vector(rmc_connection_vector_t* conn_vec,
