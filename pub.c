@@ -91,11 +91,11 @@ void pub_reset_subscriber(pub_subscriber_t* sub,
 }
 
 
-packet_id_t pub_queue_packet_with_pid(pub_context_t* ctx,
-                                      packet_id_t pid,
-                                      void* payload,
-                                      payload_len_t payload_len,
-                                      user_data_t pkg_user_data)
+static packet_id_t pub_queue_packet_with_pid(pub_context_t* ctx,
+                                             packet_id_t pid,
+                                             void* payload,
+                                             payload_len_t payload_len,
+                                             user_data_t pkg_user_data)
 {
     pub_packet_node_t *node = 0;
     pub_packet_t* ppack = 0;
@@ -143,6 +143,26 @@ packet_id_t pub_queue_packet(pub_context_t* ctx,
         
 }
 
+packet_id_t pub_queue_no_acknowledge_packet(pub_context_t* ctx,
+                                            void* payload,
+                                            payload_len_t payload_len,
+                                            user_data_t pkg_user_data)
+{
+    return pub_queue_packet_with_pid(ctx,
+                                     0,
+                                     payload,
+                                     payload_len,
+                                     pkg_user_data);
+        
+}
+
+extern uint32_t pub_queue_size(pub_context_t* ctx)
+{
+    assert(ctx);
+
+    return pub_packet_list_size(&ctx->queued);
+}
+
 
 pub_packet_t* pub_next_queued_packet(pub_context_t* ctx)
 {
@@ -156,30 +176,34 @@ pub_packet_t* pub_next_queued_packet(pub_context_t* ctx)
 }
 
 void pub_packet_sent(pub_context_t* ctx,
-                     pub_packet_t* ppack,
+                     pub_packet_t* pack,
                      usec_timestamp_t send_ts)
 {
     pub_sub_node_t* sub_node = 0; // Subscribers in ctx,
-    pub_packet_node_t* ppack_node = 0;
+    pub_packet_node_t* pack_node = 0;
 
     assert(ctx);
-    assert(ppack);
+    assert(pack);
 
     // Record the usec timestamp when it was sent.
-    ppack->send_ts = send_ts;
-
+    pack->send_ts = send_ts;
+    
     // Unlink the node from queued packets in our context.
-    // ppack->parent will still be allocated and can be reused
-    // when we insert the ppack into the inflight packets
+    // pack->parent will still be allocated and can be reused
+    // when we insert the pack into the inflight packets
     // of context
-    pub_packet_list_unlink(ppack->parent_node);
+    pub_packet_list_unlink(pack->parent_node);
 
-    // Insert existing ppack->parent list_node_t struct into
+    // Do not set packet up for acknowledgement if pid is 0, which
+    // means that it should not be acked at all by the subscriber.
+    if (!pack->pid)
+        return;
+
+    // Insert existing pack->parent list_node_t struct into
     // the context's inflight packets.
     // Sorted on ascending pid.
-    //
     pub_packet_list_insert_sorted_node(&ctx->inflight,
-                                       ppack->parent_node,
+                                       pack->parent_node,
                                        lambda(int, (pub_packet_t* n_dt, pub_packet_t* o_dt) {
                                                if (n_dt->pid > o_dt->pid)
                                                    return 1;
@@ -191,7 +215,7 @@ void pub_packet_sent(pub_context_t* ctx,
                                            }
                                            ));
 
-    // Traverse all subscribers and insert ppack into their
+    // Traverse all subscribers and insert pack into their
     // inflight list.
     // List is sorted on ascending order.
     //
@@ -202,7 +226,7 @@ void pub_packet_sent(pub_context_t* ctx,
         // Insert the new pub_packet_t in the descending
         // packet_id sorted list of the subscriber's inflight packets.
         pub_packet_list_insert_sorted(&sub->inflight,
-                                ppack,
+                                pack,
                                 lambda(int, (pub_packet_t* n_dt, pub_packet_t* o_dt) {
                                    if (n_dt->pid < o_dt->pid)
                                        return -1;
@@ -213,7 +237,7 @@ void pub_packet_sent(pub_context_t* ctx,
                                    return 0;
                                }
                                ));
-        ppack->ref_count++;
+        pack->ref_count++;
         sub_node = pub_sub_list_next(sub_node);
     }
 }
@@ -226,7 +250,7 @@ void pub_packet_ack(pub_subscriber_t* sub,
                                              user_data_t user_data))
 {
     pub_packet_node_t* node = 0; // Packets
-    pub_packet_t* ppack = 0;
+    pub_packet_t* pack = 0;
 
     assert(sub);
 
@@ -252,32 +276,36 @@ void pub_packet_ack(pub_subscriber_t* sub,
     }
 
     // Decrease ref counter
-    ppack = node->data;
+    pack = node->data;
 
     // Delete from subscriber's inflight packets
     pub_packet_list_delete(node);
 
-    ppack->ref_count--;
+    pack->ref_count--;
 
     // If ref_count is zero, then all subscribers have acked the
     // packet, which can now be removed from the pub_context_t::pending
-    // list. ppack->parent_node points to the list_node_t struct in the pending
+    // list. pack->parent_node points to the list_node_t struct in the pending
     // list that is to be unlinked and deleted.
     //
-    if (!ppack->ref_count) {
-        pub_packet_list_delete(ppack->parent_node);
+    if (!pack->ref_count) {
+        pub_packet_list_delete(pack->parent_node);
 
         // Free data using function provided with this call.
         if (pub_payload_free)
-            (*pub_payload_free)(ppack->payload,
-                                ppack->payload_len,
-                                ppack->pkg_user_data);
+            (*pub_payload_free)(pack->payload,
+                                pack->payload_len,
+                                pack->pkg_user_data);
 
-        // Delete the ppack.
-        _free_pending_packet(ppack);
+        // Delete the pack.
+        _free_pending_packet(pack);
     }
 }
 
+uint32_t pub_get_unacknowledged_packet_count(pub_subscriber_t* sub)
+{
+    return pub_packet_list_size(&sub->inflight);
+}
 
 void pub_get_timed_out_subscribers(pub_context_t* ctx,
                                    usec_timestamp_t current_ts,
@@ -347,9 +375,9 @@ int pub_get_oldest_unackowledged_packet(pub_context_t* ctx, usec_timestamp_t* ti
     return 1;
 }
 
-user_data_t pub_packet_user_data(pub_packet_t* ppack)
+user_data_t pub_packet_user_data(pub_packet_t* pack)
 {
-    return ppack?ppack->pkg_user_data:user_data_nil();
+    return pack?pack->pkg_user_data:user_data_nil();
 }
 
 user_data_t pub_subscriber_user_data(pub_subscriber_t* sub)
