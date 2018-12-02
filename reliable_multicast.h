@@ -5,42 +5,15 @@
 //
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
-#ifndef __RMC_PROTO_H__
-#define __RMC_PROTO_H__
+#ifndef __RELIABLE_MULTICAST_H__
+#define __RELIABLE_MULTICAST_H__
 #include "rmc_common.h"
 #include "circular_buffer.h"
 #include "rmc_pub.h"
 #include "rmc_sub.h"
 #include <netinet/in.h>
 
-#define RMC_CMD_PACKET 1
-#define RMC_CMD_ACK_SINGLE 2
-#define RMC_CMD_ACK_INTERVAL 3
-
-typedef uint32_t rmc_context_id_t;
-
-
-typedef struct multicast_header {
-    rmc_context_id_t context_id;
-    payload_len_t payload_len;
-    uint32_t listen_ip; // In host format
-    uint16_t listen_port;
-} multicast_header_t;
-
-typedef struct cmd_ack_single {
-    packet_id_t packet_id; // Packet ID to ac
-} cmd_ack_single_t;
-
-typedef struct cmd_ack_interval {
-    packet_id_t first_pid;    // ID of first packet ID
-    packet_id_t last_pid;     // ID of last packet ID
-} cmd_ack_interval_t;
-
-
-typedef struct cmd_packet_header {
-    packet_id_t pid;    // ID of first packet ID
-    payload_len_t payload_len;
-} cmd_packet_header_t;
+#include "rmc_protocol.h"
 
 
 // Max UDP size is 0xFFE3 (65507). Subtract 0x20 (32) bytes for RMC
@@ -48,7 +21,6 @@ typedef struct cmd_packet_header {
 #define RMC_MAX_PACKET 0xFFE3
 // #define RMC_MAX_PAYLOAD 0xFFC3
 #define RMC_MAX_PAYLOAD 64
-
 
 // Probably needs to be a lot bigger in high
 // throughput situations.
@@ -62,12 +34,9 @@ typedef struct cmd_packet_header {
 #define RMC_MULTICAST_INDEX 0xFFFFFFFE
 #define RMC_LISTEN_INDEX 0xFFFFFFFF
 
-
-
 #define RMC_CONNECTION_MODE_CLOSED 0
 #define RMC_CONNECTION_MODE_CONNECTING 1
 #define RMC_CONNECTION_MODE_CONNECTED 2
-#define RMC_CONNECTION_MODE_CLOSING 3
 
 
 typedef uint32_t rmc_index_t;
@@ -151,10 +120,6 @@ typedef struct rmc_connection {
     //
     // RMC_CONNECTION_MODE_CONNECTED
     //   The connection is up and running
-    //
-    // RMC_CONNECTION_MODE_CLOSING
-    //  The connection has been shutdown(2), and we are waiting for
-    //  recv to return 0 before closing.
     //
     uint8_t mode;
 
@@ -483,7 +448,7 @@ extern int rmc_sub_init_context(rmc_sub_context_t* context,
                                 // the payload_alloc callback.
                                 // The payload_free is called via rmc_sub_timeout_process()
                                 // when it has queued up the tcp command to acknowledge a packet
-                                // in _rmc_sub_packet_acknowledged().
+                                // in rmc_sub_packet_acknowledged().
                                 //
                                 // user_data will be set to the same user_data as provided
                                 // to rmc_sub_init_context().
@@ -497,7 +462,6 @@ extern int rmc_sub_init_context(rmc_sub_context_t* context,
 
 
 extern int rmc_pub_activate_context(rmc_pub_context_t* context);
-extern int rmc_pub_shutdown_context(rmc_pub_context_t* context);
 extern int rmc_pub_set_announce_interval(rmc_pub_context_t* context, uint32_t send_interval_usec);
 extern int rmc_pub_set_announce_callback(rmc_pub_context_t* context,
                                          uint8_t (*announce_cb)(struct rmc_pub_context* ctx,
@@ -529,7 +493,6 @@ extern int rmc_pub_get_next_timeout(rmc_pub_context_t* context, usec_timestamp_t
 extern int rmc_pub_process_timeout(rmc_pub_context_t* context);
 extern int rmc_pub_read(rmc_pub_context_t* context, rmc_index_t connection_index, uint8_t* op_res);
 extern int rmc_pub_write(rmc_pub_context_t* context, rmc_index_t connection_index, uint8_t* op_res);
-extern int rmc_pub_shutdown_connection(rmc_pub_context_t* ctx, rmc_index_t s_ind);
 extern int rmc_pub_close_connection(rmc_pub_context_t* ctx, rmc_index_t s_ind);
 
 extern int rmc_pub_timeout_get_next(rmc_pub_context_t* ctx, usec_timestamp_t* result);
@@ -542,12 +505,25 @@ extern int rmc_pub_queue_packet(rmc_pub_context_t* ctx,
 
 extern int rmc_pub_packet_ack(rmc_pub_context_t* ctx, rmc_connection_t* conn, packet_id_t pid);
 
+// Get stats on what is pending to be sent out.
+//
+// queued_packets is the number of packets we have not yet sent.
+//
+// send_buf_len is the sum of the number of bytes we have put on all
+// tcp channel that remain to be sent.
+//
+// ack_count is the number of packets we have sent that we have yet
+// to receive an ack on (and therefore may have to resend).
+//
+extern int rmc_pub_context_get_pending(rmc_pub_context_t* ctx,
+                                       uint32_t* queued_packets, 
+                                       uint32_t* send_buf_len,
+                                       uint32_t* ack_count);
+
 
 extern int rmc_sub_activate_context(rmc_sub_context_t* context);
-extern int rmc_sub_shutdown_context(rmc_sub_context_t* context);
 extern int rmc_sub_deactivate_context(rmc_sub_context_t* context);
 
-extern int rmc_sub_shutdown_connection(rmc_sub_context_t* ctx, rmc_index_t s_ind);
 extern int rmc_sub_close_connection(rmc_sub_context_t* ctx, rmc_index_t s_ind);
 
 extern int rmc_sub_set_announce_callback(rmc_sub_context_t* context,
@@ -556,6 +532,7 @@ extern int rmc_sub_set_announce_callback(rmc_sub_context_t* context,
                                                                 in_port_t listen_port,
                                                                 void* payload,
                                                                 payload_len_t payload_len));
+
 
 extern int rmc_sub_set_user_data(rmc_sub_context_t* ctx, user_data_t user_data);
 extern user_data_t rmc_sub_user_data(rmc_sub_context_t* ctx);
@@ -587,9 +564,9 @@ extern int _rmc_sub_write_interval_acknowledgement(rmc_sub_context_t* ctx,
                                                    rmc_connection_t* conn,
                                                    sub_pid_interval_t* interval);
 
-extern int _rmc_sub_packet_interval_acknowledged(rmc_sub_context_t* context,
-                                                 rmc_index_t index,
-                                                 sub_pid_interval_t* interval);
+extern int rmc_sub_packet_interval_acknowledged(rmc_sub_context_t* context,
+                                                rmc_index_t index,
+                                                sub_pid_interval_t* interval);
 
 extern rmc_index_t rmc_sub_packet_connection(sub_packet_t* packet);
 
@@ -659,6 +636,7 @@ extern int rmc_conn_process_accept(int listen_descriptor,
                                    rmc_connection_vector_t* conn_vec,
                                    rmc_index_t* result_index);
 
+extern int rmc_conn_get_pending_send_length(rmc_connection_t* conn, payload_len_t* result);
 extern int rmc_conn_get_max_index_in_use(rmc_connection_vector_t* conn_vec, rmc_index_t *result);
 extern int rmc_conn_get_poll_size(rmc_connection_vector_t* conn_vec, int *result);
 extern int rmc_conn_get_poll_vector(rmc_connection_vector_t* conn_vec, rmc_connection_t* result, int* len);
@@ -674,12 +652,9 @@ extern int rmc_conn_connect_tcp_by_host(rmc_connection_vector_t* conn_vec,
                                         rmc_index_t* result_index);
 
 
-extern int rmc_conn_shutdown_connection(rmc_connection_vector_t* conn_vec,
-                                        rmc_index_t s_ind);
 
 extern int rmc_conn_close_connection(rmc_connection_vector_t* conn_vec,
-                                     rmc_index_t s_ind,
-                                     uint8_t force_close);
+                                     rmc_index_t s_ind);
 
 extern int rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
                                         rmc_connection_t*conn);
@@ -702,4 +677,4 @@ extern int rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
                                      uint8_t* read_res,
                                      rmc_conn_command_dispatch_t* dispatch_table, // Terminated by a null dispatch entry
                                      user_data_t user_data);
-#endif // __RMC_PROTO_H__
+#endif // __RELIABLE_MULTICAST_H__
