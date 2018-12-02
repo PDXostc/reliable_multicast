@@ -79,7 +79,7 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
         if (events[nfds].events & EPOLLHUP) {
             puts("POLLHUP");
             _test("rmc_proto_test[%d.%d] process_events():rmc_close_tcp(): %s\n",
-                  major, 11, rmc_pub_shutdown_connection(ctx, c_ind));
+                  major, 11, rmc_pub_close_connection(ctx, c_ind));
             continue;
         }
 
@@ -178,7 +178,12 @@ void test_rmc_proto_pub(char* mcast_group_addr,
     usec_timestamp_t exit_ts = 0;
     usec_timestamp_t current_ts = 0;
     packet_id_t debug_output_pid = 0;
-    
+    int busy = 0;
+
+    uint32_t queued_packets = 0;
+    uint32_t send_buf_len = 0;
+    uint32_t ack_count = 0;
+
     signal(SIGHUP, SIG_IGN);
 
     epollfd = epoll_create1(0);
@@ -275,7 +280,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
             debug_output_pid = ind + 1;
         }
 
-//        printf("rmc_proto_test_pub: queue_test_data(%s): drop[%c] wait[%ld]\n", buf, drop_flag?'x':' ', tout-current_ts);
+        printf("rmc_proto_test_pub: queue_test_data(%s): drop[%c] wait[%ld]\n", buf, drop_flag?'x':' ', tout-current_ts);
 
         // Make sure we run the loop at least one.
         if (current_ts > tout)
@@ -287,6 +292,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
         while(current_ts < tout) {
             usec_timestamp_t event_tout = 0;
 
+            puts("Doing it");
             rmc_pub_timeout_get_next(ctx, &event_tout);
 
             if (event_tout == -1 || event_tout > tout)
@@ -301,23 +307,33 @@ void test_rmc_proto_pub(char* mcast_group_addr,
 
     puts("Shutting down");
     
-    rmc_pub_shutdown_context(ctx);
 
     // Disable announce.
     rmc_pub_set_announce_interval(ctx, 0);
+
     
-    while(1) {
+    
+    busy = rmc_pub_context_get_pending(ctx, &queued_packets, &send_buf_len, &ack_count);
+    printf("busy init: queued_packets[%u] send_buf_len[%u] ack_count[%u] -> %d\n",
+           queued_packets, send_buf_len, ack_count, busy);
+    while(busy == EBUSY) {
         usec_timestamp_t tout = 0;
 
         rmc_pub_timeout_get_next(ctx, &tout);
+        printf("tout[%ld]\n", tout);
         if (tout == -1)
             break;
 
-        if ((res = process_events(ctx, epollfd, tout, 2)) == ETIME) 
+        if ((res = process_events(ctx, epollfd, tout, 2)) == ETIME)  {
+            puts("Processing timeout");
             rmc_pub_timeout_process(ctx);
-
+        }
+        busy = rmc_pub_context_get_pending(ctx, &queued_packets, &send_buf_len, &ack_count);
+        printf("busy: queued_packets[%u] send_buf_len[%u] ack_count[%u] -> %d\n",
+               queued_packets, send_buf_len, ack_count, busy);
     }
 
+    rmc_pub_deactivate_context(ctx);
     puts("Done");
 
     puts("TO TEST: Multiple publishers. Single subscriber");

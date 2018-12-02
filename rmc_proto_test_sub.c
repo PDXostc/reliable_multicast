@@ -199,7 +199,7 @@ static int process_events(rmc_sub_context_t* ctx,
         // Figure out what to do.
         if (events[nfds].events & EPOLLHUP) {
             _test("rmc_proto_test[%d.%d] process_events():rmc_close_tcp(): %s\n",
-                  1, 1, rmc_conn_shutdown_connection(&ctx->conn_vec, c_ind));
+                  1, 1, rmc_conn_close_connection(&ctx->conn_vec, c_ind));
             continue;
         }
 
@@ -306,13 +306,11 @@ void test_rmc_proto_sub(char* mcast_group_addr,
         rmc_sub_timeout_get_next(ctx, &timeout_ts);
         printf("timeout[%ld]\n", (timeout_ts == -1)?-1:timeout_ts  - current_ts);
         if (process_events(ctx, epollfd, timeout_ts) == ETIME) {
-            puts("Yep");
+            puts("Processing timeout");
             rmc_sub_timeout_process(ctx);
         }
-        rmc_sub_timeout_process(ctx);
 
         // Process as many packets as possible.
-        puts("Intro");
         
         while((pack = rmc_sub_get_next_dispatch_ready(ctx))) {
             if (!first_pid)
@@ -321,19 +319,16 @@ void test_rmc_proto_sub(char* mcast_group_addr,
             last_pid = pack->pid;
             if (!process_incoming_data(ctx, pack, expect, node_id_map_size)) {
                 do_exit = 1;
-                puts("EXIT");
                 break;
             }
         }
         printf("Pid[%lu:%lu]\n", first_pid, last_pid);
-        puts("Exit");
 
         if (do_exit)
             break;
     }
 
     puts("Shutting down");
-    rmc_sub_shutdown_context(ctx);
 
     while(1) {
         rmc_sub_timeout_get_next(ctx, &timeout_ts);
@@ -347,6 +342,7 @@ void test_rmc_proto_sub(char* mcast_group_addr,
             rmc_sub_timeout_process(ctx);
         }
     }
+    rmc_sub_deactivate_context(ctx);
     
     puts("Done");
 }
