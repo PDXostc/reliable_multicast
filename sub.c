@@ -39,7 +39,7 @@ int sub_packet_is_duplicate(sub_publisher_t* pub, packet_id_t pid)
     // FIXME: Setup hash table for pub->received so that we
     // can find dups faster
     //
-    if (pub->max_pid_ready != 0 && pid < pub->max_pid_ready) {
+    if (pub->max_pid_ready != 0 && pid <= pub->max_pid_ready) {
         printf("sub_packet_is_dup(): pid[%ld] max_pid_ready[%ld] - Already processed\n", pid, pub->max_pid_ready);
         return 1;
     }
