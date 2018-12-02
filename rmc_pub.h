@@ -123,11 +123,12 @@ extern packet_id_t pub_queue_packet(pub_context_t* ctx,
                                     user_data_t pkg_user_data);
 
 // Used to send out pid=0 announcement packets
-extern packet_id_t pub_queue_packet_with_pid(pub_context_t* ctx,
-                                             packet_id_t pid,
-                                             void* payload,
-                                             payload_len_t payload_len,
-                                             user_data_t pkg_user_data);
+extern packet_id_t pub_queue_no_acknowledge_packet(pub_context_t* ctx,
+                                                   void* payload,
+                                                   payload_len_t payload_len,
+                                                   user_data_t pkg_user_data);
+
+extern uint32_t pub_queue_size(pub_context_t* ctx);
 
 extern pub_packet_t* pub_next_queued_packet(pub_context_t* ctx);
 extern user_data_t pub_packet_user_data(pub_packet_t* ppack);
@@ -150,10 +151,12 @@ extern void pub_get_timed_out_subscribers(pub_context_t* ctx,
                                           usec_timestamp_t timeout_period, // Number of usecs until timeout
                                           pub_sub_list_t* result);
 
-void pub_get_timed_out_packets(pub_subscriber_t* sub,
-                               usec_timestamp_t current_ts,     // as reported by rmc_usec_monotonic_timestamp().
-                               usec_timestamp_t timeout_period, // Number of usecs until timeout
-                               pub_packet_list_t* result);
+extern void pub_get_timed_out_packets(pub_subscriber_t* sub,
+                                      usec_timestamp_t current_ts,     // as reported by rmc_usec_monotonic_timestamp().
+                                      usec_timestamp_t timeout_period, // Number of usecs until timeout
+                                      pub_packet_list_t* result);
+
+extern uint32_t pub_get_unacknowledged_packet_count(pub_subscriber_t* sub);
 
 // Get the time when the oldest packet was sent that we still are waiting
 // for an acknowledgement on from the subscriber.
