@@ -56,7 +56,7 @@ void test_print_pub_context(pub_context_t* ctx)
         printf("\nInflight Packets:\n");
         pub_packet_list_for_each(&ctx->inflight, _test_print_pending, (void*) (uint64_t) 1);
     } else
-        printf("Queued Packets: [None]\n");
+        printf("Inflight Packets: [None]\n");
 
     if (pub_sub_list_size(&ctx->subscribers) > 0) {
         printf("\nSubscribers:\n");
