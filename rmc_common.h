@@ -12,13 +12,14 @@
 #include <stdint.h>
 #include "rmc_list.h"
 
-// FIXME: Split up into multiple files. Some available as library
+// FIXME MEDIUM: Split up into multiple files. Some available as library
 // headers, some as included by code that uses this library.
 
-// FIXME: Rename externally accessible structs and functions
+// FIXME LOW: Rename externally accessible structs and functions
 //       rmc_xxx
 //
 typedef uint64_t packet_id_t;
+typedef uint32_t rmc_context_id_t;
 
 RMC_LIST(packet_id_list, packet_id_node, packet_id_t)
 
