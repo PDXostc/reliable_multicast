@@ -196,14 +196,31 @@ error:
 }
 
 
-int rmc_sub_shutdown_context(rmc_sub_context_t* ctx)
+
+int rmc_sub_deactivate_context(rmc_sub_context_t* ctx)
 {
     rmc_index_t ind = 0;
     rmc_index_t max = 0;
+    sub_packet_t *pack;
 
     if (!ctx)
         return EINVAL;
 
+    // Empty all packets that are dispatch ready.
+    while(sub_packet_list_pop_head(&ctx->dispatch_ready, &pack)) 
+        rmc_sub_packet_dispatched(ctx, pack);
+
+    // Empty ack list
+    rmc_index_list_empty(&ctx->pub_ack_list);
+
+    close(ctx->mcast_recv_descriptor);
+    if (ctx->conn_vec.poll_remove) 
+        (*ctx->conn_vec.poll_remove)(ctx->user_data,
+                                     ctx->mcast_recv_descriptor,
+                                     RMC_MULTICAST_INDEX);
+
+    ctx->mcast_recv_descriptor = -1;
+    
     rmc_conn_get_max_index_in_use(&ctx->conn_vec, &max);
     for(ind = 0; ind <= max; ++ind) {
         rmc_connection_t* conn = rmc_conn_find_by_index(&ctx->conn_vec,
@@ -212,13 +229,9 @@ int rmc_sub_shutdown_context(rmc_sub_context_t* ctx)
         if (!conn) 
             continue;
 
-        rmc_sub_shutdown_connection(ctx, ind);
+        rmc_sub_close_connection(ctx, ind);
     }
-    return 0;
-}
 
-int rmc_sub_deactivate_context(rmc_sub_context_t* ctx)
-{
     return 0;
 }
 

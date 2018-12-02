@@ -206,8 +206,7 @@ error:
     return errno;
 }
 
-
-int rmc_pub_shutdown_context(rmc_pub_context_t* ctx)
+int rmc_pub_deactivate_context(rmc_pub_context_t* ctx)
 {
     rmc_index_t ind = 0;
     rmc_index_t max = 0;
@@ -215,18 +214,41 @@ int rmc_pub_shutdown_context(rmc_pub_context_t* ctx)
     if (!ctx)
         return EINVAL;
 
-    rmc_conn_get_max_index_in_use(&ctx->conn_vec, &max);
-    for(ind = 0; ind <= max; ++ind) {
-        rmc_connection_t* conn = rmc_conn_find_by_index(&ctx->conn_vec,
-                                                        ind);
-        // Don't opereate on closed connections.
-        if (!conn) 
-            continue;
+    // Callback to remnove listen and multicast descriptor
+    // from caller's poll vector.
+    if (ctx->conn_vec.poll_remove) {
+        (*ctx->conn_vec.poll_remove)(ctx->user_data,
+                                     ctx->mcast_send_descriptor,
+                                     RMC_MULTICAST_INDEX);
 
-        rmc_pub_shutdown_connection(ctx, ind);
+        (*ctx->conn_vec.poll_remove)(ctx->user_data,
+                                     ctx->listen_descriptor,
+                                     RMC_LISTEN_INDEX);
     }
+
+    rmc_conn_get_max_index_in_use(&ctx->conn_vec, &max);
+
+    if (max != -1) {
+        for(ind = 0; ind <= max; ++ind) {
+            rmc_connection_t* conn = rmc_conn_find_by_index(&ctx->conn_vec,
+                                                            ind);
+            // Don't opereate on closed connections.
+            if (!conn) 
+                continue;
+
+            rmc_pub_close_connection(ctx, ind);
+        }
+    }
+
+    close(ctx->mcast_send_descriptor);
+    close(ctx->listen_descriptor);
+
+    ctx->mcast_send_descriptor = -1;
+    ctx->listen_descriptor = -1;
+
     return 0;
 }
+
 
 int rmc_pub_set_announce_interval(rmc_pub_context_t* ctx, uint32_t send_interval_usec)
 {
@@ -288,10 +310,6 @@ int rmc_pub_set_subscriber_disconnect_callback(rmc_pub_context_t* ctx,
 }
 
 
-int rmc_pub_deactivate_context(rmc_pub_context_t* ctx)
-{
-    return 0;
-}
 
 user_data_t rmc_pub_user_data(rmc_pub_context_t* ctx)
 {
