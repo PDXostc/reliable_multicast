@@ -87,10 +87,8 @@ int rmc_sub_packet_dispatched(rmc_sub_context_t* ctx, sub_packet_t* pack)
                                          lambda(int, (sub_packet_t* a, sub_packet_t* b) {
                                                  return a == b;
                                              }));
-
     if (!node)
         return ENOENT;
-
 
     sub_packet_list_delete(node);
 
@@ -103,7 +101,7 @@ int rmc_sub_packet_dispatched(rmc_sub_context_t* ctx, sub_packet_t* pack)
 }
 
 
-int _rmc_sub_packet_interval_acknowledged(rmc_sub_context_t* ctx, rmc_index_t index, sub_pid_interval_t* interval)
+int rmc_sub_packet_interval_acknowledged(rmc_sub_context_t* ctx, rmc_index_t index, sub_pid_interval_t* interval)
 {
     rmc_connection_t* conn = 0;
 
@@ -120,6 +118,7 @@ int _rmc_sub_packet_interval_acknowledged(rmc_sub_context_t* ctx, rmc_index_t in
 
     return 0;
 }
+
 
 
 rmc_index_t rmc_sub_packet_index(sub_packet_t* pack)
