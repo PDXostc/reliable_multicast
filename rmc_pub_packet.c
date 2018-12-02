@@ -34,7 +34,7 @@ int rmc_pub_queue_packet(rmc_pub_context_t* ctx,
     // If this is an announcement, force PID to 0.
     // If this is a regular packet, let pub.c figure out the next PID to use.
     if (announce_flag)
-        pub_queue_packet_with_pid(&ctx->pub_ctx, 0, payload, payload_len, user_data_nil());
+        pub_queue_no_acknowledge_packet(&ctx->pub_ctx, payload, payload_len, user_data_nil());
     else
         pub_queue_packet(&ctx->pub_ctx, payload, payload_len, user_data_nil());
 
