@@ -45,13 +45,18 @@ CFLAGS = -g
 
 
 all: $(OBJ) rmc_test
+wireshark: rmc_wireshark_plugin.so
 
 rmc_test: $(OBJ) $(TEST_OBJ)
 	$(CC) $(CFLAGS) $^ -o $@
 
 clean:
-	rm -f $(OBJ) *~ rmc_test.o rmc_test $(TEST_OBJ)
+	rm -f $(OBJ) *~ rmc_test.o rmc_test $(TEST_OBJ) rmc_wireshark_plugin.so
 
 $(OBJ): $(HDR)
 
 $(TEST_OBJ): $(HDR)
+
+rmc_wireshark_plugin.so:
+	gcc `pkg-config --cflags wireshark` `pkg-config --libs wireshark` -fpic -shared -o $@ rmc_wireshark_plugin.c
+
