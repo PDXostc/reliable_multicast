@@ -62,28 +62,6 @@ static int _process_cmd_ack_interval(rmc_connection_t* conn, user_data_t user_da
     return 0;
 }
 
-int rmc_pub_shutdown_connection(rmc_pub_context_t* ctx, rmc_index_t s_ind)
-{
-    rmc_connection_t* conn = 0;
-    
-    if (!ctx)
-        return EINVAL;
-
-    conn = rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
-    if (!conn)
-        return EINVAL;
-
-    printf("rmc_pub_shutdown_connection(): index[%d]\n", s_ind);
-
-    // Disconnect callback, if specified.
-    if (ctx->subscriber_disconnect_cb) {
-        char remote_addr[256];
-        strcpy(remote_addr, inet_ntoa( (struct in_addr) {.s_addr = htonl(conn->remote_address) }));
-        (*ctx->subscriber_disconnect_cb)(ctx, remote_addr, conn->remote_port);
-    }
-
-    rmc_conn_shutdown_connection(&ctx->conn_vec, s_ind);
-}
 
 int rmc_pub_close_connection(rmc_pub_context_t* ctx, rmc_index_t s_ind)
 {
@@ -93,14 +71,22 @@ int rmc_pub_close_connection(rmc_pub_context_t* ctx, rmc_index_t s_ind)
         return EINVAL;
 
     conn = rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
+
     if (!conn)
         return EINVAL;
 
-    if (rmc_conn_close_connection(&ctx->conn_vec, s_ind, 0) == EBUSY) {
-        printf("rmc_pub_close_connection(): index[%d] - Still have data to write\n", s_ind);
-        return EBUSY;
+    if (conn->mode == RMC_CONNECTION_MODE_CLOSED)
+        return ENOTCONN;
+
+    // Disconnect callback, if specified through
+    // rmc_pub_set_subscriber_connect_callback().
+    if (ctx->subscriber_disconnect_cb) {
+        char remote_addr[256];
+        strcpy(remote_addr, inet_ntoa( (struct in_addr) {.s_addr = htonl(conn->remote_address) }));
+        (*ctx->subscriber_disconnect_cb)(ctx, remote_addr, conn->remote_port);
     }
 
+    rmc_conn_close_connection(&ctx->conn_vec, s_ind);
 
     printf("rmc_pub_close_connection(): index[%d] - ok\n", s_ind);
     pub_reset_subscriber(&ctx->subscribers[s_ind],
@@ -192,9 +178,8 @@ int rmc_pub_read(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
 
     conn = rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
 
-    if (!conn) {
+    if (!conn || conn->mode != RMC_CONNECTION_MODE_CONNECTED) {
         *op_res = RMC_ERROR;
-
         return ENOTCONN;
     }
 
@@ -221,3 +206,23 @@ int rmc_pub_read(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
     return res;
 }
 
+int rmc_pub_context_has_pending_send(rmc_pub_context_t* ctx, rmc_index_t s_ind)
+{
+    rmc_connection_t* conn = 0;
+    payload_len_t len = 0;
+    
+    if (!ctx)
+        EINVAL;
+
+    conn = rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
+    if (!conn)
+        return ENOTCONN;
+    
+    // Check send buffer.
+    rmc_conn_get_pending_send_length(conn, &len);
+
+    if (len > 0)
+        return EBUSY;
+
+    return 0;
+}

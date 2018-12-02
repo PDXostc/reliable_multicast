@@ -77,6 +77,7 @@ static int _process_multicast_write(rmc_pub_context_t* ctx)
         packet_ptr += pack->payload_len;
 
         mcast_hdr->payload_len += sizeof(cmd_packet_header_t) + pack->payload_len;
+
         pub_packet_list_push_head(&snd_list, pack);
 
         last_sent = pack->pid;
@@ -225,7 +226,7 @@ int rmc_pub_write(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
 
     conn = rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
 
-    if (conn->mode == RMC_CONNECTION_MODE_CLOSED) {
+    if (conn->mode != RMC_CONNECTION_MODE_CONNECTED) {
         if (op_res)
             *op_res = RMC_ERROR;
 
@@ -266,3 +267,79 @@ int rmc_pub_write(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
         
     return res;
 }
+
+
+// FIXME MEDIUM: Not the fastest. But this function
+// *should* mostly be used during shutdown.
+
+int rmc_pub_context_get_pending(rmc_pub_context_t* ctx,
+                                uint32_t* queued_packets,
+                                uint32_t* send_buf_len,
+                                uint32_t* ack_count)
+{
+    payload_len_t len = 0;
+    rmc_index_t ind = 0;
+    int count = 0;
+    rmc_index_t max_ind = 0;
+    uint8_t busy = 0;
+    uint32_t queue_size = 0;
+
+    if (!ctx)
+        EINVAL;
+
+    if (ack_count)
+        *ack_count = 0;
+
+    if (send_buf_len)
+        *send_buf_len = 0;
+        
+    queue_size = pub_queue_size(&ctx->pub_ctx);
+    if (queue_size > 0)
+        busy = 1;
+
+    if (queued_packets)
+        *queued_packets = queue_size;
+
+    rmc_conn_get_max_index_in_use(&ctx->conn_vec, &max_ind);
+
+    // If we have no subscribers, just return immediately
+    if (max_ind == -1)
+        // Return EBUSY if we have pending data to transmit
+        return busy?EBUSY:0;
+        
+    for(ind = 0; ind <= max_ind; ++ind) {
+        rmc_connection_t* conn = 0;
+        pub_subscriber_t *sub = 0;
+        payload_len_t len = 0;
+
+        conn = rmc_conn_find_by_index(&ctx->conn_vec, ind);
+        
+        if (!conn)
+            continue;
+    
+        sub = &ctx->subscribers[conn->connection_index];
+
+        count = pub_packet_list_size(&sub->inflight);
+        if (count != 0) {
+            busy = 1;
+
+            if (ack_count) 
+                *ack_count += count;
+        }
+
+
+        rmc_conn_get_pending_send_length(conn, &len);
+
+        if (len != 0) {
+            busy = 1;
+
+            if (send_buf_len) 
+                *send_buf_len += len;
+        }
+    }
+
+    // Return EBUSY if we have pending data to transmit
+    return busy?EBUSY:0;
+}
+
+

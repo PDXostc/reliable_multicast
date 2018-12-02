@@ -32,7 +32,7 @@ static int _decode_unsubscribed_multicast(rmc_sub_context_t* ctx,
 
         if (cmd_pack->pid) {
             printf("_decode_unsubscribed_multicast(): Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s] - Ignored.\n",
-                   len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
+                   len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet);
 
             goto dump_payload;
         }
@@ -41,12 +41,12 @@ static int _decode_unsubscribed_multicast(rmc_sub_context_t* ctx,
         // In that case, just dump the packet and continue.
         if (conn) {
             printf("_decode_unsubscribed_multicast(): Len[%d] Hdr Len[%lu] Payload Len[%d] Payload[%s] - Announce: connection already in progress\n",
-                   len, sizeof(cmd_packet_header_t), cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
+                   len, sizeof(cmd_packet_header_t), cmd_pack->payload_len, packet);
             goto dump_payload;
         }
             
         printf("_decode_unsubscribed_multicast(): Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s] - Announce!\n",
-        len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
+               len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet);
             
         // Add an outbound tcp connection to the publisher.
         
@@ -264,12 +264,15 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
 {
     cmd_packet_header_t pack_hdr;
     uint8_t *payload = 0;
+    char buf[RMC_MAX_PAYLOAD];
     rmc_sub_context_t* ctx = (rmc_sub_context_t*) user_data.ptr;
     
     circ_buf_read(&conn->read_buf, (uint8_t*) &pack_hdr, sizeof(pack_hdr), 0);
     circ_buf_free(&conn->read_buf, sizeof(pack_hdr), 0);
 
-    printf("_process_cmd_packet(): pid [%lu] len[%d]\n", pack_hdr.pid, pack_hdr.payload_len);
+
+    circ_buf_read(&conn->read_buf, buf, pack_hdr.payload_len, 0);
+    printf("_process_cmd_packet(): pid [%lu] payload[%s] len[%d]\n", pack_hdr.pid, buf,  pack_hdr.payload_len);
     
     if (sub_packet_is_duplicate(&ctx->publishers[conn->connection_index], pack_hdr.pid)) {
         circ_buf_free(&conn->read_buf, pack_hdr.payload_len, 0);
@@ -304,13 +307,13 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
 }
 
 
-int rmc_sub_shutdown_connection(rmc_sub_context_t* ctx, rmc_index_t s_ind)
+
+int rmc_sub_close_connection(rmc_sub_context_t* ctx, rmc_index_t s_ind)
 {
-    if (!ctx)
-        return EINVAL;
-    
-    printf("rmc_sub_shutdown_connection(): index[%d]\n", s_ind);
-    rmc_conn_shutdown_connection(&ctx->conn_vec, s_ind);
+    printf("rmc_sub_close_connection(): index[%d]\n", s_ind);
+
+
+    rmc_conn_close_connection(&ctx->conn_vec, s_ind);
 
     sub_reset_publisher(&ctx->publishers[s_ind],
                          lambda(void, (void* payload, payload_len_t payload_len, user_data_t user_data) {
@@ -319,19 +322,6 @@ int rmc_sub_shutdown_connection(rmc_sub_context_t* ctx, rmc_index_t s_ind)
                                  else
                                      free(payload);
                              }));
-    return 0;
-}
-
-int rmc_sub_close_connection(rmc_sub_context_t* ctx, rmc_index_t s_ind)
-{
-    if (!ctx)
-        return EINVAL;
-    
-    printf("rmc_sub_close_connection(): index[%d]\n", s_ind);
-    if (rmc_conn_close_connection(&ctx->conn_vec, s_ind, 0) == EBUSY) {
-        printf("rmc_sub_close_connection(): index[%d] - Still have data to write\n", s_ind);
-        return EBUSY;
-    }
     return 0;
 }
 
@@ -357,7 +347,7 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
 
     conn = rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
 
-    if (!conn) {
+    if (!conn || conn->mode != RMC_CONNECTION_MODE_CONNECTED) {
         *op_res = RMC_ERROR;
 
         return ENOTCONN;
@@ -372,7 +362,15 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
         return 0; // This is not an error, just regular maintenance.
     }
 
+
     sub_process_received_packets(&ctx->publishers[s_ind], &ctx->dispatch_ready);
+
+    if (res == EPROTO) {
+        *op_res = RMC_ERROR;
+        rmc_sub_close_connection(ctx, s_ind);
+        return res;
+    }
+        
     *op_res = RMC_READ_TCP;
 
     // Read poll is always active. Callback to re-arm.

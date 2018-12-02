@@ -167,7 +167,7 @@ int rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
                conn->remote_port,
                strerror(errno));
         sock_err = errno; // Save it.
-        rmc_conn_close_connection(conn_vec, conn->connection_index, 1);
+        rmc_conn_close_connection(conn_vec, conn->connection_index);
         return sock_err;
     }
 
@@ -180,7 +180,7 @@ int rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
     if (sock_err != 0 && conn_vec->poll_remove) {
         (*conn_vec->poll_remove)(conn_vec->user_data, conn->descriptor, conn->connection_index);
 
-        rmc_conn_close_connection(conn_vec, conn->connection_index, 1);
+        rmc_conn_close_connection(conn_vec, conn->connection_index);
         return sock_err;
     }
     
@@ -188,7 +188,7 @@ int rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
     // out acks.
     if (setsockopt( conn->descriptor, IPPROTO_TCP, TCP_NODELAY, (void *)&tr, sizeof(tr))) {
         sock_err = errno;
-        rmc_conn_close_connection(conn_vec, conn->connection_index, 1);
+        rmc_conn_close_connection(conn_vec, conn->connection_index);
         return sock_err;
     }
 
@@ -351,7 +351,8 @@ int rmc_conn_process_accept(int listen_descriptor,
 }
 
 
-int rmc_conn_close_connection(rmc_connection_vector_t* conn_vec, rmc_index_t s_ind, uint8_t force_close)
+
+int rmc_conn_close_connection(rmc_connection_vector_t* conn_vec, rmc_index_t s_ind)
 {
     rmc_connection_t* conn = 0;
     
@@ -366,19 +367,17 @@ int rmc_conn_close_connection(rmc_connection_vector_t* conn_vec, rmc_index_t s_i
     if (conn->mode == RMC_CONNECTION_MODE_CLOSED)
         return ENOTCONN;
     
-    // If we are called without a prior call to rmc_conn_shutdown_connection()
-    // then issue a shutdown to get a somewhat clean socket disconnect.
-    if (conn->mode == RMC_CONNECTION_MODE_CONNECTED) 
-        shutdown(conn->descriptor, SHUT_RDWR);
+    conn->mode = RMC_CONNECTION_MODE_CLOSED;
+    // If we are still connecting then just terminate the conneciton.
 
+    
+    printf("rmc_conn_close_connection(): Closing connection [%d]. [%d] bytes will be discarded.\n",
+           s_ind, circ_buf_in_use(&conn->write_buf));
 
-    if (circ_buf_in_use(&conn->write_buf) > 0 && !force_close) {
-        printf("rmc_conn_close_connection(): Still have [%d] bytes to write.\n",
-               circ_buf_in_use(&conn->write_buf));
-        return EBUSY;
-    }
+    // Ok if this fails due to connection is still
+    // in progress of being setup.
+    shutdown(conn->descriptor, SHUT_RDWR);
 
-    puts("Completing close");
     // Finalize connection shutdown.
     // Delete from caller's poll vector.
     if (conn_vec->poll_remove)
@@ -398,55 +397,22 @@ int rmc_conn_close_connection(rmc_connection_vector_t* conn_vec, rmc_index_t s_i
 }
 
 
-int rmc_conn_shutdown_connection(rmc_connection_vector_t* conn_vec, rmc_index_t s_ind)
-{
-    rmc_connection_t* conn = 0;
-    
-    // Is s_ind within our connection vector?
-
-    if (s_ind >= RMC_MAX_CONNECTIONS)
-        return EINVAL;
-
-    conn = &conn_vec->connections[s_ind];
-
-    // Are we connected
-    if (conn->mode == RMC_CONNECTION_MODE_CLOSED)
-        return ENOTCONN;
-    
-    // If we are in closing mode, then complete the disconnect.
-    if (conn->mode == RMC_CONNECTION_MODE_CLOSING) {
-        puts("rmc_conn_shutdown_connection(): Shutdown already in progress - completing close");
-        return rmc_conn_close_connection(conn_vec, s_ind, 0);
-    }        
-
-    // If we are still connecting then just terminate the conneciton.
-    if (conn->mode == RMC_CONNECTION_MODE_CONNECTING) {
-        puts("rmc_conn_shutdown_connection(): Aborting ongoing connection setup");
-        return rmc_conn_close_connection(conn_vec, s_ind, 1);
-    }
-
-    // We are connected. Shut down the socket for read and write
-    // If shutdown fails, then just terminate the connection.
-    if (shutdown(conn->descriptor, SHUT_RDWR) != 0)  {
-        printf("rmc_conn_shutdown_connection(): shutdown failed: %s\n", strerror(errno));
-        return rmc_conn_close_connection(conn_vec, s_ind, 1);
-    }
-    
-    printf("rmc_conn_shutdown_connection(): Connection shut down in progress. [%d] bytes left to send.\n",
-         circ_buf_in_use(&conn->write_buf));
-
-    conn->mode = RMC_CONNECTION_MODE_CLOSING;
-
-    return 0;
-}
-
-
 int rmc_conn_get_max_index_in_use(rmc_connection_vector_t* conn_vec, rmc_index_t *result)
 {
     if (!conn_vec || !result)
         return EINVAL;
 
     *result = conn_vec->max_connection_ind;
+}
+
+int rmc_conn_get_pending_send_length(rmc_connection_t* conn, payload_len_t* result)
+{
+
+    if (!conn || !result)
+        return EINVAL;
+
+    *result = circ_buf_in_use(&conn->write_buf);
+    return 0;
 }
 
 int rmc_conn_get_poll_size(rmc_connection_vector_t* conn_vec, int *result)
