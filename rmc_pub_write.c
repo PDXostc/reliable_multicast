@@ -67,11 +67,11 @@ static int _process_multicast_write(rmc_pub_context_t* ctx)
 
         pub_packet_node_t* pnode = 0;
         cmd_packet_header_t* cmd_pack = (cmd_packet_header_t*) packet_ptr;
-        printf("Payload: mcast_hdr[%lu] + hdr->payload_len[%d] + cmd_packet_header_t[%lu] + pack->payload_len[%d] == %lu <= RMC_MAX_PAYLOAD[%d] - %s\n",
+        printf("Payload: mcast_hdr[%lu] + hdr->payload_len[%d] + cmd_packet_header_t[%lu] + pack->payload_len[%d] == %lu <= RMC_MAX_PAYLOAD[%d] - %*s\n",
                sizeof(multicast_header_t),  mcast_hdr->payload_len,  sizeof(cmd_packet_header_t),  pack->payload_len,
                sizeof(multicast_header_t) + mcast_hdr->payload_len + sizeof(cmd_packet_header_t) + pack->payload_len,
                RMC_MAX_PAYLOAD,
-               (char*) pack->payload);
+               pack->payload_len, (char*) pack->payload);
         cmd_pack->pid = pack->pid;
         cmd_pack->payload_len = pack->payload_len;
         packet_ptr += sizeof(cmd_packet_header_t);
