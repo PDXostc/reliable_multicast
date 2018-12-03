@@ -23,23 +23,18 @@ multicast_header {
     uint16_t listen_port;
 } multicast_header_t;
 
-typedef struct  __attribute__((packed))
-cmd_ack_single  {
-    packet_id_t packet_id; // Packed ID to ac
-} cmd_ack_single_t;
-
-typedef struct  __attribute__((packed))
-cmd_ack_interval {
-    packet_id_t first_pid;    // ID of first packed ID
-    packet_id_t last_pid;     // ID of last packed ID
-} cmd_ack_interval_t;
-
 
 typedef struct  __attribute__((packed))
 cmd_packet_header {
     packet_id_t pid;    // ID of first packed ID
     payload_len_t payload_len;
 } cmd_packet_header_t;
+
+typedef struct  __attribute__((packed))
+cmd_ack_interval {
+    packet_id_t first_pid;    // ID of first packed ID
+    packet_id_t last_pid;     // ID of last packed ID
+} cmd_ack_interval_t;
 
 #endif
 

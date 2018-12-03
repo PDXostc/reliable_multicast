@@ -38,7 +38,8 @@ HDR= rmc_common.h \
 		rmc_pub.h \
 		reliable_multicast.h \
 		rmc_sub.h \
-		circular_buffer.h
+		circular_buffer.h \
+		rmc_protocol.h
 
 CFLAGS = -g
 .PHONY: all clean
