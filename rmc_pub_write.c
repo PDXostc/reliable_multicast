@@ -59,14 +59,19 @@ static int _process_multicast_write(rmc_pub_context_t* ctx)
 
 
     first_sent = pack->pid;
-    while(pack && mcast_hdr->payload_len + sizeof(cmd_packet_header_t) + pack->payload_len <= RMC_MAX_PAYLOAD) {
+    while(pack &&
+          sizeof(multicast_header_t) +
+          mcast_hdr->payload_len +
+          sizeof(cmd_packet_header_t) +
+          pack->payload_len <= RMC_MAX_PAYLOAD) {
+
         pub_packet_node_t* pnode = 0;
         cmd_packet_header_t* cmd_pack = (cmd_packet_header_t*) packet_ptr;
-//        printf("Payload: [%s] mcast_hdr->payload_len[%d] + sizeof(cmd_packet_header_t)[%lu] + pack->payload_len[%d] == %lu <= RMC_MAX_PAYLOAD[%d]\n",
-//               (char*) pack->payload,
-//               mcast_hdr->payload_len, sizeof(cmd_packet_header_t),  pack->payload_len,
-//               mcast_hdr->payload_len + sizeof(cmd_packet_header_t) + pack->payload_len,
-//               RMC_MAX_PAYLOAD);
+        printf("Payload: mcast_hdr[%lu] + hdr->payload_len[%d] + cmd_packet_header_t[%lu] + pack->payload_len[%d] == %lu <= RMC_MAX_PAYLOAD[%d] - %s\n",
+               sizeof(multicast_header_t),  mcast_hdr->payload_len,  sizeof(cmd_packet_header_t),  pack->payload_len,
+               sizeof(multicast_header_t) + mcast_hdr->payload_len + sizeof(cmd_packet_header_t) + pack->payload_len,
+               RMC_MAX_PAYLOAD,
+               (char*) pack->payload);
         cmd_pack->pid = pack->pid;
         cmd_pack->payload_len = pack->payload_len;
         packet_ptr += sizeof(cmd_packet_header_t);
@@ -87,10 +92,10 @@ static int _process_multicast_write(rmc_pub_context_t* ctx)
         pack = pnode?pnode->data:0;
     }
 
-    printf("mcast_tx(): mcast[%s:%d] listen[%s:%d] pid[%lu:%lu] - len[%.5d]\n",
+    printf("mcast_tx(): mcast[%s:%d] listen[%s:%d] pid[%lu:%lu] - len[%.5lu]\n",
            mcast_addr, ntohs(sock_addr.sin_port),
            listen_addr, mcast_hdr->listen_port,
-           first_sent, last_sent, mcast_hdr->payload_len);
+           first_sent, last_sent, sizeof(multicast_header_t) + mcast_hdr->payload_len);
 
     res = sendto(ctx->mcast_send_descriptor,
                  packet,
