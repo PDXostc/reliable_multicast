@@ -11,8 +11,7 @@
 
 
 #define RMC_CMD_PACKET 1
-#define RMC_CMD_ACK_SINGLE 2
-#define RMC_CMD_ACK_INTERVAL 3
+#define RMC_CMD_ACK_INTERVAL 2
 
 
 typedef struct  __attribute__((packed))
