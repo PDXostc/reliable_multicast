@@ -103,8 +103,8 @@ static int _decode_subscribed_multicast(rmc_sub_context_t* ctx,
         }
 
 
-//        printf("_decode_subscribed_multicast(): Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s]\n",
-//               len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
+        printf("_decode_subscribed_multicast(): Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s]\n",
+               len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
 
         // Use the provided memory allocator to reserve memory for
         // incoming payload.
@@ -173,13 +173,15 @@ static int _process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
     }
 
     if (len < sizeof(multicast_header_t)) {
-        fprintf(stderr, "Corrupt header. Needed [%lu] header bytes. Got %lu\n",
+        fprintf(stderr, "Corrupt header. Needed [%lu] header bytes. Got [%lu]\n",
                 sizeof(multicast_header_t), len);
         return EPROTO;
     }
                 
     if (len < sizeof(multicast_header_t) + mcast_hdr->payload_len) {
-        fprintf(stderr, "Corrupt packet. Needed [%lu] header + payload bytes. Got %lu\n",
+        fprintf(stderr, "Corrupt packet. Needed [%lu + %d = %lu] header + payload bytes. Got %lu\n",
+                sizeof(multicast_header_t),
+                mcast_hdr->payload_len, 
                 sizeof(multicast_header_t) + mcast_hdr->payload_len, len);
         return EPROTO;
     }
