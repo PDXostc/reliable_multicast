@@ -16,28 +16,6 @@
 #include <assert.h>
 #include <arpa/inet.h>
 
-static int _process_cmd_ack_single(rmc_connection_t* conn, user_data_t user_data)
-{
-    cmd_ack_single_t ack;
-    rmc_pub_context_t* ctx = (rmc_pub_context_t*) user_data.ptr;
-
-    // Do we have enough data?
-    if (circ_buf_in_use(&conn->read_buf) < sizeof(ack))
-        return EAGAIN;
-
-
-    // Read and free.
-    circ_buf_read(&conn->read_buf, (uint8_t*) &ack, sizeof(ack), 0);
-    circ_buf_free(&conn->read_buf, sizeof(ack), 0);
-    printf("_process_cmd_ack_single(): pid[%lu]\n", ack.packet_id);
-
-    // Mark the packet as acknwoledged, and call the payload free function
-    // provided to rmc_pub_init_context(). If no function is
-    // provided, free() will bre called.
-    rmc_pub_packet_ack(ctx, conn, ack.packet_id) ;
-
-    return 0;
-}
 
 static int _process_cmd_ack_interval(rmc_connection_t* conn, user_data_t user_data)
 {
@@ -104,7 +82,6 @@ int rmc_pub_read(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
     uint8_t dummy_res = 0;
     rmc_connection_t* conn = 0;
     static rmc_conn_command_dispatch_t dispatch_table[] = {
-        { .command = RMC_CMD_ACK_SINGLE, .dispatch = _process_cmd_ack_single },
         { .command = RMC_CMD_ACK_INTERVAL, .dispatch = _process_cmd_ack_interval },
         { .command = 0, .dispatch = 0 }
     };
