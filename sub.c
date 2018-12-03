@@ -56,22 +56,6 @@ int sub_packet_is_duplicate(sub_publisher_t* pub, packet_id_t pid)
     }
 }
 
-static uint8_t _test_print_interval(sub_pid_interval_node_t* node, void* dt)
-{
-    sub_pid_interval_t intv =  node->data;
-    int indent = (int) (uint64_t) dt;
-
-    printf("%*cInterval: %lu - %lu\n", indent*2, ' ', intv.first_pid, intv.last_pid);
-    return 1;
-}
-
-static uint8_t _test_print_interval_list(sub_publisher_t* pub)
-{
-
-    puts("Interval:");
-    sub_pid_interval_list_for_each(&pub->received_interval, _test_print_interval, (void*) 1);
-    return 1;
-}
 
 int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
                         void* payload,
@@ -115,7 +99,6 @@ int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
 
     }
     _sub_packet_add_to_received_interval(pub, pid);
-    _test_print_interval_list(pub);
     return 1;
 }
 
