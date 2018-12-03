@@ -57,6 +57,6 @@ $(OBJ): $(HDR)
 
 $(TEST_OBJ): $(HDR)
 
-rmc_wireshark_plugin.so:
-	gcc `pkg-config --cflags wireshark` `pkg-config --libs wireshark` -fpic -shared -o $@ rmc_wireshark_plugin.c
+rmc_wireshark_plugin.so: rmc_wireshark_plugin.c
+	gcc `pkg-config --cflags wireshark` `pkg-config --libs wireshark` -fpic -shared $^ -o $@
 
