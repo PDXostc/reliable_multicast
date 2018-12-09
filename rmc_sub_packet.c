@@ -114,9 +114,7 @@ int rmc_sub_packet_interval_acknowledged(rmc_sub_context_t* ctx, rmc_index_t ind
         return EINVAL;
 
 
-    _rmc_sub_write_interval_acknowledgement(ctx, conn, interval);
-
-    return 0;
+    return _rmc_sub_write_interval_acknowledgement(ctx, conn, interval);
 }
 
 
