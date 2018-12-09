@@ -11,6 +11,8 @@
 #include "reliable_multicast.h"
 #include <errno.h>
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 
 
 // Send all pending acknowledgements that we need to get going.
@@ -53,9 +55,15 @@ int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
         // For each publisher that we have a timed out ack  for, we will ack
         // all pending packets in one go.
         puts("Processing ack timeout");
-        while(sub_pid_interval_list_pop_head(&pub->received_interval, &pid_intv))
-            rmc_sub_packet_interval_acknowledged(ctx, inode->data, &pid_intv);
-
+        while(sub_pid_interval_list_pop_head(&pub->received_interval, &pid_intv)) {
+            int res = 0;
+            
+            res = rmc_sub_packet_interval_acknowledged(ctx, inode->data, &pid_intv);
+            if (res) {
+                printf("Failed to send packet ack: %s\n", strerror(res));
+                exit(255);
+            }
+        }
         rmc_index_list_delete(inode);
         inode = rmc_index_list_head(&ctx->pub_ack_list);
     }
