@@ -81,14 +81,14 @@ static int _process_subscriber_timeout(rmc_pub_context_t* ctx,
 
     // Traverse packets and send them for timeout. Start
     // with oldest packet first.
-    while((pnode = pub_packet_list_tail(&packets))) {
+    while((pnode = pub_packet_list_head(&packets))) {
         // Outbound circular buffer may be full.
         printf("Timed out packet: %lu\n", pnode->data->pid);
         if ((res = _process_sent_packet_timeout(ctx, sub, pnode->data)) != 0)
             return res;
 
         // We were successful in queuing the packet transmission.
-        pub_packet_list_pop_tail(&packets, &pack);
+        pub_packet_list_pop_head(&packets, &pack);
     }
 
     return 0;
