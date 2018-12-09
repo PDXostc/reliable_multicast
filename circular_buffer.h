@@ -46,6 +46,13 @@ extern int circ_buf_read(circ_buf_t* circ_buf,
                          uint32_t size,
                          uint32_t* bytes_read);
 
+// Start reading with a given offset into circ_buf data.
+extern int circ_buf_read_offset(circ_buf_t* circ_buf,
+                                uint32_t offset, 
+                                uint8_t* target,
+                                uint32_t size,
+                                uint32_t* bytes_read);
+
 extern int circ_buf_read_segment(circ_buf_t* circ_buf,
                                  uint32_t size,
                                  uint8_t **segment1,

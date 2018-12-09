@@ -13,20 +13,75 @@
 #include <assert.h>
 #include <errno.h>
 
+
+void circ_buf_hex_dump(circ_buf_t* circ_buf)
+{
+    uint32_t ind = circ_buf->start_ind;
+    uint32_t count = 0;
+
+    printf("Circ dump\n");
+    printf("size:        %d\n", circ_buf->size);
+    printf("start_ind:   %d\n", circ_buf->start_ind);
+    printf("stop_ind:    %d\n", circ_buf->stop_ind);
+    printf("in_use:      %d\n", circ_buf_in_use(circ_buf));
+    printf("available:   %d\n", circ_buf_available(circ_buf));
+    printf("total:       %d\n", circ_buf_available(circ_buf) + circ_buf_in_use(circ_buf));
+
+    while(ind != circ_buf->stop_ind)
+    {
+        printf("  Byte[%.5d] Ind[%d], Val[%.2X] [%.3d] ",
+               count,
+               ind, 
+               circ_buf->buffer[ind] & 0xFF, 
+               circ_buf->buffer[ind] & 0xFF);
+
+        if (circ_buf->buffer[ind] > 31 && circ_buf->buffer[ind] < 127)
+            printf("[%c]\n", circ_buf->buffer[ind]);
+        else
+            putchar('\n');
+
+        count++;
+        ind++;
+
+        if (ind == circ_buf->size)
+            ind = 0;
+    }
+    puts("---");
+}
+
 void check_integrity(circ_buf_t* cb,
                      int major_test,
                      uint32_t exp_available,
                      uint32_t exp_used)
 {
+    uint32_t ind = cb->start_ind;
+    uint32_t count = 0;
+
     if (circ_buf_available(cb) != exp_available) {
-        printf("circular buffer test %d.1: Wanted %d Got %d\n",
+        printf("circular buffer test %d.1: Wanted %d as available. Got %d\n",
                major_test, exp_available, circ_buf_available(cb));
         exit(255);
     }
 
     if (circ_buf_in_use(cb) != exp_used) {
-        printf("circular buffer test %d.2: Wanted %d Got %d\n",
+        printf("circular buffer test %d.2: Wanted %d as in use. Got %d\n",
                major_test, exp_used, circ_buf_in_use(cb));
+        exit(255);
+    }
+
+    // Go through and count the elements!
+
+
+    while(ind != cb->stop_ind)
+    {
+        count++;
+        ind++;
+        if (ind == cb->size)
+            ind = 0;
+    }
+    if (count != circ_buf_in_use(cb)) {
+        printf("circular buffer test %d.2: In use shows %d elements, but I counted %dd\n",
+               major_test, circ_buf_in_use(cb), count);
         exit(255);
     }
 }
@@ -41,10 +96,11 @@ void read_data(circ_buf_t* cb,
     uint8_t* seg2 = 0;
     uint32_t seg2_len = 0;
     uint8_t data[bytes_to_read];
-    uint32_t len;
+    uint32_t len = 0;
     uint32_t available = 0;
     uint32_t in_use = 0;
     int res = 0;
+    uint32_t offset = 0;
 
     if (circ_buf_in_use(cb) < bytes_to_read) {
         printf("circular buffer test %d.1: Wanted %d bytes of data in use. Got %d\n",
@@ -71,21 +127,6 @@ void read_data(circ_buf_t* cb,
         exit(255);
     }
 
-    circ_buf_free(cb, bytes_to_read, 0);
-    if (circ_buf_available(cb) != available + bytes_to_read) {
-        printf("circular buffer test %d.4: Expected post read available %d. Got %d\n",
-               major_test, available + bytes_to_read, circ_buf_available(cb));
-
-        exit(255);
-    }
-
-    if (circ_buf_in_use(cb) != in_use - bytes_to_read ) {
-        printf("circular buffer test %d.5: Expected post read in_use %d. Got %d\n",
-               major_test, in_use - bytes_to_read, circ_buf_in_use(cb));
-
-        exit(255);
-    }
-
     if (memcmp(data, expected_result, bytes_to_read)) {
         uint32_t ind = 0;
         printf("circular buffer test %d.6: Data integrity failure.\n",
@@ -108,6 +149,72 @@ void read_data(circ_buf_t* cb,
         }
         exit(255);
     }
+
+    // Do an offset read from 0 to in_use to ensure that we have total
+    // integrity across all offset cases for the given data.
+    //
+    
+    while(offset != in_use) {
+        uint8_t offset_data[in_use];
+        memset(offset_data, 'X', in_use);
+        
+        
+        res = circ_buf_read_offset(cb, offset, offset_data, bytes_to_read - offset, &len);
+        if (res != 0) {
+            printf("circular buffer test %d.7: Wanted return value 0 (OK). Got %s\n",
+                   major_test, strerror(res));
+            
+            exit(255);
+        }
+
+        if (len != bytes_to_read - offset) {
+            printf("circular buffer test %d.8: Wanted to read %d bytes. Got %d\n",
+                   major_test, bytes_to_read - offset, res);
+
+            exit(255);
+        }
+        
+        if (memcmp(offset_data, expected_result + offset, bytes_to_read - offset)) {
+            uint32_t ind = 0;
+            
+            printf("circular buffer test %d.6: Offset integrity failure. Offset[%d]\n", 
+                   major_test, offset);
+
+            printf("byte | expect | got\n");
+               
+            for(ind = 0; ind < bytes_to_read-offset; ++ind) {
+                if (expected_result[ind+offset] == offset_data[ind])
+                    printf(" %.3d      %c      %c\n",
+                           ind,
+                           (int) expected_result[ind+offset],
+                           (int) offset_data[ind]);
+                else
+                    printf("*%.3d      %c      %c\n",
+                       
+                           ind,
+                           (int) expected_result[ind+offset],
+                           (int) offset_data[ind]);
+            }
+            exit(255);
+        }
+        ++offset;
+    }
+
+    circ_buf_free(cb, bytes_to_read, 0);
+    if (circ_buf_available(cb) != available + bytes_to_read) {
+        printf("circular buffer test %d.4: Expected post read available %d. Got %d\n",
+               major_test, available + bytes_to_read, circ_buf_available(cb));
+
+        exit(255);
+    }
+
+    if (circ_buf_in_use(cb) != in_use - bytes_to_read ) {
+        printf("circular buffer test %d.5: Expected post read in_use %d. Got %d\n",
+               major_test, in_use - bytes_to_read, circ_buf_in_use(cb));
+
+        exit(255);
+    }
+    
 }
 
 void write_data(circ_buf_t* cb,
@@ -277,7 +384,7 @@ void test_circular_buffer(void)
     // After write:
     // Index:     [0][1][2][3][4]
     // Data:       A  B  C  D  -
-    // Start/Stop  S           s
+    // Start/stop  S           s
     // Please note that the buffer is full since we have
     // one byte reserved to distinguish between empty
     // and full vuffer, in which both cases start and stop
@@ -293,7 +400,7 @@ void test_circular_buffer(void)
     // After read:
     // Index:     [0][1][2][3][4]
     // Data:       -  -  -  D  -
-    // Start/Stop           S  s
+    // Start/stop           S  s
     read_data(&cb, 25, "ABC");
     check_integrity(&cb, 26, 3, 1);
 
@@ -304,7 +411,7 @@ void test_circular_buffer(void)
     // After write:
     // Index:     [0][1][2][3][4]
     // Data:       B  C  -  D  A
-    // Start/Stop        s  S  
+    // Start/stop        s  S  
     write_data(&cb, 27, "ABC", 1, 2);
     check_integrity(&cb, 28, 0, 4);
 
@@ -315,7 +422,7 @@ void test_circular_buffer(void)
     // After read:
     // Index:     [0][1][2][3][4]
     // Data:       -  -  -  -  -
-    // Start/Stop        X  
+    // Start/stop        X  
     read_data(&cb, 29, "DABC");
     check_integrity(&cb, 30, 4, 0);
     
@@ -400,4 +507,17 @@ void test_circular_buffer(void)
     }
     circ_buf_trim(&cb, 9);
 
+
+    // Bug found during higher-level testing
+    circ_buf_init(&cb, buf2, 65);
+
+    // Setup start situation
+    cb.start_ind = 8;
+    cb.stop_ind = 7;
+
+    // Copy in data that preluded the corruption.
+    memcpy(cb.buffer + 8, "0x01\0x13\0x00\0x00\0x00\0x00\0x00\0x00\0x00\0x08\0x00\0x31\0x3A\0x31\0x39\0x3A\0x32\0x30\0x00\0x01\0x14\0x00\0x00\0x00\0x00\0x00\0x00\0x00\0x08\0x00\0x31\0x3A\0x32\0x30\0x3A\0x32\0x30\0x00", 38);
+    // The trimming caused the bug, bringing in_use down to 26
+    circ_buf_trim(&cb, 38);
+    check_integrity(&cb, 32, 64-38, 38);
 }

@@ -10,9 +10,10 @@
 #include "circular_buffer.h"
 #include <errno.h>
 #include <memory.h>
+#include <stdio.h>
 
-#define RMC_MAX(x,y) ((x)>(y)?(x):(y))
-#define RMC_MIN(x,y) ((x)<(y)?(x):(y))
+#define RMC_MIN(x,y) (((x)<(y))?(x):(y))
+
 
 // circ_buf_t::start_ind = First byte of data in use.
 // circ_buf_t::stop_ind = First byte *AFTER* last data byte in use
@@ -110,35 +111,32 @@ void circ_buf_trim(circ_buf_t* circ_buf, uint32_t target_len)
     // Before
     // Index:     [0][1][2][3][4]
     // Data:       A  B  C  D  -
-    // Start/Stop  S           s
+    // Start/stop  S           s
     //
     // After
     // Index:     [0][1][2][3][4]
     // Data:       A  B  -  -  -
-    // Start/Stop  S  s         
+    // Start/stop  S  s         
     //
     if (circ_buf->stop_ind > target_len) {
         circ_buf->stop_ind -= in_use - target_len;
         return;
     }
-
     
+    // We need to wrap stop_ind back to the end of the buffer.
+    //
     // target_len: 1
     // Before
     // Index:     [0][1][2][3][4]
     // Data:       C  D  -  A  B
-    // Start/Stop        s  S  
+    // Start/stop        s  S  
     //
     // After
     // Index:     [0][1][2][3][4]
     // Data:       -  -  -  A  -
-    // Start/Stop           S  s         
+    // Start/stop           S  s         
     //
-
-    target_len -= circ_buf->stop_ind;
-
-    circ_buf->stop_ind = circ_buf->size - target_len;
-    
+    circ_buf->stop_ind = circ_buf->start_ind + target_len;
     return;
 }
 
@@ -176,33 +174,38 @@ int circ_buf_free(circ_buf_t* circ_buf, uint32_t size, uint32_t* in_use)
 
     circ_buf->start_ind += size;
     circ_buf->start_ind %= circ_buf->size;
-
+        
     if (in_use)
-        *in_use = len-size;
+        *in_use = len - size;
 
     return 0;
 }
 
 
-int circ_buf_read(circ_buf_t* circ_buf,
-                  uint8_t* target,
-                  uint32_t size,
-                  uint32_t* bytes_read)
+
+int circ_buf_read_offset(circ_buf_t* circ_buf,
+                         uint32_t offset,
+                         uint8_t* target,
+                         uint32_t size,
+                         uint32_t* bytes_read)
 {
-    uint32_t len = circ_buf_in_use(circ_buf);
+    uint32_t len = 0;
+    uint32_t in_use = circ_buf_in_use(circ_buf);
     uint32_t segment_len = 0;
     uint32_t copied_bytes = 0;
+    uint32_t start_ind = 0;
 
-    if (!size || !circ_buf || !target)
+    if (!circ_buf || !target || offset > in_use)
         return EINVAL;
 
-    len = RMC_MIN(len, size);
-
+    len = RMC_MIN(size, in_use - offset);
+    
+    start_ind = (circ_buf->start_ind + offset) %  circ_buf->size;
     // If the entire data of buffer is stored without
     // wrapping the buffer we can just copy it in one operation
     // and be done.
-    if (circ_buf->stop_ind >= circ_buf->start_ind) {
-        memcpy(target, circ_buf->buffer + circ_buf->start_ind, len);
+    if (circ_buf->stop_ind >= start_ind) {
+        memcpy(target, circ_buf->buffer + start_ind, len);
 
         if (bytes_read)
             *bytes_read = len;
@@ -212,17 +215,16 @@ int circ_buf_read(circ_buf_t* circ_buf,
 
     // Copy out the first part of the circular buffer, spanning from
     // start_ind (first data byte) to end either of buffer or the
-    // length that we want, whichwever is smaller.
-
-    segment_len = circ_buf->size - circ_buf->start_ind;
+    // length that we want, whichever is smaller.
+    segment_len = circ_buf->size - start_ind;
     segment_len = RMC_MIN(segment_len, len);
 
-    memcpy(target, circ_buf->buffer + circ_buf->start_ind, segment_len);
+    memcpy(target, circ_buf->buffer + start_ind, segment_len);
     copied_bytes += segment_len;
 
     // Return if the copied data was all that was requested by the
     // caller.
-    if (len <= segment_len) {
+    if (len == segment_len) {
         if (bytes_read)
             *bytes_read = copied_bytes;
 
@@ -233,8 +235,14 @@ int circ_buf_read(circ_buf_t* circ_buf,
     // 0 to either stop_ind (last data byte) or the number of bytes left
     // wanted by the caller, whichever is smaller.
     len -= segment_len;
+    if (offset > segment_len)
+        offset -= segment_len;
+    else
+        offset = 0;
+  
     segment_len = RMC_MIN(len, circ_buf->stop_ind);
-    memcpy(target + segment_len, circ_buf->buffer, segment_len);
+    
+    memcpy(target + copied_bytes, circ_buf->buffer + offset, segment_len);
 
     copied_bytes += segment_len;
 
@@ -243,6 +251,15 @@ int circ_buf_read(circ_buf_t* circ_buf,
 
     return 0;
 }
+
+int circ_buf_read(circ_buf_t* circ_buf,
+                  uint8_t* target,
+                  uint32_t size,
+                  uint32_t* bytes_read)
+{
+    return circ_buf_read_offset(circ_buf, 0, target, size, bytes_read);
+}
+
 
 // FIXME: Add test in circular_buffer_test.c
 int circ_buf_read_segment(circ_buf_t* circ_buf,
