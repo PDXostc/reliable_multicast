@@ -10,7 +10,7 @@
 #define _GNU_SOURCE 1
 #include "reliable_multicast.h"
 #include <errno.h>
-
+#include <string.h>
 #include <stdio.h>
 #include <sys/uio.h>
 
@@ -37,6 +37,7 @@ int rmc_conn_process_tcp_write(rmc_connection_t* conn, uint32_t* bytes_left)
         *bytes_left = 0;
         return ENODATA;
     }
+
     
     // Setup a zero-copy scattered socket write
     iov[0].iov_base = seg1;
@@ -87,10 +88,10 @@ int rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
     socklen_t len = sizeof(sock_err);
     int res;
 
+
     // We have at least one byte available since
     // we would not be called w
     res = circ_buf_read(&conn->read_buf, &command, 1, 0);
-    circ_buf_free(&conn->read_buf, 1, &in_use);
 
     if (res) {
         *op_res = RMC_ERROR;
@@ -98,28 +99,37 @@ int rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
     }
     
     *op_res = RMC_READ_TCP;
-    
     while(1) {
         rmc_conn_command_dispatch_t* current = dispatch_table;
 
+        // Traverse dispatch table to find matching command byte.
         while(current->dispatch) {
-            if (command == current->command) {
-                // The called function will free any additional circular buffer
-                // space beyond the command byte.
-
-                res = (*current->dispatch)(conn, user_data);
-
-                // Not enough data?
-                if (res == EAGAIN)
-                    return 0;
-
-                if (res != 0) {
-                    *op_res = RMC_ERROR;
-                    return res;
-                }
-                break;
+            if (command != current->command) {
+                ++current;
+                continue;
             }
-            ++current;
+                
+            // The called function will free any additional circular buffer
+            // space beyond the command byte.
+
+            // conn->read_buf will still have the command byte as its first byte.
+            // It is up to the dispatch function to either return EAGAIN with the buffer
+            // untouched, or circ_buf_free the command byte and all of the payload for
+            // the command.
+            res = (*current->dispatch)(conn, user_data);
+
+            // Not enough data?
+            // Roll back the command
+            if (res != 0) {
+                if (res != EAGAIN) {
+                    *op_res = RMC_ERROR;
+                }
+                // We either have a protocol error, or not enough data
+                // to process the current packet.
+                // In both cases we need to return.
+                return res;
+            }
+            break;
         }
 
         // No hit in the dispatch table?
@@ -131,8 +141,10 @@ int rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
         // Read next command byte.
         in_use = circ_buf_in_use(&conn->read_buf);
 
-        if (!in_use)
+        // If no data is left, then we are done.
+        if (!in_use) {
             return 0;
+        }
 
         // We are at the start of the next command.
         // Read the command byte.
@@ -141,9 +153,7 @@ int rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
             *op_res = RMC_ERROR;
             return res;
         }
-        circ_buf_free(&conn->read_buf, 1, 0);
     }
-
     // Never executed.
     return 0;
 }
@@ -163,6 +173,9 @@ int rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
     uint32_t seg2_len = 0;
     struct iovec iov[2];
     uint32_t available = circ_buf_available(&conn->read_buf);
+    uint32_t orig_in_use = circ_buf_in_use(&conn->read_buf);
+    int ret = 0;
+
 
     // Grab as much data as we can.
     // The call will only return available
@@ -171,6 +184,7 @@ int rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
                    available,
                    &seg1, &seg1_len,
                    &seg2, &seg2_len);
+
 
     if (!seg1_len) {
         *op_res = RMC_ERROR;
@@ -183,6 +197,7 @@ int rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
     iov[1].iov_base = seg2;
     iov[1].iov_len = seg2_len;
     
+    errno = 0;
     res = readv(conn->descriptor, iov, 2);
 
 
@@ -196,8 +211,13 @@ int rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
     
     // Trim the tail end of the allocated data to match the number of
     // bytes read.
-    circ_buf_trim(&conn->read_buf, res);
 
-    return rmc_conn_process_tcp_read(conn_vec, s_ind, op_res,
-                                     dispatch_table, user_data);
+    // Trim the end of read_buf so that we ony have our original read_buf data plus
+    // the bytes we actually read.
+    circ_buf_trim(&conn->read_buf, res + orig_in_use);
+
+    ret = rmc_conn_process_tcp_read(conn_vec, s_ind, op_res,
+                                    dispatch_table, user_data);
+
+    return ret;
 }
