@@ -27,7 +27,7 @@ void circ_buf_hex_dump(circ_buf_t* circ_buf)
     printf("available:   %d\n", circ_buf_available(circ_buf));
     printf("total:       %d\n", circ_buf_available(circ_buf) + circ_buf_in_use(circ_buf));
 
-    while(ind != circ_buf->stop_ind)
+    while(count != circ_buf_in_use(circ_buf) + 1)
     {
         printf("  Byte[%.5d] Ind[%d], Val[%.2X] [%.3d] ",
                count,
@@ -520,4 +520,15 @@ void test_circular_buffer(void)
     // The trimming caused the bug, bringing in_use down to 26
     circ_buf_trim(&cb, 38);
     check_integrity(&cb, 32, 64-38, 38);
+
+    //
+    // Bug found during higher-level testing
+    //
+    circ_buf_init(&cb, buf2, 65);
+
+    // Setup start situation
+    cb.start_ind = 42;
+    cb.stop_ind = 41;
+    circ_buf_trim(&cb, 46);
+    check_integrity(&cb, 32, 64-46, 46);
 }
