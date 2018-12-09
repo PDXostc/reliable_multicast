@@ -208,7 +208,7 @@ static int process_events(rmc_sub_context_t* ctx,
             res = rmc_sub_read(ctx, c_ind, &op_res);
             // Did we read a loopback message we sent ourselves?
 //            printf("process_events(%s):%s\n", _op_res_string(op_res), strerror(res));
-            if (res == ELOOP)
+            if (res == EAGAIN)
                 continue;       
 
             _test("rmc_proto_test[%d.%d] process_events():rmc_read(): %s\n", 1, 1, res);
