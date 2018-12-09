@@ -64,17 +64,22 @@ int _rmc_sub_write_interval_acknowledgement(rmc_sub_context_t* ctx,
                conn->remote_port);
 
         // Allocate memory for command
-        circ_buf_alloc(&conn->write_buf, 1,
-                       &seg1, &seg1_len,
-                       &seg2, &seg2_len);
+        res = circ_buf_alloc(&conn->write_buf, 1,
+                             &seg1, &seg1_len,
+                             &seg2, &seg2_len);
 
+        if (res) 
+            return ENOMEM;
 
         *seg1 = RMC_CMD_ACK_INTERVAL;
 
         // Allocate memory for packet header
-        circ_buf_alloc(&conn->write_buf, sizeof(ack) ,
-                       &seg1, &seg1_len,
-                       &seg2, &seg2_len);
+        res = circ_buf_alloc(&conn->write_buf, sizeof(ack) ,
+                             &seg1, &seg1_len,
+                             &seg2, &seg2_len);
+
+        if (res) 
+            return ENOMEM;
 
         // Copy in packet header
         memcpy(seg1, (uint8_t*) &ack, seg1_len);
@@ -91,6 +96,7 @@ int _rmc_sub_write_interval_acknowledgement(rmc_sub_context_t* ctx,
                                          conn->connection_index,
                                          old_action,
                                          conn->action);
+        return 0;
 }
 
 int rmc_sub_write(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
