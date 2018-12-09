@@ -180,15 +180,16 @@ int rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
     // Grab as much data as we can.
     // The call will only return available
     // data.
-    circ_buf_alloc(&conn->read_buf,
-                   available,
-                   &seg1, &seg1_len,
-                   &seg2, &seg2_len);
+    res = circ_buf_alloc(&conn->read_buf,
+                         available,
+                         &seg1, &seg1_len,
+                         &seg2, &seg2_len);
 
 
-    if (!seg1_len) {
+    // Did we fail?
+    if (res) {
         *op_res = RMC_ERROR;
-        return ENOMEM;
+        return res;
     }
 
     // Setup a zero-copy scattered socket write
