@@ -9,6 +9,7 @@
 #define _GNU_SOURCE
 #include "reliable_multicast.h"
 #include <string.h>
+#include <stdlib.h>
 #include <errno.h>
 #include <stdio.h>
 #include <arpa/inet.h>
@@ -160,18 +161,26 @@ int _rmc_pub_resend_packet(rmc_pub_context_t* ctx,
         return ENOMEM;
     
     // Allocate memory for command
-    circ_buf_alloc(&conn->write_buf, 1,
-                   &seg1, &seg1_len,
-                   &seg2, &seg2_len);
+    res = circ_buf_alloc(&conn->write_buf, 1,
+                         &seg1, &seg1_len,
+                         &seg2, &seg2_len);
 
-
+    // We checked above that we have memory, so an error here is final
+    if (res) {
+        printf("_rmc_pub_resend_packet(): Could not allocate one byte: %s\n", strerror(errno));
+        exit(255);
+    }
     *seg1 = RMC_CMD_PACKET;
 
     // Allocate memory for packet header
-    circ_buf_alloc(&conn->write_buf, sizeof(pack_cmd) ,
-                   &seg1, &seg1_len,
-                   &seg2, &seg2_len);
+    res = circ_buf_alloc(&conn->write_buf, sizeof(pack_cmd) ,
+                         &seg1, &seg1_len,
+                         &seg2, &seg2_len);
 
+    if (res) {
+        printf("_rmc_pub_resend_packet(): Could not allocate %lu header bytes: %s\n", sizeof(pack_cmd), strerror(errno));
+        exit(255);
+    }
 
     // Copy in packet header
     memcpy(seg1, (uint8_t*) &pack_cmd, seg1_len);
@@ -179,9 +188,14 @@ int _rmc_pub_resend_packet(rmc_pub_context_t* ctx,
         memcpy(seg2, ((uint8_t*) &pack_cmd) + seg1_len, seg2_len);
 
     // Allocate packet payload
-    circ_buf_alloc(&conn->write_buf, pack->payload_len,
-                   &seg1, &seg1_len,
-                   &seg2, &seg2_len);
+    res = circ_buf_alloc(&conn->write_buf, pack->payload_len,
+                         &seg1, &seg1_len,
+                         &seg2, &seg2_len);
+
+    if (res) {
+        printf("_rmc_pub_resend_packet(): Could not allocate %d payload bytes: %s\n", pack->payload_len, strerror(errno));
+        exit(255);
+    }
 
     // Copy in packet payload
     memcpy(seg1, pack->payload, seg1_len);
