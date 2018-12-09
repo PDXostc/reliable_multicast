@@ -41,7 +41,7 @@ HDR= rmc_common.h \
 		circular_buffer.h \
 		rmc_protocol.h
 
-CFLAGS = -g
+CFLAGS = -ggdb
 .PHONY: all clean
 
 
