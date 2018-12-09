@@ -264,44 +264,74 @@ rearm:
 
 static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
 {
-    cmd_packet_header_t pack_hdr;
     uint8_t *payload = 0;
-    char buf[RMC_MAX_PAYLOAD];
+    char buf[sizeof(cmd_packet_header_t)];
+    cmd_packet_header_t* pack_hdr = (cmd_packet_header_t*) buf;
     rmc_sub_context_t* ctx = (rmc_sub_context_t*) user_data.ptr;
-    
-    circ_buf_read(&conn->read_buf, (uint8_t*) &pack_hdr, sizeof(pack_hdr), 0);
-    circ_buf_free(&conn->read_buf, sizeof(pack_hdr), 0);
+
+    // Make sure that we have enough data for the header.
+    // Please note that the command byte is still lingering as the
+    // first byte in conn->read_buf since we cannot free it until we
+    // have atomically processed or rejeceted the command.
+    //
+    if (circ_buf_in_use(&conn->read_buf) < 1 + sizeof(cmd_packet_header_t)) {
+        printf("_process_cmd_packet(): Incomplete header data. Want [%lu] Got[%d]\n",
+               1 + sizeof(cmd_packet_header_t), circ_buf_in_use(&conn->read_buf));
+
+        // Don't free any memory since we will get called again when we have more data.
+        return EAGAIN;
+    }
+
+    // Read the command byte and the packet header
+    circ_buf_read_offset(&conn->read_buf, 1, buf, sizeof(cmd_packet_header_t), 0);
 
 
-    circ_buf_read(&conn->read_buf, buf, pack_hdr.payload_len, 0);
-    printf("_process_cmd_packet(): pid [%lu] payload[%s] len[%d]\n", pack_hdr.pid, buf,  pack_hdr.payload_len);
-    
-    if (sub_packet_is_duplicate(&ctx->publishers[conn->connection_index], pack_hdr.pid)) {
-        circ_buf_free(&conn->read_buf, pack_hdr.payload_len, 0);
+    // Now we know how big the payload is. Check if we have enough memory for an atomic
+    // process or reject.
+    if (circ_buf_in_use(&conn->read_buf) < 1 + sizeof(cmd_packet_header_t) + pack_hdr->payload_len) {
+        printf("_process_cmd_packet(): Incomplete payload data. Want [%d] Got[%d]\n",
+               pack_hdr->payload_len, circ_buf_in_use(&conn->read_buf));
+
+        // Don't free any memory since we will get called again when we have more data.
+        return EAGAIN;
+    }
+
+    // We have enough data to process the entire packet
+    // Free command byte and packet header from read buffer.
+    circ_buf_free(&conn->read_buf, 1 + sizeof(cmd_packet_header_t), 0);
+
+    // Is the packet a duplicate?
+    if (sub_packet_is_duplicate(&ctx->publishers[conn->connection_index], pack_hdr->pid)) {
         printf("_process_cmd_packet(%lu): Duplicate\n",
-               pack_hdr.pid);
+               pack_hdr->pid);
 
+        // Free payload
+        circ_buf_free(&conn->read_buf, pack_hdr->payload_len, 0);
         return 0; // Dups are ok.
     }
 
+
+    // Allocate memory for payload
     if (ctx->payload_alloc)
-        payload = (*ctx->payload_alloc)(pack_hdr.payload_len, ctx->user_data);
+        payload = (*ctx->payload_alloc)(pack_hdr->payload_len, ctx->user_data);
     else
-        payload = malloc(pack_hdr.payload_len);
+        payload = malloc(pack_hdr->payload_len);
 
     if (!payload) {
-        perror("_process_cmd_packet::memory alloc:");
-
+        perror("_process_cmd_packet()::memory alloc:");
         exit(255);
     }
 
-    circ_buf_read(&conn->read_buf, payload, pack_hdr.payload_len, 0);
-    circ_buf_free(&conn->read_buf, pack_hdr.payload_len, 0);
+    // Read in payload and free it from conn->read_buf
+    circ_buf_read(&conn->read_buf, payload, pack_hdr->payload_len, 0);
+    circ_buf_free(&conn->read_buf, pack_hdr->payload_len, 0);
 
+    printf("_process_cmd_packet(): pid [%lu] payload[%s] len[%d]\n",
+           pack_hdr->pid, payload,  pack_hdr->payload_len);
 
     rmc_sub_packet_received(ctx, conn->connection_index,
-                            pack_hdr.pid,
-                            payload,pack_hdr.payload_len,
+                            pack_hdr->pid,
+                            payload,pack_hdr->payload_len,
                             rmc_usec_monotonic_timestamp(),
                             user_data_u32(conn->connection_index));
 
@@ -344,29 +374,37 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
     if (!op_res)
         op_res = &dummy_res;
 
+    // Is this a multicast pacekt?
     if (s_ind == RMC_MULTICAST_INDEX) 
         return _process_multicast_read(ctx, op_res);
 
+
+    // This is incoming data on tcp. 
+
+    // Find connection.
     conn = rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
 
+    // No conn?
     if (!conn || conn->mode != RMC_CONNECTION_MODE_CONNECTED) {
         *op_res = RMC_ERROR;
-
         return ENOTCONN;
     }
 
+    // Read data from publisher.
     res = rmc_conn_tcp_read(&ctx->conn_vec, s_ind, op_res,
                              dispatch_table, user_data_ptr(ctx));
 
+    // Are we disconnected?
     if (res == EPIPE) {
         *op_res = RMC_READ_DISCONNECT;
         rmc_sub_close_connection(ctx, s_ind);
-        return 0; // This is not an error, just regular maintenance.
+        return 0; // This is not an error, just regular disconnect.
     }
 
-
+    // Process packets (which may be none in case of error)
     sub_process_received_packets(&ctx->publishers[s_ind], &ctx->dispatch_ready);
 
+    // Did rmc_conn_tcp_read error out?
     if (res == EPROTO) {
         *op_res = RMC_ERROR;
         rmc_sub_close_connection(ctx, s_ind);
