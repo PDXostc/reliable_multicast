@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <memory.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #define RMC_MIN(x,y) (((x)<(y))?(x):(y))
 
@@ -136,7 +137,7 @@ void circ_buf_trim(circ_buf_t* circ_buf, uint32_t target_len)
     // Data:       -  -  -  A  -
     // Start/stop           S  s         
     //
-    circ_buf->stop_ind = circ_buf->start_ind + target_len;
+    circ_buf->stop_ind = (circ_buf->start_ind + target_len) % circ_buf->size;
     return;
 }
 
