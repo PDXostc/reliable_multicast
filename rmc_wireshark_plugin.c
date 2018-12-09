@@ -78,7 +78,6 @@ static gint dissect_rmc_packet(proto_tree* tree, tvbuff_t *tvb, gint offset)
     
     // Do we have header data?
     if (tvb_captured_length_remaining(tvb, 0) < 10) {
-        printf("Partial packet. Wanted [%d]. Got [%d]\n", 10, tvb_captured_length_remaining(tvb, offset));
         return 0;
     }
 
@@ -113,10 +112,8 @@ static int dissect_rmc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
     rmc_tree = proto_item_add_subtree(ti, ett_rmc_control);
 
     while(1) {
-        if (tvb_captured_length_remaining(tvb, offset) < 1) {
-            printf("Partial command header. Wanted [%d]. Got [%d]\n", 3, tvb_captured_length_remaining(tvb, offset));
+        if (tvb_captured_length_remaining(tvb, offset) < 1) 
             return tvb_captured_length(tvb);
-        }
 
         proto_tree_add_item(rmc_tree, hf_rmc_control_command, tvb, offset, 1, ENC_NA);
         command = tvb_get_guint8(tvb, 0);
