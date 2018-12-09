@@ -143,7 +143,7 @@ static int process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, sub
         
         // Check if we are complete
         if (current == max_expected) {
-            printf("rmc_proto_test_sub(): ContextID [%u] Complete at[%lu]\n",
+            printf("rmc_proto_test_sub(): ContextID [%u] **COMPLETE** at[%lu]\n",
                    node_id, current);
             
             expect[node_id].status = RMC_TEST_SUB_COMPLETED;
@@ -302,7 +302,6 @@ void test_rmc_proto_sub(char* mcast_group_addr,
     printf("rmc_proto_test_sub: context: ctx[%.9X] mcast_addr[%s] mcast_port[%d] \n",
            rmc_sub_context_id(ctx), mcast_group_addr, mcast_port);
 
-
     while(1) {
         sub_packet_t* pack = 0;
         packet_id_t first_pid = 0;
@@ -310,7 +309,7 @@ void test_rmc_proto_sub(char* mcast_group_addr,
         usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
         
         rmc_sub_timeout_get_next(ctx, &timeout_ts);
-        printf("timeout[%ld]\n", (timeout_ts == -1)?-1:timeout_ts  - current_ts);
+        printf("timeout[%ld]\n", (timeout_ts == -1)?-1:(timeout_ts  - current_ts));
         if (process_events(ctx, epollfd, timeout_ts) == ETIME) {
             puts("Processing timeout");
             rmc_sub_timeout_process(ctx);
@@ -337,6 +336,9 @@ void test_rmc_proto_sub(char* mcast_group_addr,
     puts("Shutting down");
 
     while(1) {
+        sub_packet_t* pack = 0;
+        packet_id_t first_pid = 0;
+        packet_id_t last_pid = 0;
         rmc_sub_timeout_get_next(ctx, &timeout_ts);
         printf("timeout_ts[%ld]\n", timeout_ts - rmc_usec_monotonic_timestamp());
 
@@ -348,6 +350,18 @@ void test_rmc_proto_sub(char* mcast_group_addr,
             puts("Timed out");
             rmc_sub_timeout_process(ctx);
         }
+
+        while((pack = rmc_sub_get_next_dispatch_ready(ctx))) {
+            if (!first_pid)
+                first_pid = pack->pid;
+
+            last_pid = pack->pid;
+            if (!process_incoming_data(ctx, pack, expect, node_id_map_size)) {
+                do_exit = 1;
+                break;
+            }
+        }
+        printf("Pid[%lu:%lu]\n", first_pid, last_pid);
     }
     rmc_sub_deactivate_context(ctx);
     
