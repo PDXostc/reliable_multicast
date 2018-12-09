@@ -88,7 +88,7 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
             res = rmc_pub_read(ctx, c_ind, &op_res);
             // Did we read a loopback message we sent ourselves?
 //            printf("process_events(%s):%s\n", _op_res_string(op_res), strerror(res));
-            if (res == ELOOP)
+            if (res == EAGAIN)
                 continue;       
 
             _test("rmc_proto_test[%d.%d] process_events():rmc_read(): %s\n", major, 1, res);
@@ -310,8 +310,6 @@ void test_rmc_proto_pub(char* mcast_group_addr,
 
     // Disable announce.
     rmc_pub_set_announce_interval(ctx, 0);
-
-    
     
     busy = rmc_pub_context_get_pending(ctx, &queued_packets, &send_buf_len, &ack_count);
     printf("busy init: queued_packets[%u] send_buf_len[%u] ack_count[%u] -> %d\n",
