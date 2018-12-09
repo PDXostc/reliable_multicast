@@ -171,7 +171,13 @@ static int process_events(rmc_sub_context_t* ctx,
     struct epoll_event events[RMC_MAX_CONNECTIONS];
     char buf[16];
     int nfds = 0;
-
+    
+    if (timeout_ts != -1) {
+        timeout_ts -= rmc_usec_monotonic_timestamp();
+        if (timeout_ts < 0)
+            timeout_ts = 0;
+    }
+            
     nfds = epoll_wait(epollfd, events, RMC_MAX_CONNECTIONS, (timeout_ts == -1)?-1:(timeout_ts / 1000) + 1);
     if (nfds == -1) {
         perror("epoll_wait");
@@ -336,6 +342,7 @@ void test_rmc_proto_sub(char* mcast_group_addr,
 
         if (timeout_ts == -1) 
             break;
+
 
         if (process_events(ctx, epollfd, timeout_ts) == ETIME)  {
             puts("Timed out");
