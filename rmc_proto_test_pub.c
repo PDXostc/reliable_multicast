@@ -318,7 +318,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
         usec_timestamp_t tout = 0;
 
         rmc_pub_timeout_get_next(ctx, &tout);
-        printf("tout[%ld]\n", tout);
+        printf("tout[%ld]\n", tout - rmc_usec_monotonic_timestamp());
         if (tout == -1)
             break;
 
