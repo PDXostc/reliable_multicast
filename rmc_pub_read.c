@@ -23,13 +23,13 @@ static int _process_cmd_ack_interval(rmc_connection_t* conn, user_data_t user_da
     rmc_pub_context_t* ctx = (rmc_pub_context_t*) user_data.ptr;
     packet_id_t pid = 0;
     // Do we have enough data?
-    if (circ_buf_in_use(&conn->read_buf) < sizeof(ack))
+    if (circ_buf_in_use(&conn->read_buf) < sizeof(ack) + 1)
         return EAGAIN;
 
 
     // Read and free.
-    circ_buf_read(&conn->read_buf, (uint8_t*) &ack, sizeof(ack), 0);
-    circ_buf_free(&conn->read_buf, sizeof(ack), 0);
+    circ_buf_read_offset(&conn->read_buf, 1, (uint8_t*) &ack, sizeof(ack), 0);
+    circ_buf_free(&conn->read_buf, sizeof(ack) + 1, 0);
     printf("_process_cmd_ack_interval(): interval[%lu:%lu]\n", ack.first_pid, ack.last_pid);
 
     // Mark all packets in the interval as acknwoledged, and call the
