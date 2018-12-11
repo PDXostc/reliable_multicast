@@ -312,24 +312,42 @@ void test_rmc_proto_pub(char* mcast_group_addr,
     rmc_pub_set_announce_interval(ctx, 0);
     
     busy = rmc_pub_context_get_pending(ctx, &queued_packets, &send_buf_len, &ack_count);
-    printf("busy init: queued_packets[%u] send_buf_len[%u] ack_count[%u] -> %d\n",
-           queued_packets, send_buf_len, ack_count, busy);
+    printf("busy init: queued_packets[%u] send_buf_len[%u] ack_count[%u] -> %s\n",
+           queued_packets, send_buf_len, ack_count, (busy==EBUSY)?"busy":"not busy");
     while(busy == EBUSY) {
         usec_timestamp_t tout = 0;
+        usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
+        
 
         rmc_pub_timeout_get_next(ctx, &tout);
-        printf("tout[%ld]\n", tout - rmc_usec_monotonic_timestamp());
-        if (tout == -1)
-            break;
+        if (tout != -1)
+            printf("tout[%ld]\n", tout - current_ts);
+        else
+            printf("tout[infinite]");
 
-        if ((res = process_events(ctx, epollfd, tout, 2)) == ETIME)  {
+        printf("queued[%d] inflight[%d]\n",
+               pub_packet_list_size(&ctx->pub_ctx.queued),
+               pub_packet_list_size(&ctx->pub_ctx.inflight));
+
+               
+
+        // Even if we have infinite timeout, we will process events
+        // since we may have pending data that we need to write when
+        // we get EPOLLOUT from epoll()
+        //
+        if ((res = process_events(ctx, epollfd, tout, 2)) == ETIME || tout < current_ts)  {
             puts("Processing timeout");
             rmc_pub_timeout_process(ctx);
         }
         busy = rmc_pub_context_get_pending(ctx, &queued_packets, &send_buf_len, &ack_count);
-        printf("busy: queued_packets[%u] send_buf_len[%u] ack_count[%u] -> %d\n",
-               queued_packets, send_buf_len, ack_count, busy);
+        printf("busy: queued_packets[%u] send_buf_len[%u] ack_count[%u] -> %s\n",
+               queued_packets, send_buf_len, ack_count, (busy==EBUSY)?"busy":"not busy");
+
     }
+
+        busy = rmc_pub_context_get_pending(ctx, &queued_packets, &send_buf_len, &ack_count);
+        printf("exit busy: queued_packets[%u] send_buf_len[%u] ack_count[%u] -> %s\n",
+               queued_packets, send_buf_len, ack_count, (busy==EBUSY)?"busy":"not busy");
 
     rmc_pub_deactivate_context(ctx);
     puts("Done");
@@ -340,3 +358,4 @@ void test_rmc_proto_pub(char* mcast_group_addr,
     puts("TO TEST: Publishers that repeatedly connects and disconnects");
     puts("TO TEST: Subscribers that repeatedly connects and disconnects");
 }
+
