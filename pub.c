@@ -272,7 +272,7 @@ void pub_packet_ack(pub_subscriber_t* sub,
     // via TCP that cannot ack the same packet twice.
     if (!node) {
         printf("pub_packet_ack(%lu): No matching packet found in subscriber inflight packets.\n", pid);
-        exit(255); // TOOD: Handle at calling level.
+        exit(255); // FIXME: Handle at calling level.
     }
 
     // Decrease ref counter
