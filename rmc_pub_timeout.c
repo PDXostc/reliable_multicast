@@ -61,7 +61,15 @@ static int _process_sent_packet_timeout(rmc_pub_context_t* ctx,
         return EINVAL;
         
     res = _rmc_pub_resend_packet(ctx, conn, pack);
-    rmc_pub_packet_ack(ctx, conn, pack->pid) ;
+
+    // Internal ack of the packet since we now can do nothing more to
+    // get it over to the subscriber.
+    // We only ack the packet if the resend attempt was successful in getting
+    // the packet data into the circular buffer that is consumed by 
+    // rmc_conn_process_tcp_write()
+    if (!res)
+        rmc_pub_packet_ack(ctx, conn, pack->pid) ;
+
     return res;
 }
 
@@ -84,8 +92,11 @@ static int _process_subscriber_timeout(rmc_pub_context_t* ctx,
     while((pnode = pub_packet_list_head(&packets))) {
         // Outbound circular buffer may be full.
         printf("Timed out packet: %lu\n", pnode->data->pid);
-        if ((res = _process_sent_packet_timeout(ctx, sub, pnode->data)) != 0)
+        if ((res = _process_sent_packet_timeout(ctx, sub, pnode->data)) != 0)  {
+            pub_packet_list_empty(&packets);
             return res;
+        }
+
 
         // We were successful in queuing the packet transmission.
         pub_packet_list_pop_head(&packets, &pack);
@@ -134,9 +145,12 @@ int rmc_pub_timeout_process(rmc_pub_context_t* ctx)
         return 0;
     }
 
+    // Grab a list of subscribers that have timed out packets we need to subscribe
     pub_sub_list_init(&subs, 0, 0, 0);
     pub_get_timed_out_subscribers(&ctx->pub_ctx, current_ts, ctx->resend_timeout, &subs);
 
+    // Traverse the list of subscribers and process their timed out packets
+    // by sending them via the TCP control channel.
     while(pub_sub_list_pop_head(&subs, &sub)) {
         res = _process_subscriber_timeout(ctx, sub, current_ts);
 
