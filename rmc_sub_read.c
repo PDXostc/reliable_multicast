@@ -103,8 +103,8 @@ static int _decode_subscribed_multicast(rmc_sub_context_t* ctx,
         }
 
 
-        printf("_decode_subscribed_multicast(): Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s]\n",
-               len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
+//        printf("_decode_subscribed_multicast(): Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s]\n",
+//               len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
 
         // Use the provided memory allocator to reserve memory for
         // incoming payload.
@@ -196,10 +196,10 @@ static int _process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
         mcast_hdr->listen_ip = ntohl(src_addr.sin_addr.s_addr);
 
     strcpy(listen_addr_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(mcast_hdr->listen_ip) }));
-    printf("mcast_rx(): len[%.5d] from[%s:%d] listen[%s:%d]",
-           mcast_hdr->payload_len,
-           src_addr_str, ntohs(src_addr.sin_port),
-           listen_addr_str, mcast_hdr->listen_port);
+//    printf("mcast_rx(): len[%.5d] from[%s:%d] listen[%s:%d]",
+//           mcast_hdr->payload_len,
+//           src_addr_str, ntohs(src_addr.sin_port),
+//           listen_addr_str, mcast_hdr->listen_port);
            
     data += sizeof(multicast_header_t);
     
@@ -215,7 +215,6 @@ static int _process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
         *read_res = RMC_READ_MULTICAST_LOOPBACK;
         return 0; // Loopback message
     }
-    putchar('\n');
 
 
     // Find the socket we use to ack received packets back to the publisher.
@@ -326,8 +325,8 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
     circ_buf_read(&conn->read_buf, payload, pack_hdr->payload_len, 0);
     circ_buf_free(&conn->read_buf, pack_hdr->payload_len, 0);
 
-    printf("_process_cmd_packet(): pid [%lu] payload[%s] len[%d]\n",
-           pack_hdr->pid, payload,  pack_hdr->payload_len);
+//    printf("_process_cmd_packet(): pid [%lu] payload[%s] len[%d]\n",
+//           pack_hdr->pid, payload,  pack_hdr->payload_len);
 
     rmc_sub_packet_received(ctx, conn->connection_index,
                             pack_hdr->pid,
