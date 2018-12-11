@@ -28,6 +28,8 @@ typedef struct {
 
     uint64_t max_expected;
     uint64_t max_received;
+    uint64_t expect_sum;
+    uint64_t calc_sum;
 } sub_expect_t;
 
 
@@ -74,7 +76,7 @@ static int process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, sub
     rmc_context_id_t node_id = 0;
     uint64_t max_expected = 0;
     uint64_t current = 0;
-    
+
     _test("rmc_proto_test_sub[%d.%d] process_incoming_data(): %s", 3, 1, pack?0:ENODATA);
 
     if (sscanf(pack->payload, "%u:%lu:%lu", &node_id, &current, &max_expected) != 3) {
@@ -110,12 +112,19 @@ static int process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, sub
     // Check if this is the first packet from an expected source.
     // If so, set things up.
     if (expect[node_id].status == RMC_TEST_SUB_NOT_STARTED) {
+        int ind = 0;
         expect[node_id].status = RMC_TEST_SUB_IN_PROGRESS;
         expect[node_id].max_expected = max_expected;
         expect[node_id].max_received = 0; 
-        
-        printf("rmc_proto_test_sub(): Activate: node_id[%u] current[%lu] max_expected[%lu].\n",
-               node_id, current, max_expected);
+        expect[node_id].expect_sum = 0; 
+        expect[node_id].calc_sum = 0; 
+
+        // Calculate sum
+        for(ind = 1; ind <= max_expected; ++ind)
+            expect[node_id].expect_sum += ind;
+
+        printf("rmc_proto_test_sub(): Activate: node_id[%u] current[%lu] max_expected[%lu]. expected fibbonnaci[%lu].\n",
+               node_id, current, max_expected, expect[node_id].calc_sum);
 
         // Fall through to the next if statement
     }
@@ -124,13 +133,13 @@ static int process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, sub
     // If so, check that packets are correctly numbrered.
 
     if (expect[node_id].status == RMC_TEST_SUB_IN_PROGRESS) {
+
         // Check that max_expected hasn't changed.
         if (max_expected != expect[node_id].max_expected) {
             printf("rmc_proto_test_sub(): ContextID [%u] max_expected changed from [%lu] to [%lu]\n",
                    node_id, expect[node_id].max_expected, max_expected);
             exit(255);
         }
-
         
         // Check that packet is consecutive.
         if (current != expect[node_id].max_received + 1) {
@@ -140,18 +149,29 @@ static int process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, sub
         }
 
         expect[node_id].max_received = current;
+        expect[node_id].calc_sum += current;
         
         // Check if we are complete
         if (current == max_expected) {
             printf("rmc_proto_test_sub(): ContextID [%u] **COMPLETE** at[%lu]\n",
                    node_id, current);
             
+
+            // Did we see data corruption?
+            if (expect[node_id].expect_sum !=  expect[node_id].calc_sum) {
+                printf("DATA CORRUPTION! Expected total sum: %lu. Got %lu\n",
+                       expect[node_id].expect_sum,
+                       expect[node_id].calc_sum);
+                exit(0);
+            }
+
+
             expect[node_id].status = RMC_TEST_SUB_COMPLETED;
             // Check if this is the last one out.
             if (check_exit_condition(expect, expect_sz))
                 return 0;
         }
-        
+
         return 1;
     }
 
@@ -310,7 +330,7 @@ void test_rmc_proto_sub(char* mcast_group_addr,
         
         rmc_sub_timeout_get_next(ctx, &timeout_ts);
         printf("timeout[%ld]\n", (timeout_ts == -1)?-1:(timeout_ts  - current_ts));
-        if (process_events(ctx, epollfd, timeout_ts) == ETIME) {
+        if (process_events(ctx, epollfd, timeout_ts) == ETIME || timeout_ts - current_ts < 0) {
             puts("Processing timeout");
             rmc_sub_timeout_process(ctx);
         }
@@ -327,7 +347,7 @@ void test_rmc_proto_sub(char* mcast_group_addr,
                 break;
             }
         }
-        printf("Pid[%lu:%lu]\n", first_pid, last_pid);
+        printf("max_pid_ready[%lu]  max_pid_received[%lu]\n", ctx->publishers[0].max_pid_ready,  ctx->publishers[0].max_pid_ready);
 
         if (do_exit)
             break;
