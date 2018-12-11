@@ -268,12 +268,11 @@ void pub_packet_ack(pub_subscriber_t* sub,
     }
 
     // No inflight packet found for the ack.
-    // This should never happen since we get the acks
-    // via TCP that cannot ack the same packet twice.
-    if (!node) {
-        printf("pub_packet_ack(%lu): No matching packet found in subscriber inflight packets.\n", pid);
-        exit(255); // FIXME: Handle at calling level.
-    }
+    // This can happen if we have already re-sent a timeoud out packet via TCP an
+    // deleted it from the inflight queue.
+    if (!node) 
+        return;
+
 
     // Decrease ref counter
     pack = node->data;
