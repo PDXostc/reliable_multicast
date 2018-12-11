@@ -245,7 +245,7 @@ int rmc_pub_write(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
 
     conn = rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
 
-    if (conn->mode != RMC_CONNECTION_MODE_CONNECTED) {
+    if (!conn || conn->mode != RMC_CONNECTION_MODE_CONNECTED) {
         if (op_res)
             *op_res = RMC_ERROR;
 
