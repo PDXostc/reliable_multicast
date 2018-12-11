@@ -24,7 +24,8 @@
 
 // Probably needs to be a lot bigger in high
 // throughput situations.
-#define RMC_MAX_TCP_PENDING_WRITE 0xFFFF 
+// #define RMC_MAX_TCP_PENDING_WRITE 0xFFFF 
+#define RMC_MAX_TCP_PENDING_WRITE 64
 #define RMC_LISTEN_SOCKET_BACKLOG 5
 #define RMC_DEFAULT_PACKET_TIMEOUT 100000
 #define RMC_DEFAULT_ACK_TIMEOUT 50000 // 50 msec.
