@@ -145,7 +145,6 @@ static int dissect_rmc_packet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tre
 {
     u_int64_t pid = 0;
     u_int16_t len = 0;
-    int rem = tvb_captured_length_remaining(tvb, 0);
 
     dissect_rmc_packet_offset(tvb, tree, 1, 0, &pid, &len);
     ++*((int*) data);
@@ -408,7 +407,10 @@ void plugin_register_rmc(void)
     proto_register_field_array(proto_rmc_control, hf_control, array_length(hf_control));
     handle_rmc_tcp = create_dissector_handle(dissect_rmc_tcp, proto_rmc_control);
 
-    proto_rmc_ack_intv = proto_register_protocol("Interval Acknowledgement", "Interval Ack", "rmc.ack_interval");
+    proto_rmc_control = proto_register_protocol("Packet Resend", "Resend UDP packets via tcp", "rmc.control.resend");
+    proto_register_field_array(proto_rmc_control, hf_control, array_length(hf_control));
+
+    proto_rmc_ack_intv = proto_register_protocol("Interval Acknowledgement", "Interval Ack", "rmc.control.ack_interval");
     proto_register_field_array(proto_rmc_ack_intv, hf_ack_interval, array_length(hf_ack_interval));
 
     dissector_add_uint("tcp.port", RMC_TCP_PORT, handle_rmc_tcp);
