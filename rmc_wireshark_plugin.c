@@ -28,6 +28,7 @@ static dissector_handle_t handle_rmc_tcp;
 
 static int proto_rmc = -1;
 static int proto_rmc_packet = -1;
+static int proto_rmc_resend = -1;
 static int proto_rmc_ack_intv = -1;
 static int proto_rmc_control = -1;
 
@@ -48,6 +49,7 @@ static int ett_rmc = -1;
 static int ett_rmc_control = -1;
 static int ett_rmc_packet = -1;
 static int ett_rmc_ack_intv = -1;
+static int ett_rmc_resend = -1;
 
 static void hex_dump(tvbuff_t* tvb, int start, int stop)
 {
@@ -146,11 +148,12 @@ static int dissect_rmc_packet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tre
     u_int64_t pid = 0;
     u_int16_t len = 0;
 
+    proto_tree_add_item(tree, hf_rmc_control_command, tvb, 0, 1, ENC_NA);
     dissect_rmc_packet_offset(tvb, tree, 1, 0, &pid, &len);
     ++*((int*) data);
     return tvb_captured_length(tvb);
-
 }
+
 
 
 static int dissect_rmc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
@@ -169,7 +172,6 @@ static int dissect_rmc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
     int resend_count = 0;
 
     /* Clear out stuff in the info column */
-    col_clear(pinfo->cinfo,COL_INFO);
     ti = proto_tree_add_item(tree, proto_rmc_control, tvb, 0, -1, ENC_NA);
     rmc_tree = proto_item_add_subtree(ti, ett_rmc_control);
 
@@ -179,11 +181,11 @@ static int dissect_rmc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
         if (tvb_captured_length_remaining(tvb, offset) < 1) 
             return offset;
 
-        proto_tree_add_item(rmc_tree, hf_rmc_control_command, tvb, offset, 1, ENC_NA);
         command = tvb_get_guint8(tvb, offset);
-
         switch(command) {
         case RMC_CMD_ACK_INTERVAL:
+            proto_tree_add_item(rmc_tree, hf_rmc_control_command, tvb, offset, 1, ENC_NA);
+
             res = dissect_rmc_ack_interval(rmc_tree, tvb, offset + 1, &first_pid, &last_pid);
             break;
 
@@ -196,6 +198,7 @@ static int dissect_rmc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
             return 0;
         }
 
+
         // Did we get a partial packet?
         if (res == 0) {
             break;
@@ -204,9 +207,10 @@ static int dissect_rmc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
         offset += 1 + res;
     }
 
+
     if (resend_count) 
         col_add_fstr(pinfo->cinfo, COL_INFO, "Pub->Sub resend %d packets", resend_count);
-     else 
+    else 
         col_add_fstr(pinfo->cinfo,
                      COL_INFO,
                      "Sub->Pub ack[%lu-%lu]",
@@ -407,8 +411,7 @@ void plugin_register_rmc(void)
     proto_register_field_array(proto_rmc_control, hf_control, array_length(hf_control));
     handle_rmc_tcp = create_dissector_handle(dissect_rmc_tcp, proto_rmc_control);
 
-    proto_rmc_control = proto_register_protocol("Packet Resend", "Resend UDP packets via tcp", "rmc.control.resend");
-    proto_register_field_array(proto_rmc_control, hf_control, array_length(hf_control));
+//    proto_rmc_resend = proto_register_protocol("Packet resend", "Resend UDP packets via tcp", "rmc.control.resend");
 
     proto_rmc_ack_intv = proto_register_protocol("Interval Acknowledgement", "Interval Ack", "rmc.control.ack_interval");
     proto_register_field_array(proto_rmc_ack_intv, hf_ack_interval, array_length(hf_ack_interval));
