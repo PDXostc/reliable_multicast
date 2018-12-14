@@ -148,6 +148,7 @@ static int dissect_rmc_packet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tre
     int rem = tvb_captured_length_remaining(tvb, 0);
 
     dissect_rmc_packet_offset(tvb, tree, 1, 0, &pid, &len);
+    ++*((int*) data);
     return tvb_captured_length(tvb);
 
 }
@@ -166,6 +167,7 @@ static int dissect_rmc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
     gint res = 0;
     int rem = 0;
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "RMC Control Channel");
+    int resend_count = 0;
 
     /* Clear out stuff in the info column */
     col_clear(pinfo->cinfo,COL_INFO);
@@ -184,17 +186,10 @@ static int dissect_rmc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
         switch(command) {
         case RMC_CMD_ACK_INTERVAL:
             res = dissect_rmc_ack_interval(rmc_tree, tvb, offset + 1, &first_pid, &last_pid);
-            col_clear(pinfo->cinfo, COL_INFO);
-            col_add_fstr(pinfo->cinfo,
-                         COL_INFO,
-                         "Sub->Pub ack[%lu-%lu]",
-                         first_pid, last_pid);
             break;
 
         case RMC_CMD_PACKET:
-            tcp_dissect_pdus(tvb, pinfo, rmc_tree, 1, 10, get_rmc_packet_len, dissect_rmc_packet, 0);
-            col_clear(pinfo->cinfo, COL_INFO);
-            col_add_fstr(pinfo->cinfo, COL_INFO, "Pub->Sub resend");
+            tcp_dissect_pdus(tvb, pinfo, rmc_tree, 1, 10, get_rmc_packet_len, dissect_rmc_packet, &resend_count);
             break;
 
         default:
@@ -209,6 +204,14 @@ static int dissect_rmc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
 
         offset += 1 + res;
     }
+
+    if (resend_count) 
+        col_add_fstr(pinfo->cinfo, COL_INFO, "Pub->Sub resend %d packets", resend_count);
+     else 
+        col_add_fstr(pinfo->cinfo,
+                     COL_INFO,
+                     "Sub->Pub ack[%lu-%lu]",
+                     first_pid, last_pid);
 
     return tvb_captured_length(tvb);
 //    return offset;
