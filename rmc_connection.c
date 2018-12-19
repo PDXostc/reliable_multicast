@@ -310,6 +310,8 @@ int rmc_conn_process_accept(int listen_descriptor,
     struct sockaddr_in src_addr;
     socklen_t addr_len = sizeof(src_addr);
     rmc_index_t c_ind = -1;
+    int tr = 1;
+    int sock_err = 0;
 
     // Find a free slot.
     c_ind = _get_free_slot(conn_vec);
@@ -326,6 +328,14 @@ int rmc_conn_process_accept(int listen_descriptor,
  
     printf("rmc_process_accept(): %s:%d -> index %d\n",
            inet_ntoa(src_addr.sin_addr), ntohs(src_addr.sin_port), c_ind);
+
+    // Disable Nagle algorithm since latency is of essence when we send
+    // out acks.
+    if (setsockopt(conn_vec->connections[c_ind].descriptor, IPPROTO_TCP, TCP_NODELAY, (void *)&tr, sizeof(tr))) {
+        sock_err = errno;
+        rmc_conn_close_connection(conn_vec, conn_vec->connections[c_ind].descriptor);
+        return sock_err;
+    }
 
     conn_vec->connections[c_ind].mode = RMC_CONNECTION_MODE_CONNECTED;
     conn_vec->connections[c_ind].remote_address = src_addr.sin_addr.s_addr;
