@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <assert.h>
+#include <signal.h>
 
 
 // =============
@@ -53,6 +54,7 @@ int rmc_pub_init_context(rmc_pub_context_t* ctx,
     if (!ctx || !mcast_group_addr)
         return EINVAL;
 
+    signal(SIGPIPE, SIG_IGN);
     // We can throw away seed result since we will only call rand here.
     ctx->context_id = context_id?context_id:rand_r(&seed);
     ctx->user_data = user_data;
