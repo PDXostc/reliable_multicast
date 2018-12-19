@@ -30,8 +30,26 @@ typedef struct {
     uint64_t max_received;
     uint64_t expect_sum;
     uint64_t calc_sum;
+    usec_timestamp_t start_ts; // First packet received
+    usec_timestamp_t stop_ts; // Last packet received
 } sub_expect_t;
 
+static usec_timestamp_t start_time = 0;
+
+
+
+char* ts(void)
+{
+    static char elapsed[64];
+    
+
+    if (!start_time)
+        return "\033[38;2;192;0;0m?\033[0m";
+
+    sprintf(elapsed, "\033[38;2;192;0;0m%lu\033[0m", (rmc_usec_monotonic_timestamp() - start_time)/1000);
+    return elapsed;
+}
+ 
 
 static uint8_t _test_print_pending(sub_packet_node_t* node, void* dt)
 {
@@ -71,7 +89,26 @@ static int check_exit_condition( sub_expect_t* expect, int expect_sz)
     return 1;
 }
 
-static int process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, sub_expect_t* expect, int expect_sz)
+
+static uint8_t announce_cb(struct rmc_sub_context* ctx,
+                           char* listen_ip, // "1.2.3.4"
+                           in_port_t listen_port,
+                           void* payload,
+                           payload_len_t payload_len)
+{
+    puts("Announce detected. Starting tests");
+
+    start_time = rmc_usec_monotonic_timestamp();
+    return 1;
+}
+
+
+
+
+static int process_incoming_data(rmc_sub_context_t* ctx,
+                                 sub_packet_t* pack,
+                                 sub_expect_t* expect,
+                                 int expect_sz)
 {
     rmc_context_id_t node_id = 0;
     uint64_t max_expected = 0;
@@ -79,6 +116,8 @@ static int process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, sub
 
     _test("rmc_proto_test_sub[%d.%d] process_incoming_data(): %s", 3, 1, pack?0:ENODATA);
 
+    // Sscanf is slow as hell, so dissect this one manually.
+    
     if (sscanf(pack->payload, "%u:%lu:%lu", &node_id, &current, &max_expected) != 3) {
         printf("rmc_proto_test_sub(): Payload [%s] could not be scanned by [%%u:%%lu:%%lu]\n",
                (char*) pack->payload);
@@ -118,12 +157,14 @@ static int process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, sub
         expect[node_id].max_received = 0; 
         expect[node_id].expect_sum = 0; 
         expect[node_id].calc_sum = 0; 
+        expect[node_id].start_ts = rmc_usec_monotonic_timestamp();
+        expect[node_id].stop_ts = 0;
 
         // Calculate sum
         for(ind = 1; ind <= max_expected; ++ind)
             expect[node_id].expect_sum += ind;
 
-        printf("rmc_proto_test_sub(): Activate: node_id[%u] current[%lu] max_expected[%lu]. expected fibbonnaci[%lu].\n",
+        printf("rmc_proto_test_sub(): Activate: node_id[%u] current[%lu] max_expected[%lu]. expected sum[%lu].\n",
                node_id, current, max_expected, expect[node_id].calc_sum);
 
         // Fall through to the next if statement
@@ -153,10 +194,12 @@ static int process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, sub
         
         // Check if we are complete
         if (current == max_expected) {
+            double pack_sec = 0.0;
             printf("rmc_proto_test_sub(): ContextID [%u] **COMPLETE** at[%lu]\n",
                    node_id, current);
             
 
+            
             // Did we see data corruption?
             if (expect[node_id].expect_sum !=  expect[node_id].calc_sum) {
                 printf("DATA CORRUPTION! Expected total sum: %lu. Got %lu\n",
@@ -167,6 +210,16 @@ static int process_incoming_data(rmc_sub_context_t* ctx, sub_packet_t* pack, sub
 
 
             expect[node_id].status = RMC_TEST_SUB_COMPLETED;
+            expect[node_id].stop_ts = rmc_usec_monotonic_timestamp();
+
+            pack_sec = (double) expect[node_id].max_received /
+                ((double) (expect[node_id].stop_ts - expect[node_id].start_ts) / 1000000.0);
+
+            printf("rmc_proto_test_sub(): [%lu] packets in [%lu] msec -> %g packets / sec\n",
+                   expect[node_id].max_received,
+                   (expect[node_id].stop_ts - expect[node_id].start_ts) / 1000,
+                   pack_sec);
+
             // Check if this is the last one out.
             if (check_exit_condition(expect, expect_sz))
                 return 0;
@@ -191,6 +244,7 @@ static int process_events(rmc_sub_context_t* ctx,
     struct epoll_event events[RMC_MAX_CONNECTIONS];
     char buf[16];
     int nfds = 0;
+    usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
     
     if (timeout_ts != -1) {
         timeout_ts -= rmc_usec_monotonic_timestamp();
@@ -222,18 +276,14 @@ static int process_events(rmc_sub_context_t* ctx,
 //               ((events[nfds].events & EPOLLOUT)?" write":""),
 //               ((events[nfds].events & EPOLLHUP)?" disconnect":""));
 
-        // Figure out what to do.
-        if (events[nfds].events & EPOLLHUP) {
-            _test("rmc_proto_test[%d.%d] process_events():rmc_close_tcp(): %s\n",
-                  1, 1, rmc_conn_close_connection(&ctx->conn_vec, c_ind));
-            continue;
-        }
 
         if (events[nfds].events & EPOLLIN) {
             errno = 0;
             res = rmc_sub_read(ctx, c_ind, &op_res);
             // Did we read a loopback message we sent ourselves?
-//            printf("process_events(%s):%s\n", _op_res_string(op_res), strerror(res));
+            printf("%s: post rmc_sub_read(%s):%su\n",
+                   ts(),  _op_res_string(op_res),   strerror(res));
+
             if (res == EAGAIN)
                 continue;       
 
@@ -282,7 +332,6 @@ void test_rmc_proto_sub(char* mcast_group_addr,
     // Indexed by publisher node_id
     sub_expect_t expect[node_id_map_size];
 
-    signal(SIGHUP, SIG_IGN);
 
     epollfd = epoll_create1(0);
     for (ind = 0; ind < node_id_map_size; ++ind) {
@@ -318,6 +367,8 @@ void test_rmc_proto_sub(char* mcast_group_addr,
           1, 1,
           rmc_sub_activate_context(ctx));
 
+    rmc_sub_set_announce_callback(ctx, announce_cb);
+
     
     printf("rmc_proto_test_sub: context: ctx[%.9X] mcast_addr[%s] mcast_port[%d] \n",
            rmc_sub_context_id(ctx), mcast_group_addr, mcast_port);
@@ -328,12 +379,16 @@ void test_rmc_proto_sub(char* mcast_group_addr,
         packet_id_t last_pid = 0;
         usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
         
+        
         rmc_sub_timeout_get_next(ctx, &timeout_ts);
-        printf("timeout[%ld]\n", (timeout_ts == -1)?-1:(timeout_ts  - current_ts));
-        if (process_events(ctx, epollfd, timeout_ts) == ETIME || timeout_ts - current_ts < 0) {
-            puts("Processing timeout");
+        printf("%s: process_events(): timeout [%ld] msec\n", ts(), (timeout_ts == -1)?-1:(timeout_ts  - current_ts));
+        if (process_events(ctx, epollfd, timeout_ts) == ETIME ||
+            (timeout_ts != -1 && timeout_ts - rmc_usec_monotonic_timestamp() < 0)) {
+            printf("%s: process_events(): processing timeout\n", ts());
             rmc_sub_timeout_process(ctx);
         }
+        else 
+            printf("%s: process_events(): no timeout\n", ts());
 
         // Process as many packets as possible.
         
@@ -347,9 +402,10 @@ void test_rmc_proto_sub(char* mcast_group_addr,
                 break;
             }
         }
-        printf("max_pid_ready[%lu]  max_pid_received[%lu]\n", ctx->publishers[0].max_pid_ready,  ctx->publishers[0].max_pid_ready);
+        printf("%s: max_pid_ready[%lu]  max_pid_received[%lu]\n", ts(), ctx->publishers[0].max_pid_ready,  ctx->publishers[0].max_pid_ready);
 
         if (do_exit)
+
             break;
     }
 
@@ -359,15 +415,16 @@ void test_rmc_proto_sub(char* mcast_group_addr,
         sub_packet_t* pack = 0;
         packet_id_t first_pid = 0;
         packet_id_t last_pid = 0;
+
         rmc_sub_timeout_get_next(ctx, &timeout_ts);
-        printf("timeout_ts[%ld]\n", timeout_ts - rmc_usec_monotonic_timestamp());
+        printf("%s: timeout_ts[%ld]\n", ts(), timeout_ts - rmc_usec_monotonic_timestamp());
 
         if (timeout_ts == -1) 
             break;
 
 
-        if (process_events(ctx, epollfd, timeout_ts) == ETIME)  {
-            puts("Timed out");
+        if (process_events(ctx, epollfd, timeout_ts) == ETIME ||
+             timeout_ts - rmc_usec_monotonic_timestamp() < 0) {
             rmc_sub_timeout_process(ctx);
         }
 
@@ -386,4 +443,5 @@ void test_rmc_proto_sub(char* mcast_group_addr,
     rmc_sub_deactivate_context(ctx);
     
     puts("Done");
+    exit(0);
 }
