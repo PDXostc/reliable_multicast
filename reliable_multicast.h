@@ -19,13 +19,14 @@
 // Max UDP size is 0xFFE3 (65507). Subtract 0x20 (32) bytes for RMC
 // header data.
 #define RMC_MAX_PACKET 0xFFE3
-// #define RMC_MAX_PAYLOAD 0xFFC3
-#define RMC_MAX_PAYLOAD 64
+#define RMC_MAX_PAYLOAD 0xFFC3
+//#define RMC_MAX_PAYLOAD 64
 
 // Probably needs to be a lot bigger in high
 // throughput situations.
-// #define RMC_MAX_TCP_PENDING_WRITE 0xFFFF 
-#define RMC_MAX_TCP_PENDING_WRITE 64
+#define RMC_MAX_TCP_PENDING_WRITE 65400 // Seems to fit in one tcp segment.
+//#define RMC_MAX_TCP_PENDING_WRITE 0xFFFF 
+//#define RMC_MAX_TCP_PENDING_WRITE 64
 #define RMC_LISTEN_SOCKET_BACKLOG 5
 #define RMC_DEFAULT_PACKET_TIMEOUT 100000
 #define RMC_DEFAULT_ACK_TIMEOUT 50000 // 50 msec.
@@ -106,7 +107,7 @@ typedef struct rmc_connection {
     // are tied toegther through the circ_buf_init() call.
     // One byte extra needed by circ buf for housekeeping reasons.
     // FIXME: Use shared circular buffer across all rmc_connections for both read and write.
-    uint8_t read_buf_data[RMC_MAX_PAYLOAD + 1]; 
+    uint8_t read_buf_data[RMC_MAX_PAYLOAD + 1];
 
     // Circular buffer of pending data read.
     circ_buf_t write_buf;
@@ -264,6 +265,7 @@ typedef struct rmc_sub_context {
     // 'publishers' are used when we connected to a publisher in _process_multicast_read()
     // as we receive a packet from a previously unknown sender (publisher) that
     // we need to connect a TCP connection to in order to do ack and resend management.
+    //
     // Added to rmc_context_t::sub_ctx in rmc_init_context() through a
     // sub_init_publisher() call.
     // sub_publisher_t::user_data of the subscriber points to the corresponding
@@ -295,11 +297,13 @@ typedef struct rmc_sub_context {
 
     int mcast_recv_descriptor;
 
-    // usec between us receiving a packet and when we have to acknowledge it.
+    // usec between us receiving a packet and when we have to acknowledge it
+    // to the sending publisher via the tcp control channel
     uint32_t ack_timeout; 
     
-    // Randomly genrated context ID allowing us to recognize and drop
+    // Context ID  allowing us to recognize and drop
     // looped back multicast messages.
+    // Provided to rmc_sub_init_context() or generated to random number.
     rmc_context_id_t context_id; 
 
     // Callback invoked every time we receive an announce packet
@@ -380,7 +384,7 @@ extern int rmc_pub_init_context(rmc_pub_context_t* context,
                                 // Number of elements available in conn_vec.
                                 uint32_t conn_vec_size, 
 
-                               // Callback to previously allocated memory provided
+                                // Callback to previously allocated memory provided
                                 // by the caller of rmc_queue_packet().
                                 //
                                 // Invoked by rmc_read() when an ack has been collected
