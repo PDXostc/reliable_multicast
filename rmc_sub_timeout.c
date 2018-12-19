@@ -32,36 +32,50 @@ int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
     if (!ctx)
         return EINVAL;
 
-    // Go through all publishers with unackowledged packets
-    // and process those whose acks are due to be sent.
+    puts("rmc_sub_timeout_process(): called");
+
+    // Go through all publishers with unackowledged packets and
+    // process those whose acks are due to be sent.
+    //
+    // The pub_ack_list contains indexes into ctx->publishers
+    // and identifies those publishers that need to have their
+    // packets acknowledged next.
+    //
+    // The list is populated by rmc_sub_packet_received() and is sorted
+    // on the ascending chronological order in which publishers need to have their
+    // packets acknowledged. This means that the head element
+    // points out the next publisher that needs at least one of
+    // its packets acked once more than ctx->ack_timeout usecs have
+    // elapsed since we received it.
     //
     inode = rmc_index_list_head(&ctx->pub_ack_list);
-    puts("Going through pubs");
 
-    while(inode) {
+    //
+    // Retreive the publisher with the  
+   while(inode) {
         sub_publisher_t* pub = &ctx->publishers[inode->data];
         sub_pid_interval_t pid_intv;
 
-        printf("sub_oldest_unacknowledged_packet(pub) -> %ld\n", sub_oldest_unacknowledged_packet(pub));
 
         // If it is not yet time to send acks for this publisher, then
         // break out of loop and return.
         if (sub_oldest_unacknowledged_packet(pub) + ctx->ack_timeout > current_ts) {
-            
-            printf("sub_oldest_unacknowledged_packet(pub) -> Still %ld usecs left\n", sub_oldest_unacknowledged_packet(pub) + ctx->ack_timeout - current_ts);
+            printf("sub_oldest_unacknowledged_packet(pub) %ld msec until timeout. Returning.\n",
+                   sub_oldest_unacknowledged_packet(pub) + ctx->ack_timeout - current_ts);
             break;
         }
         
+        printf("sub_oldest_unacknowledged_packet(pub) past timeout by [%ld] msec. Processing\n",
+               current_ts - sub_oldest_unacknowledged_packet(pub)  + ctx->ack_timeout);
+
         // For each publisher that we have a timed out ack  for, we will ack
         // all pending packets in one go.
-        puts("Processing ack timeout");
         while(sub_pid_interval_list_pop_head(&pub->received_interval, &pid_intv)) {
             int res = 0;
-            
             res = rmc_sub_packet_interval_acknowledged(ctx, inode->data, &pid_intv);
             if (res) {
                 printf("Failed to send packet ack: %s\n", strerror(res));
-                exit(255);
+                return res;
             }
         }
         rmc_index_list_delete(inode);
@@ -74,7 +88,6 @@ int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
 
 int rmc_sub_timeout_get_next(rmc_sub_context_t* ctx, usec_timestamp_t* result)
 {
-    usec_timestamp_t oldest_received_ts = 0;
     usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
     sub_publisher_t* pub = 0;
     rmc_index_t ind = 0;
@@ -84,12 +97,13 @@ int rmc_sub_timeout_get_next(rmc_sub_context_t* ctx, usec_timestamp_t* result)
     
     // We may not have anything to ack at all.
     if (!rmc_index_list_size(&ctx->pub_ack_list)) {
+        printf("No publishers found with pending timeouts\n");
         *result = -1;
         return 0;
     }
 
     pub = &ctx->publishers[rmc_index_list_head(&ctx->pub_ack_list)->data];
-
+           
     *result = sub_oldest_unacknowledged_packet(pub) + ctx->ack_timeout;
     return 0;
 }
