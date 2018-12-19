@@ -295,9 +295,9 @@ static int process_events(rmc_sub_context_t* ctx,
         }
 
         if (events[nfds].events & EPOLLOUT) {
-            _test("rmc_proto_test[%d.%d] process_events():rmc_write(): %s\n",
-                  1, 10,
-                  rmc_sub_write(ctx, c_ind, &op_res));
+            if (rmc_sub_write(ctx, c_ind, &op_res) != 0) {
+                rmc_sub_close_connection(ctx, c_ind);
+            }
         }
     }
 

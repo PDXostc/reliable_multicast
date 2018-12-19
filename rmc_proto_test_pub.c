@@ -90,14 +90,12 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
             if (op_res == RMC_READ_ACCEPT)
                 continue;
 
+
         }
 
         if (events[nfds].events & EPOLLOUT) {
-            _test("rmc_proto_test[%d.%d] process_events():rmc_write(): %s\n",
-                  major, 10,
-                  rmc_pub_write(ctx, c_ind, &op_res));
-            
-//            printf("op_res: %s\n", _op_res_string(op_res));
+            if (rmc_pub_write(ctx, c_ind, &op_res) != 0) 
+                rmc_pub_close_connection(ctx, c_ind);
         }
     }
 
