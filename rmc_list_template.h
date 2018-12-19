@@ -307,8 +307,8 @@
                                                                         \
     NODETYPE* LISTTYPE##_find_node(LISTTYPE* list,                      \
                                    DATATYPE data,                       \
-                                   int (*compare_func)(DATATYPE new_elem, \
-                                                       DATATYPE existing_elem)) \
+                                   int (*compare_func)(DATATYPE needle, \
+                                                       DATATYPE haystack)) \
     {                                                                   \
         NODETYPE* node = 0;                                             \
                                                                         \
@@ -316,7 +316,12 @@
         node = LISTTYPE##_head(list);                                   \
                                                                         \
         while(node) {                                                   \
-            if ((*compare_func)(data, node->data) != 0)                            \
+            int res = (*compare_func)(data, node->data);                \
+                                                                        \
+            if (res == -1)                                              \
+                return 0;                                               \
+                                                                        \
+            if (res != 0)                                               \
                 return node;                                            \
                                                                         \
             node = node->next;                                          \
@@ -326,8 +331,8 @@
                                                                         \
     NODETYPE* LISTTYPE##_find_node_rev(LISTTYPE* list,                  \
                                    DATATYPE data,                       \
-                                   int (*compare_func)(DATATYPE new_elem, \
-                                                       DATATYPE existing_elem)) \
+                                   int (*compare_func)(DATATYPE needle, \
+                                                       DATATYPE haystack)) \
     {                                                                   \
         NODETYPE* node = 0;                                             \
                                                                         \
@@ -335,7 +340,12 @@
         node = LISTTYPE##_tail(list);                                   \
                                                                         \
         while(node) {                                                   \
-            if ((*compare_func)(data, node->data) != 0)                 \
+            int res = (*compare_func)(data, node->data);                \
+                                                                        \
+            if (res == -1)                                              \
+                return 0;                                               \
+                                                                        \
+            if (res != 0)                                               \
                 return node;                                            \
                                                                         \
             node = node->prev;                                          \
