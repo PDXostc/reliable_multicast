@@ -157,7 +157,7 @@ int _rmc_pub_resend_packet(rmc_pub_context_t* ctx,
     };
 
     // Do we have enough circular buffer meomory available?
-    if (circ_buf_available(&conn->write_buf) < 1 + sizeof(pack) + pack->payload_len)
+    if (circ_buf_available(&conn->write_buf) < 1 + sizeof(*pack) + pack->payload_len)
         return ENOMEM;
     
     // Allocate memory for command
