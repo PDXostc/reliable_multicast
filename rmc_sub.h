@@ -81,8 +81,17 @@ typedef sub_packet_node sub_packet_node_t;
 
 // Used by sub_get_ack_sub_pid_intervals
 typedef struct sub_pid_interval {
-    packet_id_t first_pid; // First packet ID in interval
-    packet_id_t last_pid; // LAst packet ID in interval
+
+    // First packet ID in interval
+    packet_id_t first_pid; 
+
+    // Last packet ID in interval
+    packet_id_t last_pid; 
+
+    // Timestamp when we received the first pid covered by the
+    // interval.
+    usec_timestamp_t receive_ts; 
+
 } sub_pid_interval_t;
 
 
@@ -104,18 +113,9 @@ typedef struct sub_publisher {
 
     // Received packet intervals.
     // Filled by sub_packet_received().
-    // Depletd by sub_interval_acknowledged()
+    // Depletd by rmc_sub_timeout()
     //
     sub_pid_interval_list received_interval;
-
-    // Oldest received packet that is covered in received_interval.
-    // The oldest_received_ts + timeout tells us when we have to acknowledge.
-    // the received packet to the publisher. When we do so, we ack all
-    // unacknowledged packets in one go.
-    // This timestamp is cleared when the last element from received_interval is
-    // removed after it being sent out to acknowledge all received packets.
-    //
-    usec_timestamp_t oldest_unacked_ts; 
 } sub_publisher_t; 
 
 extern void sub_init_publisher(sub_publisher_t* pub);
@@ -139,12 +139,8 @@ extern void sub_reset_publisher(sub_publisher_t*,
                                 void (*)(void*, payload_len_t, user_data_t));;
 
 extern usec_timestamp_t sub_oldest_unacknowledged_packet(sub_publisher_t* pub);
-
 extern  user_data_t sub_packet_user_data(sub_packet_t* pack);
 extern int _sub_packet_add_to_received_interval(sub_publisher_t* pub, packet_id_t pid);
-
-
-
 
 #endif // __REL_MCAST_SUB__
 

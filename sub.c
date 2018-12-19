@@ -35,26 +35,51 @@ static void _free_pending_packet(sub_packet_t* ppack)
 int sub_packet_is_duplicate(sub_publisher_t* pub, packet_id_t pid)
 {
     sub_packet_t cmp_pack = { .pid = pid };
+    int is_duplicate = 0;
+
+    // If this is the first packet to be received,
+    // then we are not a duplicate.
+    if (!pub->max_pid_ready)
+        return 0;
+
     // Is packet duplicate?
     // FIXME: Setup hash table for pub->received so that we
     // can find dups faster
     //
-    if (pub->max_pid_ready != 0 && pid <= pub->max_pid_ready) {
+    if (pid <= pub->max_pid_ready) {
         return 1;
     }
 
-    if (sub_packet_list_find_node_rev(&pub->received_pid,
-                                      &cmp_pack,
-                                      lambda(int, (sub_packet_t* dt1,
-                                                   sub_packet_t* dt2) {
-                                                 if (dt1->pid == dt2->pid)
-                                                     puts("HIT");
-                                                 return dt1->pid == dt2->pid;
-                                             }))) {
-        printf("sub_packet_is_dup(): pid[%ld] max_pid_ready[%ld] - Already received\n", pid, pub->max_pid_ready);
+    sub_packet_list_find_node_rev(&pub->received_pid,
+                                  &cmp_pack,
+                                  lambda(int, (sub_packet_t* needle,
+                                               sub_packet_t* haystack) {
+                                             // We found an actual duplicate!
+                                             if (needle->pid == haystack->pid) {
+                                                 is_duplicate = 1;
+                                                 return 1;
+                                             }
+
+                                             // Since received_pid is sorted, we will know when
+                                             // we will never find pid in the list
+                                             if (needle->pid > haystack->pid) {
+                                                 is_duplicate = 0;
+                                                 return -1;
+                                             }
+                                             return 0;
+                                         }));
+        
+    if (is_duplicate == 1) {
+        return 1;
     }
+    return 0;
 }
 
+
+int sub_packet_interval_acknowledged(sub_publisher_t* pub, sub_packet_t* pack, packet_id_t pid)
+{
+
+}
 
 int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
                         void* payload,
@@ -78,25 +103,17 @@ int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
     // Insert on ascending pid sort order, running from tail toward head
     // since our received packet probably belongs closer to the tail of
     // the received list than the beginning
+//    printf("sub_packet_received(): pid[%lu]\n", pid);
     sub_packet_list_insert_sorted_rev(&pub->received_pid,
                                       pack,
                                       lambda(int, (sub_packet_t* n_dt, sub_packet_t* o_dt) {
+//                                              printf("New pid[%lu]  Existing pid[%lu]\n",
+//                                                     n_dt->pid, o_dt->pid);
                                               return (n_dt->pid < o_dt->pid)?-1:
                                                   ((n_dt->pid > o_dt->pid)?1:
                                                    0);
                                           }));
 
-    // If we currently have no unackonwledged packets,
-    // Make a note of when we received this packet so that we know when
-    // we have to ack it (and all other unackonwledged packets for the publisher while
-    // we are at it).
-    // Insert the publisher in the argument-provided pub_ack_list that is sorted
-    // on oldest_unacked_ts. This list allows us to quickly determine
-    // which publishers we need to send out acks for.
-    if (!pub->oldest_unacked_ts) {
-        pub->oldest_unacked_ts = current_ts;
-
-    }
     _sub_packet_add_to_received_interval(pub, pid);
     return 1;
 }
@@ -105,7 +122,7 @@ int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
 // Go through all received packets and move those that are ready to
 // be dispathed to the ready queue
 // Should be called after one or more calls to sub_receive_packet()
-// Do not call too often since it is medium expensive on execution.
+// Do not call too often since it is medium-expensive on execution.
 void sub_process_received_packets(sub_publisher_t* pub, sub_packet_list_t* dispatch_ready)
 {
     sub_packet_node_t* node = 0;
@@ -117,7 +134,7 @@ void sub_process_received_packets(sub_publisher_t* pub, sub_packet_list_t* dispa
     node = sub_packet_list_head(&pub->received_pid);
 
     // Initialize pub->max_pid_ready if not setup already
-    if (node && !pub->max_pid_ready)
+    if (node && !pub->max_pid_ready) 
         pub->max_pid_ready = node->data->pid - 1;
 
     while(node) {
@@ -142,7 +159,6 @@ void sub_init_publisher(sub_publisher_t* pub)
 {
     pub->max_pid_received = 0;
     pub->max_pid_ready = 0;
-    pub->oldest_unacked_ts = 0;
     sub_packet_list_init(&pub->received_pid, 0, 0, 0);
     sub_pid_interval_list_init(&pub->received_interval, 0, 0, 0);
     return;
@@ -177,10 +193,10 @@ inline user_data_t sub_packet_user_data(sub_packet_t* pack)
 
 usec_timestamp_t sub_oldest_unacknowledged_packet(sub_publisher_t* pub)
 {
-    if (!pub)
+    if (!pub || !sub_pid_interval_list_size(&pub->received_interval))
         return 0;
 
-    return pub->oldest_unacked_ts;
+    return sub_pid_interval_list_head(&pub->received_interval)->data.receive_ts;
 }
 
 // Add the pid of a received packet to the number of
@@ -193,7 +209,7 @@ int _sub_packet_add_to_received_interval(sub_publisher_t* pub, packet_id_t pid)
 {
     sub_pid_interval_node_t* inode = 0;
     // Do we have an empty list?
-
+    
     // Traverse the list from the back, to increase chance of hit, to see if we can fit it anywhere
     inode = sub_pid_interval_list_tail(&pub->received_interval);
 
@@ -208,7 +224,13 @@ int _sub_packet_add_to_received_interval(sub_publisher_t* pub, packet_id_t pid)
         //              13 
         //              pid
         if (pid > inode->data.last_pid + 1) {
-            sub_pid_interval_list_insert_after(inode, (sub_pid_interval_t) { .first_pid = pid, .last_pid = pid });
+            sub_pid_interval_list_insert_after(inode,
+                                               (sub_pid_interval_t)
+                                               {
+                                                   .first_pid = pid,
+                                                   .last_pid = pid,
+                                                   .receive_ts = rmc_usec_monotonic_timestamp()
+                                               });
             return 1;
         }
 
@@ -238,6 +260,14 @@ int _sub_packet_add_to_received_interval(sub_publisher_t* pub, packet_id_t pid)
             inext = sub_pid_interval_list_next(inode);
             if (inext && inext->data.first_pid - 1 == pid) {
                 inode->data.last_pid = inext->data.last_pid;
+
+                // Copy the oldest timestamp of the two merged
+                // intervals.
+                inode->data.receive_ts = 
+                    (inode->data.receive_ts < inext->data.receive_ts)?
+                    inode->data.receive_ts:
+                    inext->data.receive_ts;
+
                 sub_pid_interval_list_delete(inext);
                 return -1; // We manged to delete one interval
             }
@@ -271,6 +301,14 @@ int _sub_packet_add_to_received_interval(sub_publisher_t* pub, packet_id_t pid)
             iprev = sub_pid_interval_list_prev(inode);
             if (iprev && iprev->data.last_pid + 1 == pid) {
                 inode->data.first_pid = iprev->data.first_pid;
+
+                // Copy the oldest timestamp of the two merged
+                // intervals.
+                inode->data.receive_ts = 
+                    (inode->data.receive_ts < iprev->data.receive_ts)?
+                    inode->data.receive_ts:
+                    iprev->data.receive_ts;
+
                 sub_pid_interval_list_delete(iprev);
                 return -1;
             }
@@ -279,7 +317,7 @@ int _sub_packet_add_to_received_interval(sub_publisher_t* pub, packet_id_t pid)
         inode = sub_pid_interval_list_prev(inode);
     }
 
-    // If wwe came this far, pid is lesser than first_pid - 1 of the first
+    // If wwe came this far, pid is less than first_pid - 1 of the first
     // interval in the list. In this case we need to push a new interval
     // to the beginning of the lsit.
     // This case will also be executed if result is currently empty.
@@ -291,7 +329,12 @@ int _sub_packet_add_to_received_interval(sub_publisher_t* pub, packet_id_t pid)
     //  1          
     // pid
     //
-    sub_pid_interval_list_push_head(&pub->received_interval, (sub_pid_interval_t) { .first_pid = pid, .last_pid = pid });
+    sub_pid_interval_list_push_head(&pub->received_interval,
+                                    (sub_pid_interval_t) {
+                                        .first_pid = pid,
+                                        .last_pid = pid,
+                                        .receive_ts = rmc_usec_monotonic_timestamp()
+                                    });
     return 1;
 }
 
