@@ -45,7 +45,7 @@ CFLAGS = -ggdb
 .PHONY: all clean
 
 
-all: $(OBJ) rmc_test
+all: $(OBJ) rmc_test 
 wireshark: rmc_wireshark_plugin.so
 
 rmc_test: $(OBJ) $(TEST_OBJ)
@@ -54,9 +54,9 @@ rmc_test: $(OBJ) $(TEST_OBJ)
 clean:
 	rm -f $(OBJ) *~ rmc_test.o rmc_test $(TEST_OBJ) rmc_wireshark_plugin.so
 
-$(OBJ): $(HDR)
+$(OBJ): $(HDR) Makefile 
 
-$(TEST_OBJ): $(HDR)
+$(TEST_OBJ): $(HDR) Makefile
 
 rmc_wireshark_plugin.so: rmc_wireshark_plugin.c
 	gcc `pkg-config --cflags wireshark` `pkg-config --libs wireshark` -fpic -shared $^ -o $@
