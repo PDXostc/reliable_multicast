@@ -170,12 +170,13 @@ static int dissect_rmc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
     int rem = 0;
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "RMC Control Channel");
     int resend_count = 0;
+    const gchar* cval = 0;
 
-    /* Clear out stuff in the info column */
     ti = proto_tree_add_item(tree, proto_rmc_control, tvb, 0, -1, ENC_NA);
     rmc_tree = proto_item_add_subtree(ti, ett_rmc_control);
 
     rem =tvb_captured_length_remaining(tvb, 0) ;
+    col_clear(pinfo->cinfo, COL_INFO);
 
     while(1) {
         if (tvb_captured_length_remaining(tvb, offset) < 1) 
@@ -185,8 +186,19 @@ static int dissect_rmc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
         switch(command) {
         case RMC_CMD_ACK_INTERVAL:
             proto_tree_add_item(rmc_tree, hf_rmc_control_command, tvb, offset, 1, ENC_NA);
-
             res = dissect_rmc_ack_interval(rmc_tree, tvb, offset + 1, &first_pid, &last_pid);
+            cval = col_get_text(pinfo->cinfo, COL_INFO);
+            if (!cval || !*cval)
+                col_add_fstr(pinfo->cinfo,
+                         COL_INFO,
+                         "SUB->PUB ack [%lu-%lu] ",
+                         first_pid, last_pid);
+            else
+                col_append_fstr(pinfo->cinfo,
+                                COL_INFO,
+                                "[%lu-%lu] ",
+                                first_pid, last_pid);
+                
             break;
 
         case RMC_CMD_PACKET:
@@ -207,14 +219,9 @@ static int dissect_rmc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
         offset += 1 + res;
     }
 
-
     if (resend_count) 
-        col_add_fstr(pinfo->cinfo, COL_INFO, "Pub->Sub resend %d packets", resend_count);
-    else 
-        col_add_fstr(pinfo->cinfo,
-                     COL_INFO,
-                     "Sub->Pub ack[%lu-%lu]",
-                     first_pid, last_pid);
+        col_add_fstr(pinfo->cinfo, COL_INFO, "PUB->SUB resend %d packets", resend_count);
+
 
     return tvb_captured_length(tvb);
 //    return offset;
