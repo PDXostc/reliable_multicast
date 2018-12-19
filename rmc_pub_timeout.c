@@ -50,12 +50,12 @@ static int _process_sent_packet_timeout(rmc_pub_context_t* ctx,
 
     }
 
-    printf("process_sent_packet_timeout(): pid[%lu] mcast[%s:%d] listen[%s:%d]\n",
-           pack->pid,
-           group_addr,
-           ctx->mcast_port,
-           remote_addr,
-           ctx->control_listen_port);
+//    printf("process_sent_packet_timeout(): pid[%lu] mcast[%s:%d] listen[%s:%d]\n",
+//           pack->pid,
+//           group_addr,
+//           ctx->mcast_port,
+//           remote_addr,
+//           ctx->control_listen_port);
     
     if (!conn || conn->mode != RMC_CONNECTION_MODE_CONNECTED)
         return EINVAL;
@@ -91,7 +91,7 @@ static int _process_subscriber_timeout(rmc_pub_context_t* ctx,
     // with oldest packet first.
     while((pnode = pub_packet_list_head(&packets))) {
         // Outbound circular buffer may be full.
-        printf("Timed out packet: %lu\n", pnode->data->pid);
+//        printf("Timed out packet: %lu\n", pnode->data->pid);
         if ((res = _process_sent_packet_timeout(ctx, sub, pnode->data)) != 0)  {
             pub_packet_list_empty(&packets);
             return res;
@@ -132,7 +132,6 @@ int rmc_pub_timeout_process(rmc_pub_context_t* ctx)
             len = sizeof(buffer);
             
         if (send_announce) {
-            puts("Sendning out announcement");
             rmc_pub_queue_packet(ctx, buffer, len, 1);
         }
 
