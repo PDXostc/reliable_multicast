@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <signal.h>
 
 #include "rmc_list_template.h"
 RMC_LIST_IMPL(rmc_index_list, rmc_index_node, uint32_t) 
@@ -55,6 +56,7 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
     sub_packet_list_init(&ctx->dispatch_ready, 0, 0, 0);
     rmc_index_list_init(&ctx->pub_ack_list, 0, 0, 0);
 
+    signal(SIGPIPE, SIG_IGN);
     // We can throw away seed result since we will only call rand here.
     ctx->context_id = context_id?context_id:rand_r(&seed);
     ctx->user_data = user_data;
