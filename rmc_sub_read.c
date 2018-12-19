@@ -77,8 +77,9 @@ static int _decode_subscribed_multicast(rmc_sub_context_t* ctx,
     payload_len_t len = (payload_len_t) packet_len;
     uint8_t* payload = 0;
     sub_publisher_t* pub = &ctx->publishers[conn->connection_index];
-
     usec_timestamp_t now = rmc_usec_monotonic_timestamp();
+    packet_id_t first_pid = 0;
+    packet_id_t last_pid = 0;
 
     // Traverse the received datagram and extract all packets
     while(len) {
@@ -102,7 +103,10 @@ static int _decode_subscribed_multicast(rmc_sub_context_t* ctx,
             continue;
         }
 
+        if (!first_pid)
+            first_pid = cmd_pack->pid;
 
+        last_pid = cmd_pack->pid;
 //        printf("_decode_subscribed_multicast(): Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s]\n",
 //               len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
 
@@ -135,6 +139,8 @@ static int _decode_subscribed_multicast(rmc_sub_context_t* ctx,
     // Process received packages, moving consectutive ones
     // over to the ready queue.
     sub_process_received_packets(pub, &ctx->dispatch_ready);
+
+    printf("decode_subscribed_multicast(): pid[%lu-%lu]\n", first_pid, last_pid);
     return 0;
 }
 
@@ -159,7 +165,7 @@ static int _process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
     if (!ctx)
         return EINVAL;
 
-    if (ctx->mcast_recv_descriptor == -1)
+    if (ctx->mcast_recv_descriptor == -1) 
         return ENOTCONN;
 
     len = recvfrom(ctx->mcast_recv_descriptor,
@@ -267,6 +273,7 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
     char buf[sizeof(cmd_packet_header_t)];
     cmd_packet_header_t* pack_hdr = (cmd_packet_header_t*) buf;
     rmc_sub_context_t* ctx = (rmc_sub_context_t*) user_data.ptr;
+    usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
 
     // Make sure that we have enough data for the header.
     // Please note that the command byte is still lingering as the
@@ -282,7 +289,9 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
     }
 
     // Read the command byte and the packet header
+
     circ_buf_read_offset(&conn->read_buf, 1, buf, sizeof(cmd_packet_header_t), 0);
+//    printf("      Offset: %lu\n", rmc_usec_monotonic_timestamp() - current_ts);
 
 
     // Now we know how big the payload is. Check if we have enough memory for an atomic
@@ -294,10 +303,12 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
         // Don't free any memory since we will get called again when we have more data.
         return EAGAIN;
     }
+//    printf("      In use: %lu\n", rmc_usec_monotonic_timestamp() - current_ts);
 
     // We have enough data to process the entire packet
     // Free command byte and packet header from read buffer.
     circ_buf_free(&conn->read_buf, 1 + sizeof(cmd_packet_header_t), 0);
+//    printf("      Free: %lu\n", rmc_usec_monotonic_timestamp() - current_ts);
 
     // Is the packet a duplicate?
     if (sub_packet_is_duplicate(&ctx->publishers[conn->connection_index], pack_hdr->pid)) {
@@ -309,6 +320,7 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
         return 0; // Dups are ok.
     }
 
+//    printf("      Duplicate: %lu\n", rmc_usec_monotonic_timestamp() - current_ts);
 
     // Allocate memory for payload
     if (ctx->payload_alloc)
@@ -321,9 +333,13 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
         exit(255);
     }
 
+//    printf("      Malloc: %lu\n", rmc_usec_monotonic_timestamp() - current_ts);
+
     // Read in payload and free it from conn->read_buf
     circ_buf_read(&conn->read_buf, payload, pack_hdr->payload_len, 0);
+//    printf("      Read: %lu\n", rmc_usec_monotonic_timestamp() - current_ts);
     circ_buf_free(&conn->read_buf, pack_hdr->payload_len, 0);
+//    printf("      Free: %lu\n", rmc_usec_monotonic_timestamp() - current_ts);
 
 //    printf("_process_cmd_packet(): pid [%lu] payload[%s] len[%d]\n",
 //           pack_hdr->pid, payload,  pack_hdr->payload_len);
@@ -334,6 +350,7 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
                             rmc_usec_monotonic_timestamp(),
                             user_data_u32(conn->connection_index));
 
+//    printf("      Received: %lu\n", rmc_usec_monotonic_timestamp() - current_ts);
     return 0;
 }
 
