@@ -6,9 +6,9 @@
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
 #include "reliable_multicast.h"
+#include "rmc_log.h"
 #include <string.h>
 #include <errno.h>
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <arpa/inet.h>
@@ -31,7 +31,7 @@ static int _decode_unsubscribed_multicast(rmc_sub_context_t* ctx,
         packet += sizeof(cmd_packet_header_t);
 
         if (cmd_pack->pid) {
-            printf("_decode_unsubscribed_multicast(): Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s] - Ignored.\n",
+            RMC_LOG_COMMENT("Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s] - Ignored.",
                    len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet);
 
             goto dump_payload;
@@ -40,12 +40,12 @@ static int _decode_unsubscribed_multicast(rmc_sub_context_t* ctx,
         // If conn is set, then it will always be RMC_CONNECTION_MODE_CONNECTING
         // In that case, just dump the packet and continue.
         if (conn) {
-            printf("_decode_unsubscribed_multicast(): Len[%d] Hdr Len[%lu] Payload Len[%d] Payload[%s] - Announce: connection already in progress\n",
+            RMC_LOG_COMMENT("Len[%d] Hdr Len[%lu] Payload Len[%d] Payload[%s] - Announce: connection already in progress",
                    len, sizeof(cmd_packet_header_t), cmd_pack->payload_len, packet);
             goto dump_payload;
         }
             
-        printf("_decode_unsubscribed_multicast(): Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s] - Announce!\n",
+        RMC_LOG_COMMENT("Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s] - Announce!",
                len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet);
             
         // Add an outbound tcp connection to the publisher.
@@ -88,7 +88,7 @@ static int _decode_subscribed_multicast(rmc_sub_context_t* ctx,
 
         // Skip announce packets.
         if (!cmd_pack->pid) {
-            printf("_decode_multicast(): Ignoring announce\n");
+            RMC_LOG_COMMENT("_decode_multicast(): Ignoring announce");
             packet += sizeof(cmd_packet_header_t) + cmd_pack->payload_len;
             len -= sizeof(cmd_packet_header_t) + cmd_pack->payload_len;
             continue;
@@ -96,8 +96,8 @@ static int _decode_subscribed_multicast(rmc_sub_context_t* ctx,
 
         // Check that we do not have a duplicate
         if (sub_packet_is_duplicate(pub, cmd_pack->pid)) {
-            printf("_decode_multicast(%lu): Duplicate or pre-connect straggler\n",
-                   cmd_pack->pid);
+            RMC_LOG_DEBUG("pid %lu  is duplicate or pre-connect straggler",
+                          cmd_pack->pid);
             packet += sizeof(cmd_packet_header_t) + cmd_pack->payload_len;
             len -= sizeof(cmd_packet_header_t) + cmd_pack->payload_len;
             continue;
@@ -107,8 +107,8 @@ static int _decode_subscribed_multicast(rmc_sub_context_t* ctx,
             first_pid = cmd_pack->pid;
 
         last_pid = cmd_pack->pid;
-//        printf("_decode_subscribed_multicast(): Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s]\n",
-//               len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
+        RMC_LOG_DEBUG("Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s]",
+               len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
 
         // Use the provided memory allocator to reserve memory for
         // incoming payload.
@@ -140,7 +140,7 @@ static int _decode_subscribed_multicast(rmc_sub_context_t* ctx,
     // over to the ready queue.
     sub_process_received_packets(pub, &ctx->dispatch_ready);
 
-    printf("decode_subscribed_multicast(): pid[%lu-%lu]\n", first_pid, last_pid);
+    RMC_LOG_COMMENT("decode_subscribed_multicast(): pid[%lu-%lu]\n", first_pid, last_pid);
     return 0;
 }
 
@@ -281,7 +281,7 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
     // have atomically processed or rejeceted the command.
     //
     if (circ_buf_in_use(&conn->read_buf) < 1 + sizeof(cmd_packet_header_t)) {
-        printf("_process_cmd_packet(): Incomplete header data. Want [%lu] Got[%d]\n",
+        RMC_LOG_COMMENT("Incomplete header data. Want [%lu] Got[%d]\n",
                1 + sizeof(cmd_packet_header_t), circ_buf_in_use(&conn->read_buf));
 
         // Don't free any memory since we will get called again when we have more data.
@@ -291,36 +291,30 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
     // Read the command byte and the packet header
 
     circ_buf_read_offset(&conn->read_buf, 1, buf, sizeof(cmd_packet_header_t), 0);
-//    printf("      Offset: %lu\n", rmc_usec_monotonic_timestamp() - current_ts);
 
 
     // Now we know how big the payload is. Check if we have enough memory for an atomic
     // process or reject.
     if (circ_buf_in_use(&conn->read_buf) < 1 + sizeof(cmd_packet_header_t) + pack_hdr->payload_len) {
-        printf("_process_cmd_packet(): Incomplete payload data. Want [%d] Got[%d]\n",
+        RMC_LOG_COMMENT("Incomplete payload data. Want [%d] Got[%d]",
                pack_hdr->payload_len, circ_buf_in_use(&conn->read_buf));
 
         // Don't free any memory since we will get called again when we have more data.
         return EAGAIN;
     }
-//    printf("      In use: %lu\n", rmc_usec_monotonic_timestamp() - current_ts);
 
     // We have enough data to process the entire packet
     // Free command byte and packet header from read buffer.
     circ_buf_free(&conn->read_buf, 1 + sizeof(cmd_packet_header_t), 0);
-//    printf("      Free: %lu\n", rmc_usec_monotonic_timestamp() - current_ts);
 
     // Is the packet a duplicate?
     if (sub_packet_is_duplicate(&ctx->publishers[conn->connection_index], pack_hdr->pid)) {
-        printf("_process_cmd_packet(%lu): Duplicate\n",
-               pack_hdr->pid);
+        RMC_LOG_DEBUG("Duplicate: %lu", pack_hdr->pid);
 
         // Free payload
         circ_buf_free(&conn->read_buf, pack_hdr->payload_len, 0);
         return 0; // Dups are ok.
     }
-
-//    printf("      Duplicate: %lu\n", rmc_usec_monotonic_timestamp() - current_ts);
 
     // Allocate memory for payload
     if (ctx->payload_alloc)
@@ -329,20 +323,14 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
         payload = malloc(pack_hdr->payload_len);
 
     if (!payload) {
-        perror("_process_cmd_packet()::memory alloc:");
+        RMC_LOG_FATAL("memory allocation failed");
         exit(255);
     }
 
-//    printf("      Malloc: %lu\n", rmc_usec_monotonic_timestamp() - current_ts);
 
     // Read in payload and free it from conn->read_buf
     circ_buf_read(&conn->read_buf, payload, pack_hdr->payload_len, 0);
-//    printf("      Read: %lu\n", rmc_usec_monotonic_timestamp() - current_ts);
     circ_buf_free(&conn->read_buf, pack_hdr->payload_len, 0);
-//    printf("      Free: %lu\n", rmc_usec_monotonic_timestamp() - current_ts);
-
-//    printf("_process_cmd_packet(): pid [%lu] payload[%s] len[%d]\n",
-//           pack_hdr->pid, payload,  pack_hdr->payload_len);
 
     rmc_sub_packet_received(ctx, conn->connection_index,
                             pack_hdr->pid,
@@ -350,7 +338,6 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
                             rmc_usec_monotonic_timestamp(),
                             user_data_u32(conn->connection_index));
 
-//    printf("      Received: %lu\n", rmc_usec_monotonic_timestamp() - current_ts);
     return 0;
 }
 
@@ -358,8 +345,7 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
 
 int rmc_sub_close_connection(rmc_sub_context_t* ctx, rmc_index_t s_ind)
 {
-    printf("rmc_sub_close_connection(): index[%d]\n", s_ind);
-
+    RMC_LOG_COMMENT("index[%d]", s_ind);
 
     rmc_conn_close_connection(&ctx->conn_vec, s_ind);
 

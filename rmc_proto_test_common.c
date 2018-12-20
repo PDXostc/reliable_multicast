@@ -6,7 +6,7 @@
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
 #include "rmc_proto_test_common.h"
-
+#include "rmc_log.h"
 
 // We need user data that points out both
 // the pollset file descriptor and the context associated.
@@ -56,15 +56,15 @@ void poll_add(user_data_t user_data,
     if (action & RMC_POLLWRITE)
         ev.events |= EPOLLOUT;
 
-    printf("poll_add(%s:%d)%s%s%s\n",
-           _index(index, buf),
-           descriptor,
-           ((action & RMC_POLLREAD)?" read":""),
-           ((action & RMC_POLLWRITE)?" write":""),
-           (!(action & (RMC_POLLREAD | RMC_POLLWRITE)))?" [none]":"");
+    RMC_LOG_COMMENT("poll_add(%s:%d)%s%s%s",
+                    _index(index, buf),
+                    descriptor,
+                    ((action & RMC_POLLREAD)?" read":""),
+                    ((action & RMC_POLLWRITE)?" write":""),
+                    (!(action & (RMC_POLLREAD | RMC_POLLWRITE)))?" [none]":"");
 
     if (epoll_ctl(epollfd, EPOLL_CTL_ADD, descriptor, &ev) == -1) {
-        perror("epoll_ctl(add)");
+        RMC_LOG_FATAL("epoll_ctl(add)");
         exit(255);
     }
 }
@@ -90,15 +90,15 @@ void poll_modify(user_data_t user_data,
     if (new_action & RMC_POLLWRITE)
         ev.events |= EPOLLOUT;
 
-//    printf("poll_modify(%s:%d)%s%s%s\n",
-//           _index(index, buf),
-//           descriptor,
-//           ((new_action & RMC_POLLREAD)?" read":""),
-//           ((new_action & RMC_POLLWRITE)?" write":""),
-//           (!(new_action & (RMC_POLLREAD | RMC_POLLWRITE)))?" [none]":"");
+    RMC_LOG_DEBUG("poll_modify(%s:%d)%s%s%s",
+                  _index(index, buf),
+                  descriptor,
+                  ((new_action & RMC_POLLREAD)?" read":""),
+                  ((new_action & RMC_POLLWRITE)?" write":""),
+                  (!(new_action & (RMC_POLLREAD | RMC_POLLWRITE)))?" [none]":"");
 
     if (epoll_ctl(epollfd, EPOLL_CTL_MOD, descriptor, &ev) == -1) {
-        perror("epoll_ctl(modify)");
+        RMC_LOG_FATAL("epoll_ctl(modify): %s", strerror(errno));
         exit(255);
     }
 }
@@ -112,10 +112,10 @@ void poll_remove(user_data_t user_data,
     int epollfd = user_data.i32;
 
     if (epoll_ctl(epollfd, EPOLL_CTL_DEL, descriptor, 0) == -1) {
-        perror("epoll_ctl(delete)");
-        exit(255);
+        RMC_LOG_WARNING("epoll_ctl(delete): %s", strerror(errno));
+        return;
     }
-    printf("poll_remove(%s)\n", _index(index, buf));
+    RMC_LOG_COMMENT("poll_remove(%s)", _index(index, buf));
 }
 
 

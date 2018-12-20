@@ -5,10 +5,9 @@
 //
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
-
-
 #define _GNU_SOURCE 1
 #include "reliable_multicast.h"
+#include "rmc_log.h"
 #include <errno.h>
 #include <string.h>
 #include <stdio.h>
@@ -51,13 +50,13 @@ int rmc_conn_process_tcp_write(rmc_connection_t* conn, uint32_t* bytes_left)
     // How did that write go?
     if (res == -1) { 
         *bytes_left = circ_buf_in_use(&conn->write_buf);
-        perror("writev");
+        RMC_LOG_INFO("writev");
         return errno;
     }
 
     if (res == 0) { 
         *bytes_left = circ_buf_in_use(&conn->write_buf);
-        puts("rmc_conn_process_tcp_write(): Failed to send data");
+        RMC_LOG_INFO("Failed to send data");
         return 0;
     }
 
@@ -66,7 +65,7 @@ int rmc_conn_process_tcp_write(rmc_connection_t* conn, uint32_t* bytes_left)
     // At the same time grab number of bytes left to
     // send from the buffer.,
     circ_buf_free(&conn->write_buf, res, bytes_left);
-    printf("rmc_conn_process_tcp_write(): Wrote [%ld] bytes\n", res);
+    RMC_LOG_DEBUG("Wrote [%ld] bytes", res);
 
     return 0;
 }
@@ -188,7 +187,7 @@ int rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
                          &seg1, &seg1_len,
                          &seg2, &seg2_len);
 
-//    printf("    Alloc: %lu\n", rmc_usec_monotonic_timestamp() - current_ts);
+    RMC_LOG_DEBUG("alloc: %lu\n", rmc_usec_monotonic_timestamp() - current_ts);
     // Did we fail?
     if (res) {
         *op_res = RMC_ERROR;
@@ -204,7 +203,7 @@ int rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
     errno = 0;
     
     res = readv(conn->descriptor, iov, 2);
-//    printf("    Read(%lu): %lu\n", res, rmc_usec_monotonic_timestamp() - current_ts);
+    RMC_LOG_DEBUG("read(%lu): %lu\n", res, rmc_usec_monotonic_timestamp() - current_ts);
 
 
     if (res == -1 || res == 0) {
@@ -221,11 +220,11 @@ int rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
     // Trim the end of read_buf so that we ony have our original read_buf data plus
     // the bytes we actually read.
     circ_buf_trim(&conn->read_buf, res + orig_in_use);
-//    printf("    Trim: %lu\n", rmc_usec_monotonic_timestamp() - current_ts);
+    RMC_LOG_DEBUG("trim: %lu", rmc_usec_monotonic_timestamp() - current_ts);
 
     ret = rmc_conn_process_tcp_read(conn_vec, s_ind, op_res,
                                     dispatch_table, user_data);
 
-//    printf("    Process: %lu\n", rmc_usec_monotonic_timestamp() - current_ts);
+    RMC_LOG_DEBUG("process: %lu", rmc_usec_monotonic_timestamp() - current_ts);
     return ret;
 }

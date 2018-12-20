@@ -8,6 +8,7 @@
 
 #define _GNU_SOURCE
 #include "reliable_multicast.h"
+#include "rmc_log.h"
 #include <string.h>
 #include <errno.h>
 #include <stdio.h>
@@ -55,7 +56,7 @@ int _rmc_sub_write_interval_acknowledgement(rmc_sub_context_t* ctx,
 
         strcpy(group_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }));
         strcpy(remote_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(conn->remote_address) }));
-        printf("_rmc_sub_write_interval_acknowledgement(): interval[%lu:%lu] mcast[%s:%d] remote[%s:%d]\n",
+        RMC_LOG_COMMENT("interval[%lu:%lu] mcast[%s:%d] remote[%s:%d]",
                interval->first_pid,
                interval->last_pid,
                group_addr,

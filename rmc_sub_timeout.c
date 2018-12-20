@@ -9,6 +9,7 @@
 
 #define _GNU_SOURCE
 #include "reliable_multicast.h"
+#include "rmc_log.h"
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
@@ -32,7 +33,7 @@ int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
     if (!ctx)
         return EINVAL;
 
-    puts("rmc_sub_timeout_process(): called");
+    RMC_LOG_DEBUG("called");
 
     // Go through all publishers with unackowledged packets and
     // process those whose acks are due to be sent.
@@ -60,12 +61,12 @@ int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
         // If it is not yet time to send acks for this publisher, then
         // break out of loop and return.
         if (sub_oldest_unacknowledged_packet(pub) + ctx->ack_timeout > current_ts) {
-            printf("sub_oldest_unacknowledged_packet(pub) %ld msec until timeout. Returning.\n",
+            RMC_LOG_COMMENT("%ld msec until timeout - returning",
                    sub_oldest_unacknowledged_packet(pub) + ctx->ack_timeout - current_ts);
             break;
         }
         
-        printf("sub_oldest_unacknowledged_packet(pub) past timeout by [%ld] msec. Processing\n",
+        RMC_LOG_COMMENT("past timeout by [%ld] msec -processing",
                current_ts - sub_oldest_unacknowledged_packet(pub)  + ctx->ack_timeout);
 
         // For each publisher that we have a timed out ack  for, we will ack
@@ -74,7 +75,7 @@ int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
             int res = 0;
             res = rmc_sub_packet_interval_acknowledged(ctx, inode->data, &pid_intv);
             if (res) {
-                printf("Failed to send packet ack: %s\n", strerror(res));
+                RMC_LOG_INFO("Failed to send packet ack: %s\n", strerror(res));
                 return res;
             }
         }
@@ -97,7 +98,7 @@ int rmc_sub_timeout_get_next(rmc_sub_context_t* ctx, usec_timestamp_t* result)
     
     // We may not have anything to ack at all.
     if (!rmc_index_list_size(&ctx->pub_ack_list)) {
-        printf("No publishers found with pending timeouts\n");
+        RMC_LOG_COMMENT("No publishers found with pending timeouts");
         *result = -1;
         return 0;
     }

@@ -9,6 +9,7 @@
 
 #define _GNU_SOURCE 1
 #include "reliable_multicast.h"
+#include "rmc_log.h"
 #include <string.h>
 #include <errno.h>
 
@@ -38,12 +39,12 @@ rmc_connection_t* rmc_conn_find_by_address(rmc_connection_vector_t* conn_vec,
     // FIXME: Replace with hash table search to speed up.
     strcpy(want_addr_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(remote_address) }));
 
-//    printf("_find_by_address(): max_connection_ind[%d]\n", conn_vec->max_connection_ind);
+    RMC_LOG_DEBUG("max_connection_ind[%d]", conn_vec->max_connection_ind);
     while(ind <= conn_vec->max_connection_ind) {
         strcpy(have_addr_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(conn_vec->connections[ind].remote_address)}));
         
-//        printf("_find_by_address(): want[%s:%d] got [%s:%d]\n",
-//               want_addr_str, remote_port, have_addr_str, conn_vec->connections[ind].remote_port);
+        RMC_LOG_DEBUG("want[%s:%d] got [%s:%d]",
+               want_addr_str, remote_port, have_addr_str, conn_vec->connections[ind].remote_port);
 
         
         if (conn_vec->connections[ind].descriptor != -1 &&  
@@ -159,23 +160,23 @@ int rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
                    SO_ERROR,
                    &sock_err,
                    &len) == -1) {
-        printf("rmc_conn_complete_connection(): ind[%d] addr[%s:%d]: getsockopt(): %s\n",
-               conn->connection_index,
-               inet_ntoa( (struct in_addr) {
-                       .s_addr = htonl(conn->remote_address)
-                           }),
-               conn->remote_port,
-               strerror(errno));
+        RMC_LOG_WARNING("ind[%d] addr[%s:%d]: getsockopt(): %s",
+                        conn->connection_index,
+                        inet_ntoa( (struct in_addr) {
+                                .s_addr = htonl(conn->remote_address)
+                                    }),
+                        conn->remote_port,
+                        strerror(errno));
         sock_err = errno; // Save it.
         rmc_conn_close_connection(conn_vec, conn->connection_index);
         return sock_err;
     }
 
-    printf("rmc_conn_complete_connection(): ind[%d] addr[%s:%d]: %s\n",
-           conn->connection_index,
-           inet_ntoa( (struct in_addr) {.s_addr = htonl(conn->remote_address) }),
-           conn->remote_port,
-           strerror(sock_err));
+    RMC_LOG_COMMENT("rmc_conn_complete_connection(): ind[%d] addr[%s:%d]: %s",
+                  conn->connection_index,
+                  inet_ntoa( (struct in_addr) {.s_addr = htonl(conn->remote_address) }),
+                  conn->remote_port,
+                  strerror(sock_err));
 
     if (sock_err != 0 && conn_vec->poll_remove) {
         (*conn_vec->poll_remove)(conn_vec->user_data, conn->descriptor, conn->connection_index);
@@ -238,8 +239,7 @@ int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
     if (conn_vec->connections[c_ind].descriptor == -1)
         return errno;
  
-    printf("rmc_connect_tcp_by_address(): ind[%d] addr[%s:%d]\n", c_ind, inet_ntoa(sock_addr.sin_addr), ntohs(sock_addr.sin_port));
-
+    RMC_LOG_COMMENT("ind[%d] addr[%s:%d]", c_ind, inet_ntoa(sock_addr.sin_addr), ntohs(sock_addr.sin_port));
     
     res = connect(conn_vec->connections[c_ind].descriptor,
                   (struct sockaddr*) &sock_addr,
@@ -248,7 +248,7 @@ int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
     conn_vec->connections[c_ind].remote_address = address;
     if (res == -1 && errno != EINPROGRESS) {
         err = errno; // Errno may be reset by close().
-        perror("rmc_connect(): connect()");
+        RMC_LOG_INFO("Already in progress: %s", strerror(errno));
         close(conn_vec->connections[c_ind].descriptor);
         conn_vec->connections[c_ind].descriptor = -1;
         _reset_max_connection_ind(conn_vec);
@@ -326,7 +326,7 @@ int rmc_conn_process_accept(int listen_descriptor,
     if (conn_vec->connections[c_ind].descriptor == -1)
         return errno;
  
-    printf("rmc_process_accept(): %s:%d -> index %d\n",
+    RMC_LOG_COMMENT("%s:%d -> index %d",
            inet_ntoa(src_addr.sin_addr), ntohs(src_addr.sin_port), c_ind);
 
     // Disable Nagle algorithm since latency is of essence when we send
@@ -381,8 +381,8 @@ int rmc_conn_close_connection(rmc_connection_vector_t* conn_vec, rmc_index_t s_i
     // If we are still connecting then just terminate the conneciton.
 
     
-    printf("rmc_conn_close_connection(): Closing connection [%d]. [%d] bytes will be discarded.\n",
-           s_ind, circ_buf_in_use(&conn->write_buf));
+    RMC_LOG_INFO("Closing connection [%d]. [%d] bytes will be discarded.",
+                 s_ind, circ_buf_in_use(&conn->write_buf));
 
     // Ok if this fails due to connection is still
     // in progress of being setup.

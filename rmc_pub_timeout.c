@@ -9,6 +9,7 @@
 
 #define _GNU_SOURCE
 #include "reliable_multicast.h"
+#include "rmc_log.h"
 #include <errno.h>
 #include <stdio.h>
 #include <arpa/inet.h>
@@ -85,13 +86,13 @@ static int _process_subscriber_timeout(rmc_pub_context_t* ctx,
 
     pub_packet_list_init(&packets, 0, 0, 0);
     pub_get_timed_out_packets(sub, current_ts, ctx->resend_timeout, &packets);
-    printf("Got [%d] timed out packets to process\n", pub_packet_list_size(&packets));
+    RMC_LOG_COMMENT("Got [%d] timed out packets to process", pub_packet_list_size(&packets));
 
     // Traverse packets and send them for timeout. Start
     // with oldest packet first.
     while((pnode = pub_packet_list_head(&packets))) {
         // Outbound circular buffer may be full.
-//        printf("Timed out packet: %lu\n", pnode->data->pid);
+        RMC_LOG_DEBUG("Timed out packet: %lu", pnode->data->pid);
         if ((res = _process_sent_packet_timeout(ctx, sub, pnode->data)) != 0)  {
             pub_packet_list_empty(&packets);
             return res;
