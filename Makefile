@@ -20,12 +20,14 @@ OBJ= 	common.o \
 	rmc_sub_write.o \
 	rmc_pub_write.o \
 	rmc_pub_timeout.o \
-	rmc_sub_timeout.o 
+	rmc_sub_timeout.o \
+	rmc_log.o
 
 TEST_OBJ = sub_interval_test.o \
 	rmc_proto_test_common.o \
 	rmc_proto_test_pub.o \
 	rmc_proto_test_sub.o \
+	rmc_log.o \
 	pub_test.o \
 	list_test.o \
 	rmc_test.o \
@@ -38,6 +40,7 @@ HDR= rmc_common.h \
 		rmc_pub.h \
 		reliable_multicast.h \
 		rmc_sub.h \
+		rmc_log.h \
 		circular_buffer.h \
 		rmc_protocol.h
 
