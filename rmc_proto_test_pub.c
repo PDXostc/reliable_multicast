@@ -7,6 +7,7 @@
 
 #include "rmc_proto_test_common.h"
 #include <stdlib.h>
+#include "rmc_log.h"
 
 
 static uint8_t _test_print_pending(pub_packet_node_t* node, void* dt)
@@ -14,14 +15,15 @@ static uint8_t _test_print_pending(pub_packet_node_t* node, void* dt)
     pub_packet_t* pack = (pub_packet_t*) node->data;
     int indent = (int) (uint64_t) dt;
 
-    printf("%*cPacket          %p\n", indent*2, ' ', pack);
-    printf("%*c  PID             %lu\n", indent*2, ' ', pack->pid);
-    printf("%*c  Sent timestamp  %ld\n", indent*2, ' ', pack->send_ts);
-    printf("%*c  Reference count %d\n", indent*2, ' ', pack->ref_count);
-    printf("%*c  Parent node     %p\n", indent*2, ' ', pack->parent_node);
-    printf("%*c  Payload Length  %d\n", indent*2, ' ', pack->payload_len);
-    printf("%*c  Payload         %s\n", indent*2, ' ', (char*) pack->payload);
-    putchar('\n');
+    RMC_LOG_COMMENT("%*cPacket          %p", indent*2, ' ', pack);
+    RMC_LOG_COMMENT("%*c  PID             %lu", indent*2, ' ', pack->pid);
+    RMC_LOG_COMMENT("%*c  Sent timestamp  %ld", indent*2, ' ', pack->send_ts);
+    RMC_LOG_COMMENT("%*c  Reference count %d", indent*2, ' ', pack->ref_count);
+    RMC_LOG_COMMENT("%*c  Parent node     %p", indent*2, ' ', pack->parent_node);
+    RMC_LOG_COMMENT("%*c  Payload Length  %d", indent*2, ' ', pack->payload_len);
+    RMC_LOG_COMMENT("%*c  Payload         %s", indent*2, ' ', (char*) pack->payload);
+    RMC_LOG_COMMENT("");
+
     return 1;
 }
 
@@ -69,18 +71,19 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
         uint8_t op_res = 0;
         rmc_index_t c_ind = events[nfds].data.u32;
 
-//        printf("pub_poll_wait(%s:%d)%s%s%s\n",
-//               _index(c_ind, buf), _descriptor(ctx, c_ind),
-//             ((events[nfds].events & EPOLLIN)?" read":""),
-//               ((events[nfds].events & EPOLLOUT)?" write":""),
-//               ((events[nfds].events & EPOLLHUP)?" disconnect":""));
+        RMC_LOG_DEBUG("pub_poll_wait(%s:%d)%s%s%s",
+               _index(c_ind, buf), _descriptor(ctx, c_ind),
+             ((events[nfds].events & EPOLLIN)?" read":""),
+               ((events[nfds].events & EPOLLOUT)?" write":""),
+               ((events[nfds].events & EPOLLHUP)?" disconnect":""));
 
 
         if (events[nfds].events & EPOLLIN) {
             errno = 0;
             res = rmc_pub_read(ctx, c_ind, &op_res);
             // Did we read a loopback message we sent ourselves?
-//            printf("process_events(%s):%s\n", _op_res_string(op_res), strerror(res));
+
+            RMC_LOG_DEBUG("%s:%s", _op_res_string(op_res), strerror(res));
             if (res == EAGAIN)
                 continue;       
 
@@ -110,8 +113,7 @@ void queue_test_data(rmc_pub_context_t* ctx, char* buf, int drop_flag)
     res = rmc_pub_queue_packet(ctx, memcpy(malloc(strlen(buf+1)), buf, strlen(buf)+1), strlen(buf)+1, 0);
 
     if (res) {
-        printf("queue_test_data(payload[%s]: %s",
-               buf, strerror(res));
+        RMC_LOG_FATAL("payload[%s]: %s",  buf, strerror(res));
         exit(255);
     }
 
@@ -126,7 +128,7 @@ void queue_test_data(rmc_pub_context_t* ctx, char* buf, int drop_flag)
                                          pack->pid = td->pid;
                                          // If we are to drop this packet, mark it as falsely sent.
                                          if (drop_flag) { 
-                                             printf("Dropping packet [%lu] as specified\n", pack->pid);
+                                         RMC_LOG_LEVEL_DEBUG("Dropping packet [%lu] as specified\n", pack->pid);
                                              pub_packet_sent(&ctx->pub_ctx, pack, rmc_usec_monotonic_timestamp());
                                          }
                                          return 0;
@@ -202,7 +204,10 @@ void test_rmc_proto_pub(char* mcast_group_addr,
                                             lambda(uint8_t, (rmc_pub_context_t*ctx,
                                                              char* remote_addr,
                                                              in_port_t remote_port) {
-                                                       printf("Subscriber [%s:%d] connected\n", remote_addr, remote_port); 
+                                                       RMC_LOG_INFO("Subscriber [%s:%d] connected", remote_addr, remote_port); 
+                                                       if (!subscriber_count)
+                                                           rmc_log_set_start_time();
+                                                           
                                                        subscriber_count++;
                                                        return 1;
                                                    }));
@@ -212,7 +217,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
                                                lambda(void, (rmc_pub_context_t*ctx,
                                                              char* remote_addr,
                                                              in_port_t remote_port) {
-                                                          printf("Subscriber %s:%d disconnected\n", remote_addr, remote_port);
+                                                          RMC_LOG_INFO("Subscriber %s:%d disconnected", remote_addr, remote_port);
                                                           subscriber_count--;
                                                           return;
                                                       }));
@@ -224,16 +229,14 @@ void test_rmc_proto_pub(char* mcast_group_addr,
           1, 1,
           rmc_pub_activate_context(ctx));
 
-    printf("rmc_proto_test_pub: context: ctx[%.9X] mcast_addr[%s] mcast_port[%d] \n",
-           rmc_pub_context_id(ctx), mcast_group_addr, mcast_port);
+    RMC_LOG_INFO("context: ctx[%.9X] mcast_addr[%s] mcast_port[%d]",
+                 rmc_pub_context_id(ctx), mcast_group_addr, mcast_port);
 
     // Wait for the correct number of subscribers to connect before we start sending.
     while(subscriber_count < expected_subscriber_count) {
         usec_timestamp_t event_tout = 0;
 
         rmc_pub_timeout_get_next(ctx, &event_tout);
-
-
         if (process_events(ctx, epollfd, event_tout, 2) == ETIME) 
             rmc_pub_timeout_process(ctx);
     }
@@ -257,20 +260,19 @@ void test_rmc_proto_pub(char* mcast_group_addr,
         tout = current_ts + send_interval;
         if (jitter > 0) 
              tout += (rand() % jitter) * 2 - jitter;
-        else
 
         sprintf(buf, "%u:%lu:%lu", node_id, ind, count);
         queue_test_data(ctx, buf, drop_flag);
 
         if (drop_flag) 
-            printf("dropped packet [%lu]\n", ind);
+            RMC_LOG_INFO("dropped packet [%lu]", ind);
 
         if (ind % 1000 == 0) {
-            printf("queued packet [%lu-%lu]\n", debug_output_pid, ind);
+            RMC_LOG_INFO("queued packet [%lu-%lu]", debug_output_pid, ind);
             debug_output_pid = ind + 1;
         }
 
-//        printf("rmc_proto_test_pub: queue_test_data(%s): drop[%c] wait[%ld]\n", buf, drop_flag?'x':' ', tout-current_ts);
+        RMC_LOG_DEBUG("%s: drop[%c] wait[%ld]", buf, drop_flag?'x':' ', tout-current_ts);
 
         // Make sure we run the loop at least one.
         if (current_ts > tout)
@@ -282,7 +284,6 @@ void test_rmc_proto_pub(char* mcast_group_addr,
         while(current_ts < tout) {
             usec_timestamp_t event_tout = 0;
 
-            puts("Doing it");
             rmc_pub_timeout_get_next(ctx, &event_tout);
 
             if (event_tout == -1 || event_tout > tout)
@@ -295,58 +296,43 @@ void test_rmc_proto_pub(char* mcast_group_addr,
         }  
     }
 
-    puts("Shutting down");
     
+    // Continue to process events until subscriber count reaches zero.
 
     // Disable announce.
     rmc_pub_set_announce_interval(ctx, 0);
-    
-    busy = rmc_pub_context_get_pending(ctx, &queued_packets, &send_buf_len, &ack_count);
-//    printf("busy init: queued_packets[%u] send_buf_len[%u] ack_count[%u] -> %s\n",
-//           queued_packets, send_buf_len, ack_count, (busy==EBUSY)?"busy":"not busy");
-    while(busy == EBUSY) {
+
+    RMC_LOG_INFO("All packets sent");
+   
+    while(subscriber_count > 0) {
         usec_timestamp_t tout = 0;
         usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
-        
 
         rmc_pub_timeout_get_next(ctx, &tout);
-//        if (tout != -1)
-//            printf("tout[%ld]\n", tout - current_ts);
-//        else
-//            printf("tout[infinite]");
-
-        printf("queued[%d] inflight[%d]\n",
-               pub_packet_list_size(&ctx->pub_ctx.queued),
-               pub_packet_list_size(&ctx->pub_ctx.inflight));
-
-               
-
-        // Even if we have infinite timeout, we will process events
-        // since we may have pending data that we need to write when
-        // we get EPOLLOUT from epoll()
-        //
-        if ((res = process_events(ctx, epollfd, tout, 2)) == ETIME || tout < current_ts)  {
-            puts("Processing timeout");
+        // Process all timeouts
+        while(tout != -1 && tout < current_ts) {
             rmc_pub_timeout_process(ctx);
+            rmc_pub_timeout_get_next(ctx, &tout);
+            process_events(ctx, epollfd, tout, 2);
         }
-        busy = rmc_pub_context_get_pending(ctx, &queued_packets, &send_buf_len, &ack_count);
-//        printf("busy: queued_packets[%u] send_buf_len[%u] ack_count[%u] -> %s\n",
-//               queued_packets, send_buf_len, ack_count, (busy==EBUSY)?"busy":"not busy");
 
+
+        RMC_LOG_COMMENT("queued[%d] inflight[%d]",
+                        pub_packet_list_size(&ctx->pub_ctx.queued),
+                        pub_packet_list_size(&ctx->pub_ctx.inflight));
+
+        process_events(ctx, epollfd, tout, 2);
     }
 
-        busy = rmc_pub_context_get_pending(ctx, &queued_packets, &send_buf_len, &ack_count);
-//        printf("exit busy: queued_packets[%u] send_buf_len[%u] ack_count[%u] -> %s\n",
-//               queued_packets, send_buf_len, ack_count, (busy==EBUSY)?"busy":"not busy");
-
     rmc_pub_deactivate_context(ctx);
-    puts("Done");
 
-    puts("TO TEST: Multiple publishers. Single subscriber");
+    RMC_LOG_INFO("Done");
 
-    puts("TO TEST: Multiple subscribers. Single publisher");
-    puts("TO TEST: Publishers that repeatedly connects and disconnects");
-    puts("TO TEST: Subscribers that repeatedly connects and disconnects");
+    RMC_LOG_INFO("TO TEST: Multiple publishers. Single subscriber");
+
+    RMC_LOG_INFO("TO TEST: Multiple subscribers. Single publisher");
+    RMC_LOG_INFO("TO TEST: Publishers that repeatedly connects and disconnects");
+    RMC_LOG_INFO("TO TEST: Subscribers that repeatedly connects and disconnects");
     exit(0);
 }
 
