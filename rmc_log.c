@@ -11,11 +11,13 @@
 #include "rmc_common.h"
 #include "rmc_log.h"
 #include "string.h"
+#include <unistd.h>
 
 static usec_timestamp_t start_time = 0;
 
 int _rmc_log_level = RMC_LOG_LEVEL_NONE;
-int _rmc_log_use_color = 1;
+int _rmc_log_use_color = -1;
+int _rmc_log_use_color_calculated = 0;
 FILE *_rmc_log_file = 0;
 
 
@@ -27,7 +29,8 @@ void rmc_log_set_start_time(void)
 
 void rmc_log_use_color(int use_color)
 {
-    int _rmc_log_use_color = use_color;
+    _rmc_log_use_color = use_color;
+    _rmc_log_use_color_calculated = 0;
 }
 
 void rmc_set_log_level(int log_level)
@@ -43,6 +46,15 @@ void rmc_set_log_level(int log_level)
 void rmc_log_set_file(FILE* file)
 {
     _rmc_log_file = file;
+
+    // If necessary, recalculate if we should use colors or not.
+
+    if (_rmc_log_use_color_calculated) {
+        if (isatty(fileno(_rmc_log_file)))
+            _rmc_log_use_color = 1;
+        else
+            _rmc_log_use_color = 0;
+    }
 }
 
 const char* rmc_log_color_flashing_red() 
@@ -74,6 +86,12 @@ const char* rmc_log_color_green()
     return _rmc_log_use_color?"\033[38;2;0;204;0m":"";
 }
 
+// Faint
+const char* rmc_log_color_faint()
+{
+    return _rmc_log_use_color?"\033[2m":"";
+}
+
 // None
 const char* rmc_log_color_none()
 {
@@ -86,9 +104,23 @@ void rmc_log(int log_level, const char* func, const char* file, int line, const 
 {
     const char* color = 0;
     const char* tag = 0;
-    char identifier[256];
     va_list ap;
     
+
+    // Default rmc_log_file, if not set.
+    if (!_rmc_log_file)
+        _rmc_log_file = stdout;
+
+    // If use color is -1, then check if we are on a tty or not
+    if (_rmc_log_use_color == -1) {
+        _rmc_log_use_color_calculated = 1;
+
+        if (isatty(fileno(_rmc_log_file)))
+            _rmc_log_use_color = 1;
+        else
+            _rmc_log_use_color = 0;
+    }
+
     switch(log_level) {
     case RMC_LOG_LEVEL_DEBUG:
         color = rmc_log_color_none();
@@ -126,22 +158,17 @@ void rmc_log(int log_level, const char* func, const char* file, int line, const 
         break;
     }
 
-    if (!_rmc_log_file)
-        _rmc_log_file = stdout;
-    
-    // If this is a lambda function, substitute function name with file name
-    if (!strcmp(func, "__fn__"))
-        sprintf(identifier, "(lambda):%s", file);
-    else
-        sprintf(identifier, "%s()", func);
 
-    fprintf(_rmc_log_file, "%s%s %ld%s \033[2m%s:%d\033[0m ",
+
+    fprintf(_rmc_log_file, "%s%s %ld%s %s%s:%d%s ",
             color,
             tag,
             start_time?((rmc_usec_monotonic_timestamp() - start_time)/1000):0 ,
             rmc_log_color_none(),
-            identifier,
-            line);
+            rmc_log_color_faint(),
+            file,
+            line,
+            rmc_log_color_none());
     va_start(ap, fmt);
     vfprintf(_rmc_log_file, fmt, ap);
     va_end(ap);
