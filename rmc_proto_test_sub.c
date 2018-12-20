@@ -84,7 +84,6 @@ static uint8_t announce_cb(struct rmc_sub_context* ctx,
 {
     RMC_LOG_INFO("Announce detected. Starting tests");
 
-    rmc_log_set_start_time();
     return 1;
 }
 
@@ -150,6 +149,7 @@ static int process_incoming_data(rmc_sub_context_t* ctx,
         for(ind = 1; ind <= max_expected; ++ind)
             expect[node_id].expect_sum += ind;
 
+        rmc_log_set_start_time();
         RMC_LOG_INFO("Activate: node_id[%u] current[%lu] max_expected[%lu] expected sum[%lu]",
                      node_id, current, max_expected, expect[node_id].calc_sum);
 
@@ -240,7 +240,7 @@ static int process_events(rmc_sub_context_t* ctx,
             
     nfds = epoll_wait(epollfd, events, RMC_MAX_CONNECTIONS, (timeout_ts == -1)?-1:(timeout_ts / 1000) + 1);
     if (nfds == -1) {
-        perror("epoll_wait");
+        RMC_LOG_FATAL("epoll_wait(): %s", strerror(errno));
         exit(255);
     }
 
@@ -248,9 +248,7 @@ static int process_events(rmc_sub_context_t* ctx,
     if (nfds == 0) 
         return ETIME;
 
-
     // printf("poll_wait(): %d results\n", nfds);
-
     while(nfds--) {
         int res = 0;
         uint8_t op_res = 0;
@@ -370,7 +368,7 @@ void test_rmc_proto_sub(char* mcast_group_addr,
             rmc_sub_timeout_get_next(ctx, &timeout_ts);
         }
 
-        RMC_LOG_COMMENT("timeout [%ld] msec", (timeout_ts == -1)?-1:(timeout_ts  - current_ts));
+        RMC_LOG_COMMENT("timeout [%ld] msec", (timeout_ts == -1)?-1:(timeout_ts  - current_ts)/1000);
         if (process_events(ctx, epollfd, timeout_ts) == ETIME) {
             RMC_LOG_INFO("Got timeout");
             continue;
