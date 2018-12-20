@@ -15,6 +15,7 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include "reliable_multicast.h"
+#include "rmc_log.h"
 
 extern void test_packet_interval();
 extern void run_list_tests();
@@ -51,8 +52,9 @@ extern void test_circular_buffer(void);
 void usage(char* prog)
 {
     fprintf(stderr,
-            "Usage: %s [-P] [-M <ip-addr>] [-m <ip-addr>] [-l <ip-addr>] [-P <port>] [-p <port>]\n",
+            "Usage: %s -L <log-level> [-P] [-M <ip-addr>] [-m <ip-addr>] [-l <ip-addr>] [-P <port>] [-p <port>]\n",
             prog);
+    fprintf(stderr, "       -L <log-level> Set log-level. 0=None. 1=Debug. 2=Comment 3=Info. 4=Warning. 5=Error. 6=Fatal. Default is 0\n");
     fprintf(stderr, "       -S             Run as subscriber instead of default publisher\n");
     fprintf(stderr, "       -M <ip-addr>   Multicast IP address (default: %s)\n", MULTICAST_ADDR_DEFAULT);
     fprintf(stderr, "       -m <ip-addr>   Multicast interface IP (default: %s)\n", MULTICAST_IF_ADDR_DEFAULT);
@@ -92,14 +94,19 @@ int main(int argc, char* argv[])
     int expect_node_id = 0;
     int expected_subscriber_count = 1;
     int e_arg_set = 0;
+    int log_level = RMC_LOG_LEVEL_NONE;
 
     strcpy(mcast_if_addr, MULTICAST_IF_ADDR_DEFAULT);
     strcpy(listen_if_addr, LISTEN_IF_ADDR_DEFAULT);
     strcpy(mcast_group_addr, MULTICAST_ADDR_DEFAULT);
     memset(expected_node_id, 0, sizeof(expected_node_id));
 
-    while ((opt = getopt(argc, argv, "SP:M:m:l:p:c:n:r:s:j:d:e:E:")) != -1) {
+    while ((opt = getopt(argc, argv, "SP:M:m:l:p:c:n:r:s:j:d:e:E:L:")) != -1) {
         switch (opt) {
+
+        case 'L':
+            log_level = atoi(optarg);
+            break;
 
         case 'S':
             publisher = 0;
@@ -169,10 +176,21 @@ int main(int argc, char* argv[])
     }
     
            
+    if (log_level == 0)
+        log_level == RMC_LOG_LEVEL_NONE;
+
+    if (log_level < RMC_LOG_LEVEL_DEBUG || log_level > RMC_LOG_LEVEL_NONE) {
+        fprintf(stderr, "Illegal log level: %d\n", log_level);
+        usage(argv[0]);
+        exit(1);
+    }
+    
+            
     // Default 
     if (!e_arg_set)
         expected_node_id[1] = 1;
     
+    rmc_set_log_level(log_level);
     run_list_tests();
     test_packet_interval();
     test_circular_buffer();
@@ -182,7 +200,7 @@ int main(int argc, char* argv[])
     setlinebuf(stderr);
 
     if (!publisher) {
-        puts("SUBSCRIBER\n");
+        RMC_LOG_INFO("SUBSCRIBER");
         test_rmc_proto_sub(mcast_group_addr,
                            mcast_if_addr,
                            mcast_port,
@@ -195,7 +213,7 @@ int main(int argc, char* argv[])
 
     setlinebuf(stdout);
     setlinebuf(stderr);
-    puts("PUBLISHER\n");
+    RMC_LOG_INFO("PUBLISHER");
     test_rmc_proto_pub(mcast_group_addr,
                        mcast_if_addr,
                        listen_if_addr,
