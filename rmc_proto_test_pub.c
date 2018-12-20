@@ -241,6 +241,8 @@ void test_rmc_proto_pub(char* mcast_group_addr,
             rmc_pub_timeout_process(ctx);
     }
 
+    // Send an announcement every 0.3 second.
+    rmc_pub_set_announce_interval(ctx, 0);
 
     // Seed with a predefined value, allowing us to generate the exact same random sequence
     // every time for packet drops, etc.
@@ -314,6 +316,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
             rmc_pub_timeout_process(ctx);
             rmc_pub_timeout_get_next(ctx, &tout);
             process_events(ctx, epollfd, tout, 2);
+//            RMC_LOG_COMMENT("Yo: tout[%lu]", tout);
         }
 
 
