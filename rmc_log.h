@@ -25,6 +25,7 @@ extern void rmc_log_use_color(int use_color);
 extern void rmc_set_log_level(int log_level);
 extern void rmc_log(int log_level, const char* func, const char* file, int line, const char* fmt, ...);
 extern const char* rmc_log_color_none();
+extern const char* rmc_log_color_faint();
 extern const char* rmc_log_color_green();
 extern const char* rmc_log_color_blue();
 extern const char* rmc_log_color_orange();
@@ -34,7 +35,7 @@ extern const char* rmc_log_color_flashing_red();
 extern int _rmc_log_level;
 
 #define RMC_LOG_DEBUG(fmt, ...) { if (_rmc_log_level <= RMC_LOG_LEVEL_DEBUG) rmc_log(RMC_LOG_LEVEL_DEBUG, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__ ); }
-#define RMC_LOG_COMMENT(fmt, ...) { if (_rmc_log_level <= RMC_LOG_LEVEL_COMMENT) rmc_log(RMC_LOG_LEVEL_COMMENT, __FILE__, __FUNCTION__, __LINE__, fmt, ##__VA_ARGS__ ); }
+#define RMC_LOG_COMMENT(fmt, ...) { if (_rmc_log_level <= RMC_LOG_LEVEL_COMMENT) rmc_log(RMC_LOG_LEVEL_COMMENT, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__ ); }
 #define RMC_LOG_INFO(fmt, ...) { if (_rmc_log_level <= RMC_LOG_LEVEL_INFO) rmc_log(RMC_LOG_LEVEL_INFO, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__); }
 #define RMC_LOG_WARNING(fmt, ...) { if (_rmc_log_level <= RMC_LOG_LEVEL_WARNING) rmc_log(RMC_LOG_LEVEL_WARNING, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__); }
 #define RMC_LOG_ERROR(fmt, ...) { if (_rmc_log_level <= RMC_LOG_LEVEL_ERROR) rmc_log(RMC_LOG_LEVEL_ERROR, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__); }
