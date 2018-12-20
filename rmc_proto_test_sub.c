@@ -6,6 +6,7 @@
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
 #include "rmc_proto_test_common.h"
+#include "rmc_log.h"
 
 // Indexed by publisher node_id, as received in the
 // payload 
@@ -34,25 +35,10 @@ typedef struct {
     usec_timestamp_t stop_ts; // Last packet received
 } sub_expect_t;
 
-static usec_timestamp_t start_time = 0;
-
-
-
-char* ts(void)
-{
-    static char elapsed[64];
-    
-
-    if (!start_time)
-        return "\033[38;2;192;0;0m?\033[0m";
-
-    sprintf(elapsed, "\033[38;2;192;0;0m%lu\033[0m", (rmc_usec_monotonic_timestamp() - start_time)/1000);
-    return elapsed;
-}
- 
 
 static uint8_t _test_print_pending(sub_packet_node_t* node, void* dt)
 {
+
     sub_packet_t* pack = (sub_packet_t*) node->data;
     int indent = (int) (uint64_t) dt;
 
@@ -96,9 +82,9 @@ static uint8_t announce_cb(struct rmc_sub_context* ctx,
                            void* payload,
                            payload_len_t payload_len)
 {
-    puts("Announce detected. Starting tests");
+    RMC_LOG_INFO("Announce detected. Starting tests");
 
-    start_time = rmc_usec_monotonic_timestamp();
+    rmc_log_set_start_time();
     return 1;
 }
 
@@ -119,7 +105,7 @@ static int process_incoming_data(rmc_sub_context_t* ctx,
     // Sscanf is slow as hell, so dissect this one manually.
     
     if (sscanf(pack->payload, "%u:%lu:%lu", &node_id, &current, &max_expected) != 3) {
-        printf("rmc_proto_test_sub(): Payload [%s] could not be scanned by [%%u:%%lu:%%lu]\n",
+        RMC_LOG_FATAL("Payload [%s] could not be scanned by [%%u:%%lu:%%lu]",
                (char*) pack->payload);
         exit(255);
     }
@@ -129,21 +115,21 @@ static int process_incoming_data(rmc_sub_context_t* ctx,
 
     // Is context ID within our expetcted range
     if (node_id >= expect_sz) {
-        printf("rmc_proto_test_sub(): ContextID [%u] is out of range (0-%d)\n",
+        RMC_LOG_FATAL("ContextID [%u] is out of range (0-%d)",
                node_id, expect_sz);
         exit(255);
      }
 
     // Is this context expected?
     if (expect[node_id].status == RMC_TEST_SUB_INACTIVE) {
-        printf("rmc_proto_test_sub(): ContextID [%u] not expected. Use -e %u to setup subscriber expectations.\n",
+        RMC_LOG_FATAL("ContextID [%u] not expected. Use -e %u to setup subscriber expectations.",
                node_id, node_id);
         exit(255);
     }
 
     // Have we already completed all expected packages here?
     if (expect[node_id].status == RMC_TEST_SUB_COMPLETED) {
-        printf("rmc_proto_test_sub(): ContextID [%u] have already processed its [%lu] packets. Got Current[%lu] Max[%lu].\n",
+        RMC_LOG_FATAL("ContextID [%u] have already processed its [%lu] packets. Got Current[%lu] Max[%lu].",
                node_id, expect[node_id].max_received, current, max_expected);
         exit(255);
     }
@@ -164,8 +150,8 @@ static int process_incoming_data(rmc_sub_context_t* ctx,
         for(ind = 1; ind <= max_expected; ++ind)
             expect[node_id].expect_sum += ind;
 
-        printf("rmc_proto_test_sub(): Activate: node_id[%u] current[%lu] max_expected[%lu]. expected sum[%lu].\n",
-               node_id, current, max_expected, expect[node_id].calc_sum);
+        RMC_LOG_INFO("Activate: node_id[%u] current[%lu] max_expected[%lu]. expected sum[%lu].\n",
+                     node_id, current, max_expected, expect[node_id].calc_sum);
 
         // Fall through to the next if statement
     }
@@ -177,14 +163,14 @@ static int process_incoming_data(rmc_sub_context_t* ctx,
 
         // Check that max_expected hasn't changed.
         if (max_expected != expect[node_id].max_expected) {
-            printf("rmc_proto_test_sub(): ContextID [%u] max_expected changed from [%lu] to [%lu]\n",
+            RMC_LOG_FATAL("ContextID [%u] max_expected changed from [%lu] to [%lu]\n",
                    node_id, expect[node_id].max_expected, max_expected);
             exit(255);
         }
         
         // Check that packet is consecutive.
         if (current != expect[node_id].max_received + 1) {
-            printf("rmc_proto_test_sub(): ContextID [%u] Wanted[%lu] Got[%lu]\n",
+            RMC_LOG_FATAL("ContextID [%u] Wanted[%lu] Got[%lu]\n",
                    node_id, expect[node_id].max_received + 1, current);
             exit(255);
         }
@@ -195,10 +181,8 @@ static int process_incoming_data(rmc_sub_context_t* ctx,
         // Check if we are complete
         if (current == max_expected) {
             double pack_sec = 0.0;
-            printf("rmc_proto_test_sub(): ContextID [%u] **COMPLETE** at[%lu]\n",
-                   node_id, current);
-            
-
+            RMC_LOG_INFO("rmc_proto_test_sub(): ContextID [%u] %s**COMPLETE*%s* at[%lu]\n",
+                         node_id, rmc_log_color_green(), rmc_log_color_none(), current);
             
             // Did we see data corruption?
             if (expect[node_id].expect_sum !=  expect[node_id].calc_sum) {
@@ -215,10 +199,12 @@ static int process_incoming_data(rmc_sub_context_t* ctx,
             pack_sec = (double) expect[node_id].max_received /
                 ((double) (expect[node_id].stop_ts - expect[node_id].start_ts) / 1000000.0);
 
-            printf("rmc_proto_test_sub(): [%lu] packets in [%lu] msec -> %g packets / sec\n",
-                   expect[node_id].max_received,
-                   (expect[node_id].stop_ts - expect[node_id].start_ts) / 1000,
-                   pack_sec);
+            RMC_LOG_INFO("[%lu] packets in [%lu] msec -> %s%g packets / sec%s\n",
+                         expect[node_id].max_received,
+                         (expect[node_id].stop_ts - expect[node_id].start_ts) / 1000,
+                         rmc_log_color_green(),
+                         pack_sec,
+                         rmc_log_color_none());
 
             // Check if this is the last one out.
             if (check_exit_condition(expect, expect_sz))
@@ -270,19 +256,18 @@ static int process_events(rmc_sub_context_t* ctx,
         uint8_t op_res = 0;
         rmc_index_t c_ind = events[nfds].data.u32;
 
-//        printf("poll_wait(%s:%d)%s%s%s\n",
-//               _index(c_ind, buf), _descriptor(ctx, c_ind),
-//               ((events[nfds].events & EPOLLIN)?" read":""),
-//               ((events[nfds].events & EPOLLOUT)?" write":""),
-//               ((events[nfds].events & EPOLLHUP)?" disconnect":""));
+        RMC_LOG_DEBUG("%s:%d - %s%s%s",
+               _index(c_ind, buf), _descriptor(ctx, c_ind),
+               ((events[nfds].events & EPOLLIN)?" read":""),
+               ((events[nfds].events & EPOLLOUT)?" write":""),
+               ((events[nfds].events & EPOLLHUP)?" disconnect":""));
 
 
         if (events[nfds].events & EPOLLIN) {
             errno = 0;
             res = rmc_sub_read(ctx, c_ind, &op_res);
             // Did we read a loopback message we sent ourselves?
-            printf("%s: post rmc_sub_read(%s):%su\n",
-                   ts(),  _op_res_string(op_res),   strerror(res));
+            RMC_LOG_DEBUG("resul:t %s - %s", _op_res_string(op_res),   strerror(res));
 
             if (res == EAGAIN)
                 continue;       
@@ -369,26 +354,29 @@ void test_rmc_proto_sub(char* mcast_group_addr,
 
     rmc_sub_set_announce_callback(ctx, announce_cb);
 
-    
-    printf("rmc_proto_test_sub: context: ctx[%.9X] mcast_addr[%s] mcast_port[%d] \n",
-           rmc_sub_context_id(ctx), mcast_group_addr, mcast_port);
+    RMC_LOG_INFO("ctx[%.9X] mcast_addr[%s] mcast_port[%d]",
+                  rmc_sub_context_id(ctx), mcast_group_addr, mcast_port);
 
     while(1) {
         sub_packet_t* pack = 0;
         packet_id_t first_pid = 0;
         packet_id_t last_pid = 0;
         usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
-        
-        
+
         rmc_sub_timeout_get_next(ctx, &timeout_ts);
-        printf("%s: process_events(): timeout [%ld] msec\n", ts(), (timeout_ts == -1)?-1:(timeout_ts  - current_ts));
-        if (process_events(ctx, epollfd, timeout_ts) == ETIME ||
-            (timeout_ts != -1 && timeout_ts - rmc_usec_monotonic_timestamp() < 0)) {
-            printf("%s: process_events(): processing timeout\n", ts());
+        
+        while(timeout_ts != -1 && timeout_ts < current_ts) {
             rmc_sub_timeout_process(ctx);
+            rmc_sub_timeout_get_next(ctx, &timeout_ts);
+        }
+
+        RMC_LOG_COMMENT("timeout [%ld] msec", (timeout_ts == -1)?-1:(timeout_ts  - current_ts));
+        if (process_events(ctx, epollfd, timeout_ts) == ETIME) {
+            RMC_LOG_INFO("Got timeout");
+            continue;
         }
         else 
-            printf("%s: process_events(): no timeout\n", ts());
+            RMC_LOG_DEBUG("No timeout");
 
         // Process as many packets as possible.
         
@@ -402,46 +390,15 @@ void test_rmc_proto_sub(char* mcast_group_addr,
                 break;
             }
         }
-        printf("%s: max_pid_ready[%lu]  max_pid_received[%lu]\n", ts(), ctx->publishers[0].max_pid_ready,  ctx->publishers[0].max_pid_ready);
+        RMC_LOG_COMMENT("max_pid_ready[%lu]  max_pid_received[%lu]",
+                      ctx->publishers[0].max_pid_ready,  ctx->publishers[0].max_pid_ready);
 
         if (do_exit)
 
             break;
     }
-
-    puts("Shutting down");
-
-    while(1) {
-        sub_packet_t* pack = 0;
-        packet_id_t first_pid = 0;
-        packet_id_t last_pid = 0;
-
-        rmc_sub_timeout_get_next(ctx, &timeout_ts);
-        printf("%s: timeout_ts[%ld]\n", ts(), timeout_ts - rmc_usec_monotonic_timestamp());
-
-        if (timeout_ts == -1) 
-            break;
-
-
-        if (process_events(ctx, epollfd, timeout_ts) == ETIME ||
-             timeout_ts - rmc_usec_monotonic_timestamp() < 0) {
-            rmc_sub_timeout_process(ctx);
-        }
-
-        while((pack = rmc_sub_get_next_dispatch_ready(ctx))) {
-            if (!first_pid)
-                first_pid = pack->pid;
-
-            last_pid = pack->pid;
-            if (!process_incoming_data(ctx, pack, expect, node_id_map_size)) {
-                do_exit = 1;
-                break;
-            }
-        }
-        printf("Pid[%lu:%lu]\n", first_pid, last_pid);
-    }
     rmc_sub_deactivate_context(ctx);
     
-    puts("Done");
+    RMC_LOG_INFO("Done.");
     exit(0);
 }
