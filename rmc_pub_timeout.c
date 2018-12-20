@@ -118,7 +118,9 @@ int rmc_pub_timeout_process(rmc_pub_context_t* ctx)
         return EINVAL;
 
     // Check if we need to send an announce packet.
-    if (ctx->announce_next_send_ts != 0 && ctx->announce_next_send_ts - current_ts <= 0) {
+    if (ctx->announce_send_interval &&
+        ctx->announce_next_send_ts != 0 &&
+        ctx->announce_next_send_ts - current_ts <= 0) {
         char buffer[RMC_MAX_PAYLOAD];
         payload_len_t len = 0;
         uint8_t send_announce = 1;
@@ -133,6 +135,7 @@ int rmc_pub_timeout_process(rmc_pub_context_t* ctx)
             len = sizeof(buffer);
             
         if (send_announce) {
+            RMC_LOG_COMMENT("Sending announce");
             rmc_pub_queue_packet(ctx, buffer, len, 1);
         }
 
@@ -156,9 +159,7 @@ int rmc_pub_timeout_process(rmc_pub_context_t* ctx)
 
         if (res) {
             // Clean up the list.
-            while(pub_sub_list_pop_head(&subs, &sub))
-                ;
-
+            pub_sub_list_empty(&subs);
             return res;
         }
     }
@@ -185,7 +186,7 @@ int rmc_pub_timeout_get_next(rmc_pub_context_t* ctx, usec_timestamp_t* result_ts
     // Get the send timestamp of the oldest packet we have yet to
     // receive an acknowledgement for from the subscriber.
     pub_get_oldest_unackowledged_packet(&ctx->pub_ctx, &ack_timeout_ts);
-
+    
     // Calculate time stamp of when we need to see an ack by.
     if (ack_timeout_ts != -1)
         ack_timeout_ts += ctx->resend_timeout; 
