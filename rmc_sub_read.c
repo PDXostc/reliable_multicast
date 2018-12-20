@@ -332,11 +332,21 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
     circ_buf_read(&conn->read_buf, payload, pack_hdr->payload_len, 0);
     circ_buf_free(&conn->read_buf, pack_hdr->payload_len, 0);
 
-    rmc_sub_packet_received(ctx, conn->connection_index,
-                            pack_hdr->pid,
-                            payload,pack_hdr->payload_len,
-                            rmc_usec_monotonic_timestamp(),
-                            user_data_u32(conn->connection_index));
+    RMC_LOG_DEBUG("Received: %lu", pack_hdr->pid);
+    
+    // Since we are getting this via TCP command channel,
+    // we do not need to ack it.
+    //
+    // Call sub_packet_received() directly instead of
+    // rmc_sub_packet_received() since rmc_sub_packet_received() will
+    // setup the packet for acknowledgement before calling
+    // sub_packet_received().
+    //
+    sub_packet_received(&ctx->publishers[conn->connection_index],
+                        pack_hdr->pid,
+                        payload, pack_hdr->payload_len,
+                        rmc_usec_monotonic_timestamp(),
+                        user_data_u32(conn->connection_index));
 
     return 0;
 }
