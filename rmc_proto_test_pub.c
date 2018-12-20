@@ -128,7 +128,7 @@ void queue_test_data(rmc_pub_context_t* ctx, char* buf, int drop_flag)
                                          pack->pid = td->pid;
                                          // If we are to drop this packet, mark it as falsely sent.
                                          if (drop_flag) { 
-                                         RMC_LOG_LEVEL_DEBUG("Dropping packet [%lu] as specified\n", pack->pid);
+                                         RMC_LOG_LEVEL_DEBUG("Dropping packet [%lu] as specified", pack->pid);
                                              pub_packet_sent(&ctx->pub_ctx, pack, rmc_usec_monotonic_timestamp());
                                          }
                                          return 0;

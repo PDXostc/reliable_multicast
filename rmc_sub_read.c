@@ -140,7 +140,7 @@ static int _decode_subscribed_multicast(rmc_sub_context_t* ctx,
     // over to the ready queue.
     sub_process_received_packets(pub, &ctx->dispatch_ready);
 
-    RMC_LOG_COMMENT("decode_subscribed_multicast(): pid[%lu-%lu]\n", first_pid, last_pid);
+    RMC_LOG_COMMENT("decode_subscribed_multicast(): pid[%lu-%lu]", first_pid, last_pid);
     return 0;
 }
 
@@ -281,7 +281,7 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
     // have atomically processed or rejeceted the command.
     //
     if (circ_buf_in_use(&conn->read_buf) < 1 + sizeof(cmd_packet_header_t)) {
-        RMC_LOG_COMMENT("Incomplete header data. Want [%lu] Got[%d]\n",
+        RMC_LOG_COMMENT("Incomplete header data. Want [%lu] Got[%d]",
                1 + sizeof(cmd_packet_header_t), circ_buf_in_use(&conn->read_buf));
 
         // Don't free any memory since we will get called again when we have more data.

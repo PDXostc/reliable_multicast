@@ -187,7 +187,7 @@ int rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
                          &seg1, &seg1_len,
                          &seg2, &seg2_len);
 
-    RMC_LOG_DEBUG("alloc: %lu\n", rmc_usec_monotonic_timestamp() - current_ts);
+    RMC_LOG_DEBUG("alloc: %lu", rmc_usec_monotonic_timestamp() - current_ts);
     // Did we fail?
     if (res) {
         *op_res = RMC_ERROR;
@@ -203,7 +203,7 @@ int rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
     errno = 0;
     
     res = readv(conn->descriptor, iov, 2);
-    RMC_LOG_DEBUG("read(%lu): %lu\n", res, rmc_usec_monotonic_timestamp() - current_ts);
+    RMC_LOG_DEBUG("read(%lu): %lu", res, rmc_usec_monotonic_timestamp() - current_ts);
 
 
     if (res == -1 || res == 0) {

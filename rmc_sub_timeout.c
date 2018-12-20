@@ -75,7 +75,7 @@ int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
             int res = 0;
             res = rmc_sub_packet_interval_acknowledged(ctx, inode->data, &pid_intv);
             if (res) {
-                RMC_LOG_INFO("Failed to send packet ack: %s\n", strerror(res));
+                RMC_LOG_INFO("Failed to send packet ack: %s", strerror(res));
                 return res;
             }
         }

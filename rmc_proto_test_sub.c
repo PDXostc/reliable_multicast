@@ -150,7 +150,7 @@ static int process_incoming_data(rmc_sub_context_t* ctx,
         for(ind = 1; ind <= max_expected; ++ind)
             expect[node_id].expect_sum += ind;
 
-        RMC_LOG_INFO("Activate: node_id[%u] current[%lu] max_expected[%lu]. expected sum[%lu].\n",
+        RMC_LOG_INFO("Activate: node_id[%u] current[%lu] max_expected[%lu] expected sum[%lu]",
                      node_id, current, max_expected, expect[node_id].calc_sum);
 
         // Fall through to the next if statement
@@ -163,14 +163,14 @@ static int process_incoming_data(rmc_sub_context_t* ctx,
 
         // Check that max_expected hasn't changed.
         if (max_expected != expect[node_id].max_expected) {
-            RMC_LOG_FATAL("ContextID [%u] max_expected changed from [%lu] to [%lu]\n",
+            RMC_LOG_FATAL("ContextID [%u] max_expected changed from [%lu] to [%lu]",
                    node_id, expect[node_id].max_expected, max_expected);
             exit(255);
         }
         
         // Check that packet is consecutive.
         if (current != expect[node_id].max_received + 1) {
-            RMC_LOG_FATAL("ContextID [%u] Wanted[%lu] Got[%lu]\n",
+            RMC_LOG_FATAL("ContextID [%u] Wanted[%lu] Got[%lu]",
                    node_id, expect[node_id].max_received + 1, current);
             exit(255);
         }
@@ -181,7 +181,7 @@ static int process_incoming_data(rmc_sub_context_t* ctx,
         // Check if we are complete
         if (current == max_expected) {
             double pack_sec = 0.0;
-            RMC_LOG_INFO("rmc_proto_test_sub(): ContextID [%u] %s**COMPLETE*%s* at[%lu]\n",
+            RMC_LOG_INFO("rmc_proto_test_sub(): ContextID [%u] %s**COMPLETE*%s* at[%lu]",
                          node_id, rmc_log_color_green(), rmc_log_color_none(), current);
             
             // Did we see data corruption?
@@ -199,7 +199,7 @@ static int process_incoming_data(rmc_sub_context_t* ctx,
             pack_sec = (double) expect[node_id].max_received /
                 ((double) (expect[node_id].stop_ts - expect[node_id].start_ts) / 1000000.0);
 
-            RMC_LOG_INFO("[%lu] packets in [%lu] msec -> %s%g packets / sec%s\n",
+            RMC_LOG_INFO("[%lu] packets in [%lu] msec -> %s%g packets / sec%s",
                          expect[node_id].max_received,
                          (expect[node_id].stop_ts - expect[node_id].start_ts) / 1000,
                          rmc_log_color_green(),
