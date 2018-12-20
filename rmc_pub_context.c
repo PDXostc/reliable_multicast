@@ -260,10 +260,14 @@ int rmc_pub_set_announce_interval(rmc_pub_context_t* ctx, uint32_t send_interval
     // If not currently set, do setup a timestamp.
     // If we already have a send timestamp, let it run its course per the old
     // interval, and then use the new send inteval once it has expired.
-    if (!ctx->announce_next_send_ts)
+    if (send_interval_usec && !ctx->announce_next_send_ts)
         ctx->announce_next_send_ts = rmc_usec_monotonic_timestamp() + send_interval_usec;
 
     ctx->announce_send_interval = send_interval_usec;
+
+    // Wipe any pending announce we are waiting for.
+    if (!send_interval_usec)
+        ctx->announce_next_send_ts = 0;
 }
 
 int rmc_pub_set_announce_callback(rmc_pub_context_t* ctx,
