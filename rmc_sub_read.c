@@ -66,6 +66,7 @@ dump_payload:
         packet += cmd_pack->payload_len;
         len -= sizeof(cmd_packet_header_t) + cmd_pack->payload_len;
     }
+    return EAGAIN;
 }
 
 
@@ -80,11 +81,12 @@ static int _decode_subscribed_multicast(rmc_sub_context_t* ctx,
     usec_timestamp_t now = rmc_usec_monotonic_timestamp();
     packet_id_t first_pid = 0;
     packet_id_t last_pid = 0;
+    usec_timestamp_t pack_rec_time = 0;
+    usec_timestamp_t start = 0;
 
     // Traverse the received datagram and extract all packets
     while(len) {
         cmd_packet_header_t* cmd_pack = (cmd_packet_header_t*) packet;
-
 
         // Skip announce packets.
         if (!cmd_pack->pid) {
@@ -129,11 +131,13 @@ static int _decode_subscribed_multicast(rmc_sub_context_t* ctx,
         packet += cmd_pack->payload_len;
         len -= sizeof(cmd_packet_header_t) + cmd_pack->payload_len;
 
+        start = rmc_usec_monotonic_timestamp();
         rmc_sub_packet_received(ctx, conn->connection_index,
                                 cmd_pack->pid,
                                 payload, cmd_pack->payload_len,
                                 now, user_data_u32(conn->connection_index));
 
+        pack_rec_time += rmc_usec_monotonic_timestamp() - start;
     }
 
     // Process received packages, moving consectutive ones
@@ -145,84 +149,37 @@ static int _decode_subscribed_multicast(rmc_sub_context_t* ctx,
 }
 
 
-static int _process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
+static int _process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res, uint32_t src_addr, uint8_t* buffer, int len)
 {
-    uint8_t buffer[RMC_MAX_PAYLOAD];
     uint8_t *data = buffer;
-    char src_addr_str[80];
-    char listen_addr_str[80];
-    struct sockaddr_in src_addr;
-    socklen_t addr_len = sizeof(src_addr);
-    ssize_t len = 0;
     int res = 0;
-    int sock_ind = 0;
     rmc_connection_t* conn = 0;
     multicast_header_t* mcast_hdr = (multicast_header_t*) data;
 
-    if (read_res)
-        *read_res = RMC_ERROR;
-
-    if (!ctx)
-        return EINVAL;
-
-    if (ctx->mcast_recv_descriptor == -1) 
-        return ENOTCONN;
-
-    len = recvfrom(ctx->mcast_recv_descriptor,
-                   buffer, sizeof(buffer),
-                   0,
-                   (struct sockaddr*) &src_addr, &addr_len);
-
-    if (len == -1) {
-        perror("rmc_proto::_process_multicast_read(): recvfrom()");
-        return errno;
-    }
-
     if (len < sizeof(multicast_header_t)) {
-        fprintf(stderr, "Corrupt header. Needed [%lu] header bytes. Got [%lu]\n",
-                sizeof(multicast_header_t), len);
+        RMC_LOG_ERROR("Corrupt header. Needed [%lu] header bytes. Got [%lu]\n",
+                      sizeof(multicast_header_t), len);
         return EPROTO;
     }
                 
     if (len < sizeof(multicast_header_t) + mcast_hdr->payload_len) {
-        fprintf(stderr, "Corrupt packet. Needed [%lu + %d = %lu] header + payload bytes. Got %lu\n",
+        RMC_LOG_ERROR("Corrupt packet. Needed [%lu + %d = %lu] header + payload bytes. Got %lu\n",
                 sizeof(multicast_header_t),
                 mcast_hdr->payload_len, 
                 sizeof(multicast_header_t) + mcast_hdr->payload_len, len);
+
         return EPROTO;
     }
-        
-    strcpy(src_addr_str, inet_ntoa(src_addr.sin_addr));
 
     // If the publisher has a listen socket that is bound on all
     // interfaces (IF_ANY), we will see 0.0.0.0 as the
     // mcast_hdr->listen_ip. In these cases substitute this address
     // with the source address that the multicast packet came from.
     if (mcast_hdr->listen_ip == 0)
-        mcast_hdr->listen_ip = ntohl(src_addr.sin_addr.s_addr);
+        mcast_hdr->listen_ip = src_addr;
 
-    strcpy(listen_addr_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(mcast_hdr->listen_ip) }));
-//    printf("mcast_rx(): len[%.5d] from[%s:%d] listen[%s:%d]",
-//           mcast_hdr->payload_len,
-//           src_addr_str, ntohs(src_addr.sin_port),
-//           listen_addr_str, mcast_hdr->listen_port);
-           
     data += sizeof(multicast_header_t);
     
-    // FIXME: REMOVE WHEN WE HAVE DELETED IP_MULTICAST_LOOP
-    if (mcast_hdr->context_id == ctx->context_id) {
-        puts(" - loopback (skipped)");
-        if (ctx->conn_vec.poll_modify)
-            (*ctx->conn_vec.poll_modify)(ctx->user_data,
-                                         ctx->mcast_recv_descriptor,
-                                         RMC_MULTICAST_INDEX,
-                                         RMC_POLLREAD,
-                                         RMC_POLLREAD);
-        *read_res = RMC_READ_MULTICAST_LOOPBACK;
-        return 0; // Loopback message
-    }
-
-
     // Find the socket we use to ack received packets back to the publisher.
     conn = rmc_conn_find_by_address(&ctx->conn_vec, mcast_hdr->listen_ip, mcast_hdr->listen_port);
 
@@ -238,7 +195,7 @@ static int _process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
         if (read_res)
             *read_res = RMC_READ_MULTICAST_NOT_READY;
 
-        goto rearm;
+        return res;
     }
 
 
@@ -251,8 +208,51 @@ static int _process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
     // Record if we have any packets ready to ack prior
     // to decoding additional packets.
 
-    res = _decode_subscribed_multicast(ctx, data, mcast_hdr->payload_len, conn);
-        
+    res =  _decode_subscribed_multicast(ctx, data, mcast_hdr->payload_len, conn);
+
+    return res;
+}
+
+
+static int multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
+{
+    uint8_t buffer[RMC_MAX_PAYLOAD];
+    char src_addr_str[80];
+    char listen_addr_str[80];
+    struct sockaddr_in src_addr;
+    socklen_t addr_len = sizeof(src_addr);
+    ssize_t len = 0;
+    int res = 0;
+
+    if (read_res)
+        *read_res = RMC_ERROR;
+
+    if (!ctx)
+        return EINVAL;
+
+    if (ctx->mcast_recv_descriptor == -1) 
+        return ENOTCONN;
+
+
+    while(!res) {
+        len = recvfrom(ctx->mcast_recv_descriptor,
+                       buffer, sizeof(buffer),
+                       MSG_DONTWAIT,
+                       (struct sockaddr*) &src_addr, &addr_len);
+
+        if (len == 0 || (len == -1 && errno == EAGAIN)) {
+            res = EAGAIN;
+            goto rearm;
+        }
+
+        if (len == -1 ) {
+            RMC_LOG_WARNING("recvfrom(): %d: %s ", errno, strerror(errno));
+            res = errno;
+            goto rearm;
+        }
+           
+        res = _process_multicast_read(ctx, read_res, ntohl(src_addr.sin_addr.s_addr), buffer, len);
+    }
 
 rearm:
     // Re-arm the poll descriptor and return.
@@ -297,7 +297,7 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
     // process or reject.
     if (circ_buf_in_use(&conn->read_buf) < 1 + sizeof(cmd_packet_header_t) + pack_hdr->payload_len) {
         RMC_LOG_COMMENT("Incomplete payload data. Want [%d] Got[%d]",
-               pack_hdr->payload_len, circ_buf_in_use(&conn->read_buf));
+                        1 + sizeof(cmd_packet_header_t) + pack_hdr->payload_len, circ_buf_in_use(&conn->read_buf));
 
         // Don't free any memory since we will get called again when we have more data.
         return EAGAIN;
@@ -387,8 +387,13 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
         op_res = &dummy_res;
 
     // Is this a multicast pacekt?
-    if (s_ind == RMC_MULTICAST_INDEX) 
-        return _process_multicast_read(ctx, op_res);
+    if (s_ind == RMC_MULTICAST_INDEX) {
+        do { 
+            res = multicast_read(ctx, op_res);
+        } while(!res);
+
+        return (res == EAGAIN)?0:res;
+    }
 
 
     // This is incoming data on tcp. 

@@ -9,6 +9,7 @@
 
 #define _GNU_SOURCE
 #include "reliable_multicast.h"
+#include "rmc_log.h"
 #include <string.h>
 #include <errno.h>
 #include <stdio.h>
@@ -117,6 +118,7 @@ int rmc_sub_activate_context(rmc_sub_context_t* ctx)
     struct ip_mreq mreq;
     int on_flag = 1;
     int off_flag = 0;
+    int sz = 1024*1024;
 
     if (!ctx)
         return EINVAL;
@@ -136,7 +138,13 @@ int rmc_sub_activate_context(rmc_sub_context_t* ctx)
 
     if (setsockopt(ctx->mcast_recv_descriptor, SOL_SOCKET,
                    SO_REUSEPORT, &on_flag, sizeof(on_flag)) < 0) {
-        perror("rmc_activate_context(multicast_recv): setsockopt(SO_REUSEPORT)");
+        RMC_LOG_ERROR("setsockopt(SO_REUSEPORT)");
+        goto error;
+    }
+
+    if (setsockopt(ctx->mcast_recv_descriptor, SOL_SOCKET,
+                   SO_RCVBUF, &sz, sizeof(sz)) < 0) {
+        RMC_LOG_ERROR("setsockopt(SO_RCVBUF)");
         goto error;
     }
 

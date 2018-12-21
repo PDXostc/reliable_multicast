@@ -25,11 +25,20 @@
 // Probably needs to be a lot bigger in high
 // throughput situations.
 #define RMC_MAX_TCP_PENDING_WRITE 65400 // Seems to fit in one tcp segment.
-//#define RMC_MAX_TCP_PENDING_WRITE 0xFFFF 
-//#define RMC_MAX_TCP_PENDING_WRITE 64
 #define RMC_LISTEN_SOCKET_BACKLOG 5
-#define RMC_DEFAULT_PACKET_TIMEOUT 100000
-#define RMC_DEFAULT_ACK_TIMEOUT 50000 // 50 msec.
+
+// Number of usecs that publisher will wait after sending
+// a packet via UDP multicast before it resends it via TCP
+// control channel
+#define RMC_DEFAULT_PACKET_TIMEOUT 100000 // 100 msec
+
+// Number of usec a subscriber will wait after receiving
+// a packet via UDP multicast before acking it via the
+// TCP control channel.
+// The reason for the wait is that the subscriber
+// wants to collate as many packets as possible
+// into as few interval acks as possible.
+#define RMC_DEFAULT_ACK_TIMEOUT 50000  // 50 msec
 
 #define RMC_POLLREAD 0x01
 #define RMC_POLLWRITE 0x02

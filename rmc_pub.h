@@ -23,7 +23,7 @@ typedef struct pub_packet {
     // ref_count == 0 -> The packet has not yet been sent.
     // ref_count > 0  -> The packet has been sent and can be found
     //                   in 'ref_count' subscriber::inflight_packets
-   //                   lists.
+    //                   lists.
     uint32_t ref_count;
 
     // Back pointer to pub_context::queued or pub_context::pending, depending

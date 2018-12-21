@@ -84,6 +84,7 @@ static uint8_t announce_cb(struct rmc_sub_context* ctx,
 {
     RMC_LOG_INFO("Announce detected. Starting tests");
 
+    rmc_log_set_start_time();
     return 1;
 }
 
@@ -149,7 +150,6 @@ static int process_incoming_data(rmc_sub_context_t* ctx,
         for(ind = 1; ind <= max_expected; ++ind)
             expect[node_id].expect_sum += ind;
 
-        rmc_log_set_start_time();
         RMC_LOG_INFO("Activate: node_id[%u] current[%lu] max_expected[%lu] expected sum[%lu]",
                      node_id, current, max_expected, expect[node_id].calc_sum);
 
@@ -180,7 +180,7 @@ static int process_incoming_data(rmc_sub_context_t* ctx,
         
         // Check if we are complete
         if (current == max_expected) {
-            double pack_sec = 0.0;
+            int pack_sec = 0;
             RMC_LOG_INFO("rmc_proto_test_sub(): ContextID [%u] %s**COMPLETE*%s* at[%lu]",
                          node_id, rmc_log_color_green(), rmc_log_color_none(), current);
             
@@ -196,10 +196,10 @@ static int process_incoming_data(rmc_sub_context_t* ctx,
             expect[node_id].status = RMC_TEST_SUB_COMPLETED;
             expect[node_id].stop_ts = rmc_usec_monotonic_timestamp();
 
-            pack_sec = (double) expect[node_id].max_received /
+            pack_sec = (int) expect[node_id].max_received /
                 ((double) (expect[node_id].stop_ts - expect[node_id].start_ts) / 1000000.0);
 
-            RMC_LOG_INFO("[%lu] packets in [%lu] msec -> %s%g packets / sec%s",
+            RMC_LOG_INFO("[%lu] packets in [%lu] msec -> %s%d packets / sec%s",
                          expect[node_id].max_received,
                          (expect[node_id].stop_ts - expect[node_id].start_ts) / 1000,
                          rmc_log_color_green(),
@@ -239,6 +239,7 @@ static int process_events(rmc_sub_context_t* ctx,
     }
             
     nfds = epoll_wait(epollfd, events, RMC_MAX_CONNECTIONS, (timeout_ts == -1)?-1:(timeout_ts / 1000) + 1);
+
     if (nfds == -1) {
         RMC_LOG_FATAL("epoll_wait(): %s", strerror(errno));
         exit(255);
@@ -254,7 +255,7 @@ static int process_events(rmc_sub_context_t* ctx,
         uint8_t op_res = 0;
         rmc_index_t c_ind = events[nfds].data.u32;
 
-        RMC_LOG_DEBUG("%s:%d - %s%s%s",
+        RMC_LOG_COMMENT("%s:%d - %s%s%s",
                _index(c_ind, buf), _descriptor(ctx, c_ind),
                ((events[nfds].events & EPOLLIN)?" read":""),
                ((events[nfds].events & EPOLLOUT)?" write":""),
@@ -266,15 +267,6 @@ static int process_events(rmc_sub_context_t* ctx,
             res = rmc_sub_read(ctx, c_ind, &op_res);
             // Did we read a loopback message we sent ourselves?
             RMC_LOG_DEBUG("resul:t %s - %s", _op_res_string(op_res),   strerror(res));
-
-            if (res == EAGAIN)
-                continue;       
-
-            _test("rmc_proto_test[%d.%d] process_events():rmc_read(): %s\n", 1, 1, res);
-                
-            // If this was a connection call processed, we can continue.
-            if (op_res == RMC_READ_ACCEPT)
-                continue;
         }
 
         if (events[nfds].events & EPOLLOUT) {
