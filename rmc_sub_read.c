@@ -113,7 +113,7 @@ static int decode_subscribed_multicast(rmc_sub_context_t* ctx,
 
     sub_process_received_packets(pub, &ctx->dispatch_ready);
 
-    RMC_LOG_COMMENT("multicast pid: %lu", pack_hdr->pid);
+    RMC_LOG_COMMENT("Received multicast pid: %lu", pack_hdr->pid);
 
     return 0;
 }
@@ -298,7 +298,7 @@ static int process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
     circ_buf_read(&conn->read_buf, payload, pack_hdr.payload_len, 0);
     circ_buf_free(&conn->read_buf, pack_hdr.payload_len, 0);
 
-    RMC_LOG_DEBUG("Received: %lu", pack_hdr.pid);
+    RMC_LOG_COMMENT("Received resend pid: %lu", pack_hdr.pid);
     
     // Since we are getting this via TCP command channel,
     // we do not need to ack it.
@@ -385,7 +385,7 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
     // Are we disconnected?
     if (res == EPIPE) {
         *op_res = RMC_READ_DISCONNECT;
-        RMC_LOG_COMMENT("Index %d got disconnected");
+        RMC_LOG_COMMENT("Index %d got disconnected", s_ind);
         rmc_sub_close_connection(ctx, s_ind);
         return 0; // This is not an error, just regular disconnect.
     }
