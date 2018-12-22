@@ -20,9 +20,9 @@
 // =============
 
 
-static int _process_sent_packet_timeout(rmc_pub_context_t* ctx,
-                                        pub_subscriber_t* sub,
-                                        pub_packet_t* pack)
+static int process_sent_packet_timeout(rmc_pub_context_t* ctx,
+                                       pub_subscriber_t* sub,
+                                       pub_packet_t* pack)
 {
     // Send the packet via TCP.
     rmc_connection_t* conn = 0;
@@ -39,29 +39,29 @@ static int _process_sent_packet_timeout(rmc_pub_context_t* ctx,
     strcpy(remote_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(conn->remote_address) }));
 
     if (conn->mode != RMC_CONNECTION_MODE_CONNECTED) {
-        printf("process_sent_packet_timeout(): pid[%lu] mcast[%s:%d] listen[%s:%d] -> Disconnected. Dropped resend attempt\n",
-               pack->pid,
-               group_addr,
-               ctx->mcast_port,
-               remote_addr,
-               ctx->control_listen_port);
+        RMC_LOG_INFO("pid[%lu] mcast[%s:%d] listen[%s:%d] -> Disconnected. Dropped resend attempt",
+                     pack->pid,
+                     group_addr,
+                     ctx->mcast_port,
+                     remote_addr,
+                     ctx->control_listen_port);
 
         rmc_pub_packet_ack(ctx, conn, pack->pid) ;
         return 0;
 
     }
 
-//    printf("process_sent_packet_timeout(): pid[%lu] mcast[%s:%d] listen[%s:%d]\n",
-//           pack->pid,
-//           group_addr,
-//           ctx->mcast_port,
-//           remote_addr,
-//           ctx->control_listen_port);
+    RMC_LOG_COMMENT("Resending pid[%lu] mcast[%s:%d] listen[%s:%d]",
+           pack->pid,
+           group_addr,
+           ctx->mcast_port,
+           remote_addr,
+           ctx->control_listen_port);
     
     if (!conn || conn->mode != RMC_CONNECTION_MODE_CONNECTED)
         return EINVAL;
         
-    res = _rmc_pub_resend_packet(ctx, conn, pack);
+    res = rmc_pub_resend_packet(ctx, conn, pack);
 
     // Internal ack of the packet since we now can do nothing more to
     // get it over to the subscriber.
@@ -75,9 +75,9 @@ static int _process_sent_packet_timeout(rmc_pub_context_t* ctx,
 }
 
 
-static int _process_subscriber_timeout(rmc_pub_context_t* ctx,
-                                       pub_subscriber_t* sub,
-                                       usec_timestamp_t current_ts)
+static int process_subscriber_timeout(rmc_pub_context_t* ctx,
+                                      pub_subscriber_t* sub,
+                                      usec_timestamp_t current_ts)
 {
     pub_packet_list_t packets;
     pub_packet_t* pack = 0;
@@ -92,8 +92,8 @@ static int _process_subscriber_timeout(rmc_pub_context_t* ctx,
     // with oldest packet first.
     while((pnode = pub_packet_list_head(&packets))) {
         // Outbound circular buffer may be full.
-        RMC_LOG_DEBUG("Timed out packet: %lu", pnode->data->pid);
-        if ((res = _process_sent_packet_timeout(ctx, sub, pnode->data)) != 0)  {
+        RMC_LOG_DEBUG("Timed out packet pid: %lu", pnode->data->pid);
+        if ((res = process_sent_packet_timeout(ctx, sub, pnode->data)) != 0)  {
             pub_packet_list_empty(&packets);
             return res;
         }
@@ -155,7 +155,7 @@ int rmc_pub_timeout_process(rmc_pub_context_t* ctx)
     // Traverse the list of subscribers and process their timed out packets
     // by sending them via the TCP control channel.
     while(pub_sub_list_pop_head(&subs, &sub)) {
-        res = _process_subscriber_timeout(ctx, sub, current_ts);
+        res = process_subscriber_timeout(ctx, sub, current_ts);
 
         if (res) {
             // Clean up the list.
