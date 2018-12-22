@@ -19,8 +19,8 @@
 // Max UDP size is 0xFFE3 (65507). Subtract 0x20 (32) bytes for RMC
 // header data.
 #define RMC_MAX_PACKET 0xFF78
-#define RMC_MAX_PAYLOAD (RMC_MAX_PACKET - sizeof(packet_header_t))
-//#define RMC_MAX_PAYLOAD 64
+#define RMC_MAX_PAYLOAD (RMC_MAX_PACKET - sizeof(packet_header_t) - 1)
+
 
 // Probably needs to be a lot bigger in high
 // throughput situations.
@@ -675,8 +675,8 @@ extern int rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
 
 extern int rmc_conn_process_tcp_write(rmc_connection_t* conn, uint32_t* bytes_left);
 
-extern int _rmc_pub_resend_packet(rmc_pub_context_t* ctx,
-                                  rmc_connection_t* conn,
+extern int rmc_pub_resend_packet(rmc_pub_context_t* ctx,
+                                 rmc_connection_t* conn,
                                   pub_packet_t* pack);
 
 extern int rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
