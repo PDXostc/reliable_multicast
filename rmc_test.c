@@ -54,7 +54,7 @@ void usage(char* prog)
     fprintf(stderr,
             "Usage: %s -L <log-level> [-P] [-M <ip-addr>] [-m <ip-addr>] [-l <ip-addr>] [-P <port>] [-p <port>]\n",
             prog);
-    fprintf(stderr, "       -L <log-level> Set log-level. 0=None. 1=Debug. 2=Comment 3=Info. 4=Warning. 5=Error. 6=Fatal. Default is 0\n");
+    fprintf(stderr, "       -L <log-level> Set log-level. 0=None. 1=Fatal. 2=Error 3=Warning. 4=Info. 5=Comment. 6=Debug. Default is 0\n");
     fprintf(stderr, "       -S             Run as subscriber instead of default publisher\n");
     fprintf(stderr, "       -M <ip-addr>   Multicast IP address (default: %s)\n", MULTICAST_ADDR_DEFAULT);
     fprintf(stderr, "       -m <ip-addr>   Multicast interface IP (default: %s)\n", MULTICAST_IF_ADDR_DEFAULT);
@@ -176,21 +176,16 @@ int main(int argc, char* argv[])
     }
     
            
-    if (log_level == 0)
-        log_level == RMC_LOG_LEVEL_NONE;
-
-    if (log_level < RMC_LOG_LEVEL_DEBUG || log_level > RMC_LOG_LEVEL_NONE) {
-        fprintf(stderr, "Illegal log level: %d\n", log_level);
-        usage(argv[0]);
-        exit(1);
-    }
     
-            
     // Default 
     if (!e_arg_set)
         expected_node_id[1] = 1;
     
-    rmc_set_log_level(log_level);
+    if (rmc_set_log_level(log_level)) {
+        usage(argv[0]);
+        exit(1);
+    }
+        
     run_list_tests();
     test_packet_interval();
     test_circular_buffer();

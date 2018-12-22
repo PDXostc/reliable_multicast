@@ -11,18 +11,18 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-#define RMC_LOG_LEVEL_DEBUG 1
-#define RMC_LOG_LEVEL_COMMENT 2
-#define RMC_LOG_LEVEL_INFO 3
-#define RMC_LOG_LEVEL_WARNING 4
-#define RMC_LOG_LEVEL_ERROR 5
-#define RMC_LOG_LEVEL_FATAL 6
-#define RMC_LOG_LEVEL_NONE 7
+#define RMC_LOG_LEVEL_NONE 0
+#define RMC_LOG_LEVEL_FATAL 1
+#define RMC_LOG_LEVEL_ERROR 2
+#define RMC_LOG_LEVEL_WARNING 3
+#define RMC_LOG_LEVEL_INFO 4
+#define RMC_LOG_LEVEL_COMMENT 5
+#define RMC_LOG_LEVEL_DEBUG 6
 
 extern char* rmc_log_timestamp(char* target);
 extern void rmc_log_set_start_time(void);
 extern void rmc_log_use_color(int use_color);
-extern void rmc_set_log_level(int log_level);
+extern int rmc_set_log_level(int log_level);
 extern void rmc_log(int log_level, const char* func, const char* file, int line, const char* fmt, ...);
 extern const char* rmc_log_color_none();
 extern const char* rmc_log_color_faint();
@@ -34,11 +34,11 @@ extern const char* rmc_log_color_flashing_red();
 
 extern int _rmc_log_level;
 
-#define RMC_LOG_DEBUG(fmt, ...) { if (_rmc_log_level <= RMC_LOG_LEVEL_DEBUG) rmc_log(RMC_LOG_LEVEL_DEBUG, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__ ); }
-#define RMC_LOG_COMMENT(fmt, ...) { if (_rmc_log_level <= RMC_LOG_LEVEL_COMMENT) rmc_log(RMC_LOG_LEVEL_COMMENT, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__ ); }
-#define RMC_LOG_INFO(fmt, ...) { if (_rmc_log_level <= RMC_LOG_LEVEL_INFO) rmc_log(RMC_LOG_LEVEL_INFO, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__); }
-#define RMC_LOG_WARNING(fmt, ...) { if (_rmc_log_level <= RMC_LOG_LEVEL_WARNING) rmc_log(RMC_LOG_LEVEL_WARNING, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__); }
-#define RMC_LOG_ERROR(fmt, ...) { if (_rmc_log_level <= RMC_LOG_LEVEL_ERROR) rmc_log(RMC_LOG_LEVEL_ERROR, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__); }
-#define RMC_LOG_FATAL(fmt, ...) { if (_rmc_log_level <= RMC_LOG_LEVEL_FATAL) rmc_log(RMC_LOG_LEVEL_FATAL, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__); }
+#define RMC_LOG_DEBUG(fmt, ...) { if (_rmc_log_level >= RMC_LOG_LEVEL_DEBUG) rmc_log(RMC_LOG_LEVEL_DEBUG, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__ ); }
+#define RMC_LOG_COMMENT(fmt, ...) { if (_rmc_log_level >= RMC_LOG_LEVEL_COMMENT) rmc_log(RMC_LOG_LEVEL_COMMENT, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__ ); }
+#define RMC_LOG_INFO(fmt, ...) { if (_rmc_log_level >= RMC_LOG_LEVEL_INFO) rmc_log(RMC_LOG_LEVEL_INFO, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__); }
+#define RMC_LOG_WARNING(fmt, ...) { if (_rmc_log_level >= RMC_LOG_LEVEL_WARNING) rmc_log(RMC_LOG_LEVEL_WARNING, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__); }
+#define RMC_LOG_ERROR(fmt, ...) { if (_rmc_log_level >= RMC_LOG_LEVEL_ERROR) rmc_log(RMC_LOG_LEVEL_ERROR, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__); }
+#define RMC_LOG_FATAL(fmt, ...) { if (_rmc_log_level >= RMC_LOG_LEVEL_FATAL) rmc_log(RMC_LOG_LEVEL_FATAL, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__); }
 
 #endif // __RMC_LOG_H__

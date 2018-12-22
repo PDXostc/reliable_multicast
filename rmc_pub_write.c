@@ -136,7 +136,6 @@ static int process_multicast_write(rmc_pub_context_t* ctx)
         ++count;
         pack = pub_next_queued_packet(pctx);
     }
-    RMC_LOG_COMMENT("Chunked out %d packets. Res %d: %s", count, res ,strerror(res));
     return res;
 }
 int _rmc_pub_resend_packet(rmc_pub_context_t* ctx,

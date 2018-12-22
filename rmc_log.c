@@ -33,14 +33,17 @@ void rmc_log_use_color(int use_color)
     _rmc_log_use_color_calculated = 0;
 }
 
-void rmc_set_log_level(int log_level)
+int rmc_set_log_level(int log_level)
 {
-    if (log_level < RMC_LOG_LEVEL_DEBUG || log_level > RMC_LOG_LEVEL_NONE) {
-        printf("Illegal log level: %d\n", log_level);
-        return;
+    if (log_level < RMC_LOG_LEVEL_NONE || log_level > RMC_LOG_LEVEL_DEBUG) {
+
+        rmc_log(RMC_LOG_LEVEL_WARNING, __FUNCTION__, __FILE__, __LINE__,
+                "Illegal log level: %d. Legal values [%d-%d]", log_level, RMC_LOG_LEVEL_NONE, RMC_LOG_LEVEL_DEBUG);
+        return 1;
     }
 
     _rmc_log_level = log_level;
+    return 0;
 }
 
 void rmc_log_set_file(FILE* file)
