@@ -377,9 +377,15 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
     res = rmc_conn_tcp_read(&ctx->conn_vec, s_ind, op_res,
                              dispatch_table, user_data_ptr(ctx));
 
+    if (res == ENOMEM) {
+        RMC_LOG_WARNING("Cannot read tcp control channel for index [%d] since buffer is full.");
+        return ENOMEM;
+    }
+        
     // Are we disconnected?
     if (res == EPIPE) {
         *op_res = RMC_READ_DISCONNECT;
+        RMC_LOG_COMMENT("Index %d got disconnected");
         rmc_sub_close_connection(ctx, s_ind);
         return 0; // This is not an error, just regular disconnect.
     }
