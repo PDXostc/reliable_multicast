@@ -138,7 +138,9 @@ static int process_multicast_write(rmc_pub_context_t* ctx)
     }
     return res;
 }
-int _rmc_pub_resend_packet(rmc_pub_context_t* ctx,
+
+
+int rmc_pub_resend_packet(rmc_pub_context_t* ctx,
                            rmc_connection_t* conn,
                            pub_packet_t* pack)
 {
@@ -150,8 +152,12 @@ int _rmc_pub_resend_packet(rmc_pub_context_t* ctx,
     packet_header_t pack_hdr;
     
     // Do we have enough circular buffer meomory available?
-    if (circ_buf_available(&conn->write_buf) < 1 + sizeof(packet_header_t) + pack->payload_len)
+    if (circ_buf_available(&conn->write_buf) < 1 + sizeof(packet_header_t) + pack->payload_len) {
+        RMC_LOG_DEBUG("Resend packet needed %d bytes, got %d",
+                     1 + sizeof(packet_header_t) + pack->payload_len,
+                     circ_buf_available(&conn->write_buf));
         return ENOMEM;
+    }
     
     // Allocate memory for command
     res = circ_buf_alloc(&conn->write_buf, 1,
@@ -196,6 +202,10 @@ int _rmc_pub_resend_packet(rmc_pub_context_t* ctx,
     memcpy(seg1, pack->payload, seg1_len);
     if (seg2_len) 
         memcpy(seg2, ((uint8_t*) pack->payload) + seg1_len, seg2_len);
+
+    RMC_LOG_DEBUG("Queued %d bytes",
+                 1 + sizeof(packet_header_t) + pack->payload_len);
+
 
     // Setup the poll write action
     if (!(conn->action & RMC_POLLWRITE)) {
