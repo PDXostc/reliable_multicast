@@ -45,14 +45,18 @@ HDR= rmc_common.h \
 		rmc_protocol.h
 
 CFLAGS = -ggdb
-.PHONY: all clean
+.PHONY: all clean etags
 
 
-all: $(OBJ) rmc_test 
+all: $(OBJ) rmc_test etags
 wireshark: rmc_wireshark_plugin.so
 
-rmc_test: $(OBJ) $(TEST_OBJ)
+rmc_test: $(OBJ) $(TEST_OBJ) 
 	$(CC) $(CFLAGS) $^ -o $@
+
+etags: 
+	@rm -f TAGS
+	find . -name '*.h' -o -name '*.c' -print | etags -
 
 clean:
 	rm -f $(OBJ) *~ rmc_test.o rmc_test $(TEST_OBJ) rmc_wireshark_plugin.so
