@@ -8,6 +8,7 @@
 
 #define _GNU_SOURCE
 #include "reliable_multicast.h"
+#include "rmc_log.h"
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -15,122 +16,100 @@
 #include <arpa/inet.h>
 #include <assert.h>
 
+
+static void setup_packet_header(rmc_pub_context_t* ctx,
+                               pub_packet_t* pack,
+                               packet_header_t* pack_hdr)
+{
+    // Setup context id. 
+    pack_hdr->context_id = ctx->context_id;
+    pack_hdr->payload_len = pack->payload_len; 
+    pack_hdr->pid = pack->pid; 
+
+    // If listen_ip == 0 then receiver will use source address of packet as tcp
+    // address to connect to.
+    pack_hdr->listen_ip = ctx->control_listen_if_addr; 
+    pack_hdr->listen_port = ctx->control_listen_port; 
+}
+
 // FIXME: If we see timed out (== lost) packets from subscribers, we should
 //        switch them to TCP for a period of time in order
 //        to use TCP's flow control until congestion has eased.
-static int _process_multicast_write(rmc_pub_context_t* ctx)
+static int send_single_multicast_packet(rmc_pub_context_t* ctx, pub_packet_t* pack)
 {
     pub_context_t* pctx = &ctx->pub_ctx;
-    pub_packet_t* pack = pub_next_queued_packet(pctx);
-    uint8_t packet[RMC_MAX_PAYLOAD];
+    uint8_t packet[RMC_MAX_PACKET];
     uint8_t *packet_ptr = packet;
     packet_id_t pid = 0;
     usec_timestamp_t ts = 0;
-    pub_packet_list_t snd_list;
     ssize_t res = 0;
-    multicast_header_t *mcast_hdr = (multicast_header_t*) packet_ptr;
-    char listen_addr[128];
-    char mcast_addr[128];
-    packet_id_t first_sent = 0;
-    packet_id_t last_sent = 0;
+    packet_header_t pack_hdr;
+    struct msghdr msg_hdr;
+    struct iovec io_vec[2];
     struct sockaddr_in sock_addr = (struct sockaddr_in) {
         .sin_family = AF_INET,
         .sin_port = htons(ctx->mcast_port),
         .sin_addr = (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }
     };
 
+
     if (ctx->mcast_send_descriptor == -1)
         return ENOTCONN;
 
-    // Setup context id. 
-    mcast_hdr->context_id = ctx->context_id;
-    mcast_hdr->payload_len = 0; // Will be updated below
+    // Will the packet fit inside a UDP packet?
+    if (sizeof(packet_header_t) + pack->payload_len > RMC_MAX_PACKET) 
+        return EMSGSIZE;
 
-    // If listen_ip == 0 then receiver will use source address of packet as tcp
-    // address to connect to.
-    mcast_hdr->listen_ip = ctx->control_listen_if_addr; 
-    mcast_hdr->listen_port = ctx->control_listen_port; 
+    setup_packet_header(ctx, pack, &pack_hdr);
 
-    packet_ptr += sizeof(multicast_header_t);
-
-    pub_packet_list_init(&snd_list, 0, 0, 0);
-
-    strcpy(listen_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->control_listen_if_addr) }));
-    strcpy(mcast_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }));
-
-
-    first_sent = pack->pid;
-    while(pack &&
-          sizeof(multicast_header_t) +
-          mcast_hdr->payload_len +
-          sizeof(cmd_packet_header_t) +
-          pack->payload_len <= RMC_MAX_PAYLOAD) {
-
-        pub_packet_node_t* pnode = 0;
-        cmd_packet_header_t* cmd_pack = (cmd_packet_header_t*) packet_ptr;
-//        printf("Payload: mcast_hdr[%lu] + hdr->payload_len[%d] + cmd_packet_header_t[%lu] + pack->payload_len[%d] == %lu <= RMC_MAX_PAYLOAD[%d] - %*s\n",
-//               sizeof(multicast_header_t),  mcast_hdr->payload_len,  sizeof(cmd_packet_header_t),  pack->payload_len,
-//               sizeof(multicast_header_t) + mcast_hdr->payload_len + sizeof(cmd_packet_header_t) + pack->payload_len,
-//               RMC_MAX_PAYLOAD,
-//               pack->payload_len, (char*) pack->payload);
-        cmd_pack->pid = pack->pid;
-        cmd_pack->payload_len = pack->payload_len;
-        packet_ptr += sizeof(cmd_packet_header_t);
-
-        // FIXME: Replace with sendmsg() to get scattered iovector
-        //        write.  Saves one memcpy.
-        memcpy(packet_ptr, pack->payload, pack->payload_len);
-        packet_ptr += pack->payload_len;
-
-        mcast_hdr->payload_len += sizeof(cmd_packet_header_t) + pack->payload_len;
-
-        pub_packet_list_push_head(&snd_list, pack);
-
-        last_sent = pack->pid;
-
-        // FIXME: Maybe add a specific API call to traverse queued packages?
-        pnode = pub_packet_list_prev(pack->parent_node);
-        pack = pnode?pnode->data:0;
-    }
-
+//    char listen_addr[128];
+//    char mcast_addr[128];
+//    strcpy(listen_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->control_listen_if_addr) }));
+//    strcpy(mcast_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }));
 //    printf("mcast_tx(): mcast[%s:%d] listen[%s:%d] pid[%lu:%lu] - len[%.5lu]\n",
 //           mcast_addr, ntohs(sock_addr.sin_port),
-//           listen_addr, mcast_hdr->listen_port,
-//           first_sent, last_sent, sizeof(multicast_header_t) + mcast_hdr->payload_len);
+//           listen_addr, pack_hdr->listen_port,
+//           first_sent, last_sent, sizeof(packet_header_t) + pack_hdr->payload_len);
 
-    res = sendto(ctx->mcast_send_descriptor,
-                 packet,
-                 sizeof(multicast_header_t) + mcast_hdr->payload_len,
-                 MSG_DONTWAIT,
-                 (struct sockaddr*) &sock_addr,
-                 sizeof(sock_addr));
+    // Setup the scattered-write io vector with header and payload
+    io_vec[0] = (struct iovec) {
+            .iov_base = (void*) &pack_hdr,
+            .iov_len = sizeof(pack_hdr)
+    };
+    
+    io_vec[1] = (struct iovec) {
+        .iov_base = (void*) pack->payload,
+        .iov_len = pack->payload_len
+    };
+            
+    // Setup message header.
+    msg_hdr = (struct msghdr) {
+        .msg_name = (void*) &sock_addr,
+        .msg_namelen = sizeof(sock_addr),
+        .msg_iov = io_vec,
+        .msg_iovlen = sizeof(io_vec) / sizeof(io_vec[0]),
+        .msg_control = 0,
+        .msg_controllen = 0,
+        .msg_flags = 0
+    };
+
+    res = sendmsg(ctx->mcast_send_descriptor, &msg_hdr, MSG_DONTWAIT);
 
     if (res == -1) {
         if ( errno != EAGAIN && errno != EWOULDBLOCK)
             return errno;
 
-        if (ctx->conn_vec.poll_modify) {
-            (*ctx->conn_vec.poll_modify)(ctx->user_data,
-                                         ctx->mcast_send_descriptor,
-                                         RMC_MULTICAST_INDEX,
-                                         RMC_POLLWRITE,
-                                         RMC_POLLWRITE);
-        }
-        return 0;
+        // We are ok with an EAGAIN error since we can retry later to
+        // send the packet.
+
+        res = EAGAIN;
+        goto rearm;
     }
 
-    ts = rmc_usec_monotonic_timestamp();
+    pub_packet_sent(pctx, pack, rmc_usec_monotonic_timestamp());
 
-    // Mark all packages in the multicast packet we just
-    // sent in the multicast message as sent.
-    // pub_packet_sent will call free_o
-    while(pub_packet_list_pop_tail(&snd_list, &pack))  {
-        pub_packet_sent(pctx, pack, ts);
-    }
-
-//    extern void test_print_pub_context(pub_context_t* ctx);
-//    test_print_pub_context(&ctx->pub_ctx);
-
+    res = 0;
+rearm:
     if (ctx->conn_vec.poll_modify) {
         // Do we have more packets to send?
         (*ctx->conn_vec.poll_modify)(ctx->user_data,
@@ -139,9 +118,27 @@ static int _process_multicast_write(rmc_pub_context_t* ctx)
                             RMC_POLLWRITE,
                             pub_next_queued_packet(pctx)?RMC_POLLWRITE:0);
     }
-    return 0;
+    return res;
 }
 
+
+static int process_multicast_write(rmc_pub_context_t* ctx)
+{
+    pub_context_t* pctx = &ctx->pub_ctx;
+    pub_packet_t* pack = pub_next_queued_packet(pctx);
+    int res = 0;
+    int count = 0;
+
+    while(pack) {
+        if ((res = send_single_multicast_packet(ctx, pack)))
+            break;
+
+        ++count;
+        pack = pub_next_queued_packet(pctx);
+    }
+    RMC_LOG_COMMENT("Chunked out %d packets. Res %d: %s", count, res ,strerror(res));
+    return res;
+}
 int _rmc_pub_resend_packet(rmc_pub_context_t* ctx,
                            rmc_connection_t* conn,
                            pub_packet_t* pack)
@@ -151,13 +148,10 @@ int _rmc_pub_resend_packet(rmc_pub_context_t* ctx,
     uint8_t *seg2 = 0;
     uint32_t seg2_len = 0;
     int res = 0;
-    cmd_packet_header_t pack_cmd = {
-        .pid = pack->pid,
-        .payload_len = pack->payload_len
-    };
-
+    packet_header_t pack_hdr;
+    
     // Do we have enough circular buffer meomory available?
-    if (circ_buf_available(&conn->write_buf) < 1 + sizeof(*pack) + pack->payload_len)
+    if (circ_buf_available(&conn->write_buf) < 1 + sizeof(packet_header_t) + pack->payload_len)
         return ENOMEM;
     
     // Allocate memory for command
@@ -167,25 +161,27 @@ int _rmc_pub_resend_packet(rmc_pub_context_t* ctx,
 
     // We checked above that we have memory, so an error here is final
     if (res) {
-        printf("_rmc_pub_resend_packet(): Could not allocate one byte: %s\n", strerror(errno));
+        RMC_LOG_FATAL("Could not allocate one byte: %s\n", strerror(errno));
         exit(255);
     }
     *seg1 = RMC_CMD_PACKET;
 
+    setup_packet_header(ctx, pack, &pack_hdr);
+
     // Allocate memory for packet header
-    res = circ_buf_alloc(&conn->write_buf, sizeof(pack_cmd) ,
+    res = circ_buf_alloc(&conn->write_buf, sizeof(packet_header_t),
                          &seg1, &seg1_len,
                          &seg2, &seg2_len);
 
     if (res) {
-        printf("_rmc_pub_resend_packet(): Could not allocate %lu header bytes: %s\n", sizeof(pack_cmd), strerror(errno));
+        RMC_LOG_FATAL("Could not allocate %lu header bytes: %s\n", sizeof(pack_hdr), strerror(errno));
         exit(255);
     }
 
     // Copy in packet header
-    memcpy(seg1, (uint8_t*) &pack_cmd, seg1_len);
+    memcpy(seg1, (uint8_t*) &pack_hdr, seg1_len);
     if (seg2_len) 
-        memcpy(seg2, ((uint8_t*) &pack_cmd) + seg1_len, seg2_len);
+        memcpy(seg2, ((uint8_t*) &pack_hdr) + seg1_len, seg2_len);
 
     // Allocate packet payload
     res = circ_buf_alloc(&conn->write_buf, pack->payload_len,
@@ -193,7 +189,7 @@ int _rmc_pub_resend_packet(rmc_pub_context_t* ctx,
                          &seg2, &seg2_len);
 
     if (res) {
-        printf("_rmc_pub_resend_packet(): Could not allocate %d payload bytes: %s\n", pack->payload_len, strerror(errno));
+        RMC_LOG_FATAL("Could not allocate %d payload bytes: %s\n", pack->payload_len, strerror(errno));
         exit(255);
     }
 
@@ -232,7 +228,8 @@ int rmc_pub_write(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
     if (s_ind == RMC_MULTICAST_INDEX) {
         if (op_res)
             *op_res = RMC_WRITE_MULTICAST;
-        return _process_multicast_write(ctx);
+        // Write as many multicast packets as we can.
+        return process_multicast_write(ctx);
     }
 
     // Is s_ind within our connection vector?

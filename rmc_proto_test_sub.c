@@ -91,27 +91,24 @@ static uint8_t announce_cb(struct rmc_sub_context* ctx,
 
 
 
-static int process_incoming_data(rmc_sub_context_t* ctx,
-                                 sub_packet_t* pack,
-                                 sub_expect_t* expect,
-                                 int expect_sz)
+static int process_incoming_signal(rmc_sub_context_t* ctx,
+                                   char* signal,
+                                   sub_expect_t* expect,
+                                   int expect_sz)
+                                   
+                                 
 {
     rmc_context_id_t node_id = 0;
     uint64_t max_expected = 0;
     uint64_t current = 0;
 
-    _test("rmc_proto_test_sub[%d.%d] process_incoming_data(): %s", 3, 1, pack?0:ENODATA);
-
     // Sscanf is slow as hell, so dissect this one manually.
     
-    if (sscanf(pack->payload, "%u:%lu:%lu", &node_id, &current, &max_expected) != 3) {
+    if (sscanf(signal, "%u:%lu:%lu", &node_id, &current, &max_expected) != 3) {
         RMC_LOG_FATAL("Payload [%s] could not be scanned by [%%u:%%lu:%%lu]",
-               (char*) pack->payload);
+               (char*) signal);
         exit(255);
     }
-
-    // Will free payload
-    rmc_sub_packet_dispatched(ctx, pack);
 
     // Is context ID within our expetcted range
     if (node_id >= expect_sz) {
@@ -222,6 +219,33 @@ static int process_incoming_data(rmc_sub_context_t* ctx,
     exit(255);
 }
 
+static int process_incoming_packet(rmc_sub_context_t* ctx,
+                                   sub_packet_t* pack,
+                                   sub_expect_t* expect,
+                                   int expect_sz)
+{
+    int pack_ind = 0;
+
+
+    while(pack_ind < pack->payload_len) {
+        char signal[64];
+        int len = strlen(pack->payload + pack_ind);        
+
+        if (len >= 64) {
+            RMC_LOG_FATAL("Signal len too long at [%d]", len);
+            exit(255);
+        }
+            
+        strcpy(signal, pack->payload + pack_ind);
+        pack_ind += len + 1; // Skip string and 0.
+        if (!process_incoming_signal(ctx, signal, expect, expect_sz))
+            return 0;
+    }
+
+    // Will free payload
+    rmc_sub_packet_dispatched(ctx, pack);
+    return 1;
+}
 
 static int process_events(rmc_sub_context_t* ctx,
                           int epollfd,
@@ -375,7 +399,7 @@ void test_rmc_proto_sub(char* mcast_group_addr,
                 first_pid = pack->pid;
 
             last_pid = pack->pid;
-            if (!process_incoming_data(ctx, pack, expect, node_id_map_size)) {
+            if (!process_incoming_packet(ctx, pack, expect, node_id_map_size)) {
                 do_exit = 1;
                 break;
             }

@@ -96,64 +96,97 @@ static gint dissect_rmc_ack_interval(proto_tree* tree, tvbuff_t *tvb, gint offse
     return 16;
 }
 
-static guint
-get_rmc_packet_len(packet_info *pinfo, tvbuff_t *tvb,
-                   int offset, void *data)
+static guint get_rmc_packet_len(packet_info *pinfo, tvbuff_t *tvb,  int offset, void *data)
 {
-//    printf("Packet Len = %d\n", tvb_get_guint16(tvb, offset+9, ENC_LITTLE_ENDIAN));
-    return tvb_get_guint16(tvb, offset+9, ENC_LITTLE_ENDIAN) + 11;
+    printf("Packet Len = %d\n", tvb_get_guint16(tvb, offset+13, ENC_LITTLE_ENDIAN));
+    return tvb_get_guint16(tvb, offset+13, ENC_LITTLE_ENDIAN) + 21;
 }
 
 
-static int dissect_rmc_packet_offset(tvbuff_t* tvb, proto_tree* tree, int offset, int udp, u_int64_t* pid, u_int16_t* len)
+static int dissect_packet_offset(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_, gint offset)
 {
-    proto_item *ti_packet = 0;
-    proto_tree *rmc_packet_tree = 0;
-    u_int16_t packet_payload_len = 0;
+    proto_item *ti = 0;
+    proto_tree *rmc_tree = 0;
+    u_int16_t payload_len = 0;
+    u_int64_t pid = 0;
+    u_int32_t context_id = 0;
+    gchar* ip = 0;
+    char src_addr[64];
+    u_int32_t ip_numeric = 0;
+    u_int16_t port = 0;
+     u_int64_t max_pid = 0;
+    col_set_str(pinfo->cinfo, COL_PROTOCOL, "RMC Packet");
 
-    // Do we have header data?
-    if (tvb_captured_length_remaining(tvb, offset) < 10)  {
-//        printf("Needed %d bytes. Got %d. Offset %d\n", 10, tvb_captured_length_remaining(tvb, offset), offset);
-        return tvb_captured_length_remaining(tvb, offset) - 10;
-    }
+ 
+    ti = proto_tree_add_item(tree, proto_rmc, tvb, 0, -1, ENC_NA);
+    rmc_tree =  proto_item_add_subtree(ti, ett_rmc);
 
-    // Pid
-    *pid = tvb_get_guint64(tvb, offset, ENC_LITTLE_ENDIAN);
+
+    // Packet ID
+    pid = tvb_get_guint64(tvb, offset, ENC_LITTLE_ENDIAN);
+    proto_tree_add_item(rmc_tree, hf_rmc_packet_id, tvb, offset, 8, ENC_LITTLE_ENDIAN);
+    offset += 8;
+
+    // Context - ID
+    context_id = tvb_get_guint32(tvb, offset, ENC_LITTLE_ENDIAN);
+    proto_tree_add_item(rmc_tree, hf_rmc_context_id, tvb, offset, 4, ENC_LITTLE_ENDIAN);
+    offset += 4;
 
     // Payload len
-    packet_payload_len = tvb_get_guint16(tvb, offset+8, ENC_LITTLE_ENDIAN);
-    *len = packet_payload_len;
-    
-    // Do we have enough data for payload?
-//    printf("[%s] PID[%lu] Len[10+%d->%d] Remain[%d]\n",
-//           udp?"udp":"tcp", *pid, *len,
-//           *len + 10, tvb_captured_length_remaining(tvb, offset));
+    payload_len = tvb_get_guint16(tvb, offset, ENC_LITTLE_ENDIAN);
+    proto_tree_add_item(rmc_tree, hf_rmc_payload_len, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+    offset += 2;
 
-    if (tvb_captured_length_remaining(tvb, offset+10) < packet_payload_len) {
-        return tvb_captured_length_remaining(tvb, offset) - (10 + packet_payload_len);
-    }
     
-    ti_packet = proto_tree_add_item(tree, proto_rmc_packet, tvb, offset, -1, ENC_NA);
-    rmc_packet_tree =  proto_item_add_subtree(ti_packet, ett_rmc_packet);
-    proto_tree_add_item(rmc_packet_tree, hf_rmc_packet_id, tvb, offset, 8, ENC_LITTLE_ENDIAN);
-    proto_tree_add_item(rmc_packet_tree, hf_rmc_packet_payload_len, tvb, offset+8, 2, ENC_LITTLE_ENDIAN);
-    proto_tree_add_item(rmc_packet_tree, hf_rmc_packet_payload, tvb, offset+10, packet_payload_len, ENC_NA);
+    // Listen IP (little endian)
+    ip_numeric = tvb_get_guint32(tvb, offset, ENC_LITTLE_ENDIAN);
 
-    return 10 + packet_payload_len;
-//    return tvb_captured_length(tvb);
+    // If we have a blanc address, then substitute it with the source address IP
+    if (!ip_numeric) {
+        src_addr[0] = '*';
+        address_to_str_buf(&pinfo->src, src_addr + 1, sizeof(src_addr)-2);
+        ip = src_addr;
+    } else
+        ip = tvb_ip_to_str(tvb, offset);
+    
+    proto_tree_add_item(rmc_tree, hf_rmc_control_ip, tvb, offset, 4, ENC_LITTLE_ENDIAN);
+    offset += 4;
+
+    // Listen port (little endian)
+    port = tvb_get_guint16(tvb, offset, ENC_LITTLE_ENDIAN);
+    proto_tree_add_item(rmc_tree, hf_rmc_control_port, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+    offset += 2;
+
+    proto_tree_add_item(rmc_tree, hf_rmc_packet_payload, tvb, offset, payload_len, ENC_NA);
+
+    col_clear(pinfo->cinfo, COL_INFO);
+    if (!pid)
+        col_add_fstr(pinfo->cinfo,
+                     COL_INFO,
+                     "Pub ctx_id[0x%.8X] ctl_addr[%s:%d] len[%d] - announce",
+                     context_id, ip, port, payload_len);
+    else
+        col_add_fstr(pinfo->cinfo,
+                     COL_INFO,
+                     "Pub ctx_id[0x%.8X] ctl_addr[%s:%d] len[%d] pid[%lu]",
+                     context_id, ip, port, payload_len, pid);
+
+    return offset;
+}
+
+static int dissect_packet_multicast(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
+{
+    return dissect_packet_offset(tvb, pinfo, tree, data, 0);
 }
 
 static int dissect_rmc_packet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 {
-    u_int64_t pid = 0;
-    u_int16_t len = 0;
-
     proto_tree_add_item(tree, hf_rmc_control_command, tvb, 0, 1, ENC_NA);
-    dissect_rmc_packet_offset(tvb, tree, 1, 0, &pid, &len);
+
+    dissect_packet_offset(tvb, pinfo, tree, data, 1);
     ++*((int*) data);
     return tvb_captured_length(tvb);
 }
-
 
 
 static int dissect_rmc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
@@ -202,7 +235,7 @@ static int dissect_rmc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
             break;
 
         case RMC_CMD_PACKET:
-            tcp_dissect_pdus(tvb, pinfo, rmc_tree, 1, 10, get_rmc_packet_len, dissect_rmc_packet, &resend_count);
+            tcp_dissect_pdus(tvb, pinfo, rmc_tree, 1, 15, get_rmc_packet_len, dissect_rmc_packet, &resend_count);
             break;
 
         default:
@@ -225,89 +258,6 @@ static int dissect_rmc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
 
     return tvb_captured_length(tvb);
 //    return offset;
-}
-
-
-static int dissect_rmc_multicast(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
-{
-
-    gint offset = 0;
-    proto_item *ti = 0;
-    proto_tree *rmc_tree = 0;
-    u_int16_t payload_len = 0;
-    u_int16_t orig_payload_len = 0;
-    u_int64_t pid = 0;
-    u_int64_t min_pid = 0;
-    u_int32_t context_id = 0;
-    gchar* ip = 0;
-    char src_addr[64];
-    u_int32_t ip_numeric = 0;
-    u_int16_t port = 0;
-    u_int64_t max_pid = 0;
-    col_set_str(pinfo->cinfo, COL_PROTOCOL, "RMC Packet");
-
- 
-    ti = proto_tree_add_item(tree, proto_rmc, tvb, 0, -1, ENC_NA);
-    rmc_tree =  proto_item_add_subtree(ti, ett_rmc);
-
-    // Context - ID
-    context_id = tvb_get_guint32(tvb, offset, ENC_LITTLE_ENDIAN);
-    proto_tree_add_item(rmc_tree, hf_rmc_context_id, tvb, offset, 4, ENC_LITTLE_ENDIAN);
-    offset += 4;
-
-    // Payload len
-    payload_len = tvb_get_guint16(tvb, offset, ENC_LITTLE_ENDIAN);
-    orig_payload_len = payload_len;
-    proto_tree_add_item(rmc_tree, hf_rmc_payload_len, tvb, offset, 2, ENC_LITTLE_ENDIAN);
-    offset += 2;
-
-    
-    // Listen IP (little endian)
-    ip_numeric = tvb_get_guint32(tvb, offset, ENC_LITTLE_ENDIAN);
-
-    // If we have a blanc address, then substitute it with the source address IP
-    if (!ip_numeric) {
-        src_addr[0] = '*';
-        address_to_str_buf(&pinfo->src, src_addr + 1, sizeof(src_addr)-2);
-        ip = src_addr;
-    } else
-        ip = tvb_ip_to_str(tvb, offset);
-    
-    proto_tree_add_item(rmc_tree, hf_rmc_control_ip, tvb, offset, 4, ENC_LITTLE_ENDIAN);
-    offset += 4;
-
-    // Listen port (little endian)
-    port = tvb_get_guint16(tvb, offset, ENC_LITTLE_ENDIAN);
-    proto_tree_add_item(rmc_tree, hf_rmc_control_port, tvb, offset, 2, ENC_LITTLE_ENDIAN);
-    offset += 2;
-
-    // Loop through all the packets.
-    while(payload_len) {
-        u_int16_t len = 0;
-        gint bytes_consumed = dissect_rmc_packet_offset(tvb, rmc_tree, offset, 1, &pid, &len);
-        if (!min_pid)
-            min_pid = pid;
-
-        if (pid > max_pid)
-            max_pid = pid;
-        
-        payload_len -= bytes_consumed;
-        offset += bytes_consumed;
-    }
-
-    col_clear(pinfo->cinfo, COL_INFO);
-    if (min_pid == 0 && max_pid == 0)
-        col_add_fstr(pinfo->cinfo,
-                     COL_INFO,
-                     "Pub ctx_id[0x%.8X] ctl_addr[%s:%d] len[%d] - announce",
-                     context_id, ip, port, orig_payload_len);
-    else
-        col_add_fstr(pinfo->cinfo,
-                     COL_INFO,
-                     "Pub ctx_id[0x%.8X] ctl_addr[%s:%d] len[%d] count[%lu] pid[%lu-%lu]",
-                     context_id, ip, port, orig_payload_len, max_pid - min_pid, min_pid, max_pid);
-
-    return offset;
 }
 
 
@@ -405,7 +355,7 @@ void plugin_register_rmc(void)
     
     proto_rmc = proto_register_protocol("Reliable Multicast - Data", "RMC", "rmc");
     proto_register_field_array(proto_rmc, hf, array_length(hf));
-    handle_rmc_multicast = create_dissector_handle(dissect_rmc_multicast, proto_rmc);
+    handle_rmc_multicast = create_dissector_handle(dissect_packet_multicast, proto_rmc);
 
     proto_rmc_packet = proto_register_protocol("Packet", "RMC packet", "rmc.packet");
     proto_register_field_array(proto_rmc_packet, hf_packet, array_length(hf_packet));

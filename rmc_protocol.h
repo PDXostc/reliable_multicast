@@ -15,19 +15,14 @@
 
 
 typedef struct  __attribute__((packed))
-multicast_header {
-    rmc_context_id_t context_id;
-    payload_len_t payload_len;
-    uint32_t listen_ip; // In host format
-    uint16_t listen_port;
-} multicast_header_t;
+packet_header {
+    packet_id_t pid;               // 8 bytes  Packet ID 
+    rmc_context_id_t context_id;   // 4 bytes  Publisher Context ID
+    payload_len_t payload_len;     // 2 bytes  Payload len
+    uint32_t listen_ip;            // 4 bytes  Publisher control ip address
+    uint16_t listen_port;          // 2 bytes  Publisher control port
+} packet_header_t;                 // 20 bytes
 
-
-typedef struct  __attribute__((packed))
-cmd_packet_header {
-    packet_id_t pid;    // ID of first packed ID
-    payload_len_t payload_len;
-} cmd_packet_header_t;
 
 typedef struct  __attribute__((packed))
 cmd_ack_interval {
@@ -36,6 +31,4 @@ cmd_ack_interval {
 } cmd_ack_interval_t;
 
 #endif
-
-
 

@@ -18,13 +18,13 @@
 
 // Max UDP size is 0xFFE3 (65507). Subtract 0x20 (32) bytes for RMC
 // header data.
-#define RMC_MAX_PACKET 0xFFE3
-#define RMC_MAX_PAYLOAD 0xFFC3
+#define RMC_MAX_PACKET 0xFF78
+#define RMC_MAX_PAYLOAD (RMC_MAX_PACKET - sizeof(packet_header_t))
 //#define RMC_MAX_PAYLOAD 64
 
 // Probably needs to be a lot bigger in high
 // throughput situations.
-#define RMC_MAX_TCP_PENDING_WRITE 65400 // Seems to fit in one tcp segment.
+#define RMC_MAX_TCP_PENDING_WRITE  // Seems to fit in one tcp segment.
 #define RMC_LISTEN_SOCKET_BACKLOG 5
 
 // Number of usecs that publisher will wait after sending
@@ -120,7 +120,7 @@ typedef struct rmc_connection {
 
     // Circular buffer of pending data read.
     circ_buf_t write_buf;
-    uint8_t write_buf_data[RMC_MAX_TCP_PENDING_WRITE]; 
+    uint8_t write_buf_data[RMC_MAX_PACKET]; 
 
     // RMC_CONNECTION_MODE_CLOSED
     //  The connection is inactive.

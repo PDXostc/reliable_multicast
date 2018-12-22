@@ -13,184 +13,153 @@
 #include <stdlib.h>
 #include <arpa/inet.h>
 
-static int _decode_unsubscribed_multicast(rmc_sub_context_t* ctx,
-                                          rmc_connection_t* conn,
-                                          uint8_t* packet,
-                                          ssize_t packet_len,
-                                          uint32_t listen_ip,
-                                          uint16_t listen_port)
+static int decode_unsubscribed_multicast(rmc_sub_context_t* ctx,
+                                         packet_header_t* pack_hdr,
+                                         uint8_t* payload)
 {
-    payload_len_t len = (payload_len_t) packet_len;
+    int sock_ind = 0;
+    int res = 1;
 
-    // Traverse the received datagram and extract all packets
-    while(len) {
-        cmd_packet_header_t* cmd_pack = (cmd_packet_header_t*) packet;
-        int sock_ind = 0;
-        int res = 1;
+    if (pack_hdr->pid) {
+        RMC_LOG_COMMENT("Len[%d] Pid[%lu] - Ignoring data packet since we are not yet subscribed",
+                        pack_hdr->payload_len,
+                        pack_hdr->pid);
 
-        packet += sizeof(cmd_packet_header_t);
-
-        if (cmd_pack->pid) {
-            RMC_LOG_COMMENT("Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s] - Ignored.",
-                   len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet);
-
-            goto dump_payload;
-        }
-        
-        // If conn is set, then it will always be RMC_CONNECTION_MODE_CONNECTING
-        // In that case, just dump the packet and continue.
-        if (conn) {
-            RMC_LOG_COMMENT("Len[%d] Hdr Len[%lu] Payload Len[%d] Payload[%s] - Announce: connection already in progress",
-                   len, sizeof(cmd_packet_header_t), cmd_pack->payload_len, packet);
-            goto dump_payload;
-        }
-            
-        RMC_LOG_COMMENT("Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s] - Announce!",
-               len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet);
-            
-        // Add an outbound tcp connection to the publisher.
-        
-        // If set, invoke callback and determine if we are to setup subscription to
-        // publisher.
-        if (ctx->announce_cb) {
-            char listen_ip_str[128];
-            strcpy(listen_ip_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(listen_ip) }));
-
-            res = (*ctx->announce_cb)(ctx, listen_ip_str, listen_port, packet, cmd_pack->payload_len);
-        }
-
-        if (res)
-            rmc_conn_connect_tcp_by_address(&ctx->conn_vec, listen_ip, listen_port, &sock_ind);
-        
-dump_payload:
-        packet += cmd_pack->payload_len;
-        len -= sizeof(cmd_packet_header_t) + cmd_pack->payload_len;
+        return 0;
     }
-    return EAGAIN;
-}
+        
+            
+    RMC_LOG_COMMENT("Len[%d] Pid[%lu] - Announce!",
+                    pack_hdr->payload_len,
+                    pack_hdr->pid);
+            
+    // Add an outbound tcp connection to the publisher.
+        
+    // If set, invoke callback and determine if we are to setup subscription to
+    // publisher.
+    if (ctx->announce_cb) {
+        char listen_ip_str[128];
+        strcpy(listen_ip_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(pack_hdr->listen_ip) }));
 
-
-static int _decode_subscribed_multicast(rmc_sub_context_t* ctx,
-                                        uint8_t* packet,
-                                        ssize_t packet_len,
-                                        rmc_connection_t* conn)
-{
-    payload_len_t len = (payload_len_t) packet_len;
-    uint8_t* payload = 0;
-    sub_publisher_t* pub = &ctx->publishers[conn->connection_index];
-    usec_timestamp_t now = rmc_usec_monotonic_timestamp();
-    packet_id_t first_pid = 0;
-    packet_id_t last_pid = 0;
-    usec_timestamp_t pack_rec_time = 0;
-    usec_timestamp_t start = 0;
-
-    // Traverse the received datagram and extract all packets
-    while(len) {
-        cmd_packet_header_t* cmd_pack = (cmd_packet_header_t*) packet;
-
-        // Skip announce packets.
-        if (!cmd_pack->pid) {
-            RMC_LOG_COMMENT("_decode_multicast(): Ignoring announce");
-            packet += sizeof(cmd_packet_header_t) + cmd_pack->payload_len;
-            len -= sizeof(cmd_packet_header_t) + cmd_pack->payload_len;
-            continue;
-        }
-
-        // Check that we do not have a duplicate
-        if (sub_packet_is_duplicate(pub, cmd_pack->pid)) {
-            RMC_LOG_DEBUG("pid %lu  is duplicate or pre-connect straggler",
-                          cmd_pack->pid);
-            packet += sizeof(cmd_packet_header_t) + cmd_pack->payload_len;
-            len -= sizeof(cmd_packet_header_t) + cmd_pack->payload_len;
-            continue;
-        }
-
-        if (!first_pid)
-            first_pid = cmd_pack->pid;
-
-        last_pid = cmd_pack->pid;
-        RMC_LOG_DEBUG("Len[%d] Hdr Len[%lu] Pid[%lu], Payload Len[%d] Payload[%s]",
-               len, sizeof(cmd_packet_header_t), cmd_pack->pid, cmd_pack->payload_len, packet + sizeof(cmd_packet_header_t));
-
-        // Use the provided memory allocator to reserve memory for
-        // incoming payload.
-        // Use malloc() if nothing is specified.
-        // Must be freed by rmc_packet_dispatched()
-        if (ctx->payload_alloc)
-            payload = (*ctx->payload_alloc)(cmd_pack->payload_len, ctx->user_data);
-        else
-            payload = malloc(cmd_pack->payload_len);
- 
-        if (!payload) {
-            perror("malloc");
-            exit(255);
-        }
-
-        packet += sizeof(cmd_packet_header_t);
-        memcpy(payload, packet, cmd_pack->payload_len);
-        packet += cmd_pack->payload_len;
-        len -= sizeof(cmd_packet_header_t) + cmd_pack->payload_len;
-
-        start = rmc_usec_monotonic_timestamp();
-        rmc_sub_packet_received(ctx, conn->connection_index,
-                                cmd_pack->pid,
-                                payload, cmd_pack->payload_len,
-                                now, user_data_u32(conn->connection_index));
-
-        pack_rec_time += rmc_usec_monotonic_timestamp() - start;
+        res = (*ctx->announce_cb)(ctx, listen_ip_str, pack_hdr->listen_port, payload, pack_hdr->payload_len);
     }
 
-    // Process received packages, moving consectutive ones
-    // over to the ready queue.
-    sub_process_received_packets(pub, &ctx->dispatch_ready);
-
-    RMC_LOG_COMMENT("decode_subscribed_multicast(): pid[%lu-%lu]", first_pid, last_pid);
+    if (res)
+        rmc_conn_connect_tcp_by_address(&ctx->conn_vec, pack_hdr->listen_ip, pack_hdr->listen_port, &sock_ind);
+        
     return 0;
 }
 
 
-static int _process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res, uint32_t src_addr, uint8_t* buffer, int len)
+static int decode_subscribed_multicast(rmc_sub_context_t* ctx,
+                                       rmc_connection_t* conn,
+                                       packet_header_t* pack_hdr,
+                                       uint8_t* payload)
+
+{
+    sub_publisher_t* pub = &ctx->publishers[conn->connection_index];
+    usec_timestamp_t now = rmc_usec_monotonic_timestamp();
+    usec_timestamp_t pack_rec_time = 0;
+    usec_timestamp_t start = 0;
+    uint8_t* payload_copy = 0;
+
+    // Skip announce packets.
+    if (!pack_hdr->pid) {
+        RMC_LOG_COMMENT("Already subscribing - Ignoring announce");
+        return 0;
+    }
+
+    // Check that we do not have a duplicate
+    if (sub_packet_is_duplicate(pub, pack_hdr->pid)) {
+        RMC_LOG_DEBUG("pid %lu  is duplicate or pre-connect straggler",
+                      pack_hdr->pid);
+        return 0;
+    }
+
+
+    RMC_LOG_DEBUG("Len[%d] Pid[%lu]", pack_hdr->payload_len, pack_hdr->pid);
+
+    // Use the provided memory allocator to reserve memory for
+    // incoming payload.
+    // Use malloc() if nothing is specified.
+    // Must be freed by rmc_packet_dispatched()
+    //
+    // FIXME: If we allocate payload in multicast_read()
+    //        We can omot the memcpy below.
+    ///    
+    if (ctx->payload_alloc)
+        payload_copy = (*ctx->payload_alloc)(pack_hdr->payload_len, ctx->user_data);
+    else
+        payload_copy = malloc(pack_hdr->payload_len);
+    
+    if (!payload_copy) {
+        RMC_LOG_FATAL("malloc(%d): %s", pack_hdr->payload_len, strerror(errno));
+        exit(255);
+    }
+
+    memcpy(payload_copy, payload, pack_hdr->payload_len);
+
+    start = rmc_usec_monotonic_timestamp();
+    rmc_sub_packet_received(ctx,
+                            conn->connection_index,
+                            pack_hdr->pid,
+                            payload_copy, pack_hdr->payload_len,
+                            now, user_data_u32(conn->connection_index));
+
+    pack_rec_time += rmc_usec_monotonic_timestamp() - start;
+
+    // Process received packages, moving consectutive ones
+    // over to the ready queue.
+
+    sub_process_received_packets(pub, &ctx->dispatch_ready);
+
+    RMC_LOG_COMMENT("multicast pid: %lu", pack_hdr->pid);
+
+    return 0;
+}
+
+
+static int process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res, uint32_t src_addr, uint8_t* buffer, int len)
 {
     uint8_t *data = buffer;
     int res = 0;
     rmc_connection_t* conn = 0;
-    multicast_header_t* mcast_hdr = (multicast_header_t*) data;
+    packet_header_t* pack_hdr = (packet_header_t*) data;
 
-    if (len < sizeof(multicast_header_t)) {
+    if (len < sizeof(packet_header_t)) {
         RMC_LOG_ERROR("Corrupt header. Needed [%lu] header bytes. Got [%lu]\n",
-                      sizeof(multicast_header_t), len);
+                      sizeof(packet_header_t), len);
         return EPROTO;
     }
                 
-    if (len < sizeof(multicast_header_t) + mcast_hdr->payload_len) {
+    if (len < sizeof(packet_header_t) + pack_hdr->payload_len) {
         RMC_LOG_ERROR("Corrupt packet. Needed [%lu + %d = %lu] header + payload bytes. Got %lu\n",
-                sizeof(multicast_header_t),
-                mcast_hdr->payload_len, 
-                sizeof(multicast_header_t) + mcast_hdr->payload_len, len);
+                sizeof(packet_header_t),
+                pack_hdr->payload_len, 
+                sizeof(packet_header_t) + pack_hdr->payload_len, len);
 
         return EPROTO;
     }
 
     // If the publisher has a listen socket that is bound on all
     // interfaces (IF_ANY), we will see 0.0.0.0 as the
-    // mcast_hdr->listen_ip. In these cases substitute this address
+    // pack_hdr->listen_ip. In these cases substitute this address
     // with the source address that the multicast packet came from.
-    if (mcast_hdr->listen_ip == 0)
-        mcast_hdr->listen_ip = src_addr;
+    if (pack_hdr->listen_ip == 0)
+        pack_hdr->listen_ip = src_addr;
 
-    data += sizeof(multicast_header_t);
+    data += sizeof(packet_header_t);
     
     // Find the socket we use to ack received packets back to the publisher.
-    conn = rmc_conn_find_by_address(&ctx->conn_vec, mcast_hdr->listen_ip, mcast_hdr->listen_port);
+    conn = rmc_conn_find_by_address(&ctx->conn_vec, pack_hdr->listen_ip, pack_hdr->listen_port);
 
     // If no socket is setup, initiate the connection to the publisher.
     // Drop the recived packet
 
     if (!conn || conn->mode == RMC_CONNECTION_MODE_CONNECTING) {
-        res = _decode_unsubscribed_multicast(ctx,
-                                             conn,
-                                             data, mcast_hdr->payload_len,
-                                             mcast_hdr->listen_ip, mcast_hdr->listen_port);
+        res = decode_unsubscribed_multicast(ctx,
+                                            pack_hdr,
+                                            data);
 
         if (read_res)
             *read_res = RMC_READ_MULTICAST_NOT_READY;
@@ -208,7 +177,7 @@ static int _process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res, ui
     // Record if we have any packets ready to ack prior
     // to decoding additional packets.
 
-    res =  _decode_subscribed_multicast(ctx, data, mcast_hdr->payload_len, conn);
+    res =  decode_subscribed_multicast(ctx, conn, pack_hdr, data);
 
     return res;
 }
@@ -216,7 +185,7 @@ static int _process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res, ui
 
 static int multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
 {
-    uint8_t buffer[RMC_MAX_PAYLOAD];
+    uint8_t buffer[RMC_MAX_PACKET];
     char src_addr_str[80];
     char listen_addr_str[80];
     struct sockaddr_in src_addr;
@@ -251,7 +220,7 @@ static int multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
             goto rearm;
         }
            
-        res = _process_multicast_read(ctx, read_res, ntohl(src_addr.sin_addr.s_addr), buffer, len);
+        res = process_multicast_read(ctx, read_res, ntohl(src_addr.sin_addr.s_addr), buffer, len);
     }
 
 rearm:
@@ -267,11 +236,10 @@ rearm:
     return res;
 }
 
-static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
+static int process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
 {
     uint8_t *payload = 0;
-    char buf[sizeof(cmd_packet_header_t)];
-    cmd_packet_header_t* pack_hdr = (cmd_packet_header_t*) buf;
+    packet_header_t pack_hdr;
     rmc_sub_context_t* ctx = (rmc_sub_context_t*) user_data.ptr;
     usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
 
@@ -280,24 +248,22 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
     // first byte in conn->read_buf since we cannot free it until we
     // have atomically processed or rejeceted the command.
     //
-    if (circ_buf_in_use(&conn->read_buf) < 1 + sizeof(cmd_packet_header_t)) {
+    if (circ_buf_in_use(&conn->read_buf) < 1 + sizeof(packet_header_t)) {
         RMC_LOG_COMMENT("Incomplete header data. Want [%lu] Got[%d]",
-               1 + sizeof(cmd_packet_header_t), circ_buf_in_use(&conn->read_buf));
+               1 + sizeof(packet_header_t), circ_buf_in_use(&conn->read_buf));
 
         // Don't free any memory since we will get called again when we have more data.
         return EAGAIN;
     }
 
     // Read the command byte and the packet header
-
-    circ_buf_read_offset(&conn->read_buf, 1, buf, sizeof(cmd_packet_header_t), 0);
-
+    circ_buf_read_offset(&conn->read_buf, 1, (uint8_t*) &pack_hdr, sizeof(pack_hdr), 0);
 
     // Now we know how big the payload is. Check if we have enough memory for an atomic
     // process or reject.
-    if (circ_buf_in_use(&conn->read_buf) < 1 + sizeof(cmd_packet_header_t) + pack_hdr->payload_len) {
+    if (circ_buf_in_use(&conn->read_buf) < 1 + sizeof(packet_header_t) + pack_hdr.payload_len) {
         RMC_LOG_COMMENT("Incomplete payload data. Want [%d] Got[%d]",
-                        1 + sizeof(cmd_packet_header_t) + pack_hdr->payload_len, circ_buf_in_use(&conn->read_buf));
+                        1 + sizeof(packet_header_t) + pack_hdr.payload_len, circ_buf_in_use(&conn->read_buf));
 
         // Don't free any memory since we will get called again when we have more data.
         return EAGAIN;
@@ -305,22 +271,22 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
 
     // We have enough data to process the entire packet
     // Free command byte and packet header from read buffer.
-    circ_buf_free(&conn->read_buf, 1 + sizeof(cmd_packet_header_t), 0);
+    circ_buf_free(&conn->read_buf, 1 + sizeof(packet_header_t), 0);
 
     // Is the packet a duplicate?
-    if (sub_packet_is_duplicate(&ctx->publishers[conn->connection_index], pack_hdr->pid)) {
-        RMC_LOG_DEBUG("Duplicate: %lu", pack_hdr->pid);
+    if (sub_packet_is_duplicate(&ctx->publishers[conn->connection_index], pack_hdr.pid)) {
+        RMC_LOG_DEBUG("Duplicate: %lu", pack_hdr.pid);
 
         // Free payload
-        circ_buf_free(&conn->read_buf, pack_hdr->payload_len, 0);
+        circ_buf_free(&conn->read_buf, pack_hdr.payload_len, 0);
         return 0; // Dups are ok.
     }
 
     // Allocate memory for payload
     if (ctx->payload_alloc)
-        payload = (*ctx->payload_alloc)(pack_hdr->payload_len, ctx->user_data);
+        payload = (*ctx->payload_alloc)(pack_hdr.payload_len, ctx->user_data);
     else
-        payload = malloc(pack_hdr->payload_len);
+        payload = malloc(pack_hdr.payload_len);
 
     if (!payload) {
         RMC_LOG_FATAL("memory allocation failed");
@@ -329,10 +295,10 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
 
 
     // Read in payload and free it from conn->read_buf
-    circ_buf_read(&conn->read_buf, payload, pack_hdr->payload_len, 0);
-    circ_buf_free(&conn->read_buf, pack_hdr->payload_len, 0);
+    circ_buf_read(&conn->read_buf, payload, pack_hdr.payload_len, 0);
+    circ_buf_free(&conn->read_buf, pack_hdr.payload_len, 0);
 
-    RMC_LOG_DEBUG("Received: %lu", pack_hdr->pid);
+    RMC_LOG_DEBUG("Received: %lu", pack_hdr.pid);
     
     // Since we are getting this via TCP command channel,
     // we do not need to ack it.
@@ -343,8 +309,8 @@ static int _process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
     // sub_packet_received().
     //
     sub_packet_received(&ctx->publishers[conn->connection_index],
-                        pack_hdr->pid,
-                        payload, pack_hdr->payload_len,
+                        pack_hdr.pid,
+                        payload, pack_hdr.payload_len,
                         rmc_usec_monotonic_timestamp(),
                         user_data_u32(conn->connection_index));
 
@@ -376,7 +342,7 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
     uint8_t dummy_res = 0;
     rmc_connection_t* conn = 0;
     static rmc_conn_command_dispatch_t dispatch_table[] = {
-        { .command = RMC_CMD_PACKET, .dispatch = _process_cmd_packet },
+        { .command = RMC_CMD_PACKET, .dispatch = process_cmd_packet },
         { .command = 0, .dispatch = 0 }
     };
 

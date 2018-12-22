@@ -106,14 +106,14 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
 }
 
 
-void queue_test_data(rmc_pub_context_t* ctx, char* buf, int drop_flag)
+void queue_test_data(rmc_pub_context_t* ctx, uint8_t* payload, int payload_len, int drop_flag)
 {
     pub_packet_node *node = 0;
     int res = 0;
-    res = rmc_pub_queue_packet(ctx, memcpy(malloc(strlen(buf+1)), buf, strlen(buf)+1), strlen(buf)+1, 0);
+    res = rmc_pub_queue_packet(ctx, memcpy(malloc(payload_len), payload, payload_len), payload_len, 0);
 
     if (res) {
-        RMC_LOG_FATAL("payload[%s]: %s",  buf, strerror(res));
+        RMC_LOG_FATAL("payload_len[%d]: %s",  payload_len, strerror(res));
         exit(255);
     }
 
@@ -147,7 +147,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
                         int mcast_port,
                         int listen_port,
                         rmc_context_id_t node_id,
-                        uint64_t count,
+                        uint64_t count, // Number of signals to send
                         int expected_subscriber_count,
                         int seed,
                         usec_timestamp_t send_interval, //usec
@@ -163,14 +163,14 @@ void test_rmc_proto_pub(char* mcast_group_addr,
     int epollfd = -1;
     pid_t sub_pid = 0;
     user_data_t ud = { .u64 = 0 };
-    uint64_t ind = 0;
+    uint64_t signal_ind = 0;
+    uint64_t packet_ind = 0;
     usec_timestamp_t t_out = 0;
     uint8_t *conn_vec_mem = 0;
     char buf[128];
     int subscriber_count = 0;
     usec_timestamp_t exit_ts = 0;
     usec_timestamp_t current_ts = 0;
-    packet_id_t debug_output_pid = 0;
     int busy = 0;
 
     uint32_t queued_packets = 0;
@@ -247,13 +247,39 @@ void test_rmc_proto_pub(char* mcast_group_addr,
     // Seed with a predefined value, allowing us to generate the exact same random sequence
     // every time for packet drops, etc.
     srand(seed);
-    debug_output_pid = 1;
-    for(ind = 1; ind <= count; ++ind) {
+
+    signal_ind = 1;
+    packet_ind = 0;
+
+    while(signal_ind <= count) {
+        char payload[RMC_MAX_PAYLOAD];
+        int payload_len = 0;
+        int start_signal_ind = signal_ind;
         float rnd = (float) (rand() % 1000000);
         int drop_flag = 0;
         usec_timestamp_t tout = 0;
 
+
+        // Fill single packet payload with as many signals as we can
+        while(signal_ind <= count) {
+            char buf[64];
+            int len = 0;
+            sprintf(buf, "%u:%lu:%lu", node_id, signal_ind, count);
+
+            len = strlen(buf) + 1;
+            if (payload_len + len >= RMC_MAX_PAYLOAD)
+                break;
+
+            memcpy(payload + payload_len, buf, len);
+            payload_len += len;
+            ++signal_ind;
+            if (signal_ind % 1000 == 0) {
+                RMC_LOG_INFO("queued signal [%lu]",  signal_ind);
+            }
+        }
+
         current_ts = rmc_usec_monotonic_timestamp();        // Check if we are to drop the packet.
+
         if (rnd / 1000000.0 < drop_rate)  
             drop_flag = 1;
 
@@ -263,18 +289,13 @@ void test_rmc_proto_pub(char* mcast_group_addr,
         if (jitter > 0) 
              tout += (rand() % jitter) * 2 - jitter;
 
-        sprintf(buf, "%u:%lu:%lu", node_id, ind, count);
-        queue_test_data(ctx, buf, drop_flag);
-
+        queue_test_data(ctx, payload, payload_len, drop_flag);
+        packet_ind++;
         if (drop_flag) 
-            RMC_LOG_INFO("dropped packet [%lu]", ind);
+            RMC_LOG_INFO("dropped packet [%lu]", packet_ind);
 
-        if (ind % 1000 == 0) {
-            RMC_LOG_INFO("queued packet [%lu-%lu]", debug_output_pid, ind);
-            debug_output_pid = ind + 1;
-        }
-
-        RMC_LOG_DEBUG("%s: drop[%c] wait[%ld]", buf, drop_flag?'x':' ', tout-current_ts);
+        RMC_LOG_DEBUG("packet[%d] signal[%d-%d] drop[%c] wait[%ld]",
+                      packet_ind, start_signal_ind, signal_ind, drop_flag?'x':' ', tout-current_ts);
 
         // Make sure we run the loop at least one.
         if (current_ts > tout)
@@ -304,7 +325,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
     // Disable announce.
     rmc_pub_set_announce_interval(ctx, 0);
 
-    RMC_LOG_INFO("All packets sent");
+    RMC_LOG_INFO("All packets queued");
    
     while(subscriber_count > 0) {
         usec_timestamp_t tout = 0;
@@ -316,11 +337,10 @@ void test_rmc_proto_pub(char* mcast_group_addr,
             rmc_pub_timeout_process(ctx);
             rmc_pub_timeout_get_next(ctx, &tout);
             process_events(ctx, epollfd, tout, 2);
-//            RMC_LOG_COMMENT("Yo: tout[%lu]", tout);
         }
 
 
-        RMC_LOG_COMMENT("queued[%d] inflight[%d]",
+        RMC_LOG_COMMENT("queued packets[%d] inflight[%d]",
                         pub_packet_list_size(&ctx->pub_ctx.queued),
                         pub_packet_list_size(&ctx->pub_ctx.inflight));
 

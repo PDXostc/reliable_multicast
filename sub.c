@@ -104,12 +104,9 @@ int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
     // Insert on ascending pid sort order, running from tail toward head
     // since our received packet probably belongs closer to the tail of
     // the received list than the beginning
-    RMC_LOG_DEBUG("Insert %lu", pid);
     sub_packet_list_insert_sorted_rev(&pub->received_pid,
                                       pack,
                                       lambda(int, (sub_packet_t* n_dt, sub_packet_t* o_dt) {
-                                              RMC_LOG_DEBUG("  New pid[%lu]  Existing pid[%lu]",
-                                                              n_dt->pid, o_dt->pid);
                                               return (n_dt->pid < o_dt->pid)?-1:
                                                   ((n_dt->pid > o_dt->pid)?1:
                                                    0);
