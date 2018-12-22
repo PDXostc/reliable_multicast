@@ -273,9 +273,6 @@ void test_rmc_proto_pub(char* mcast_group_addr,
             memcpy(payload + payload_len, buf, len);
             payload_len += len;
             ++signal_ind;
-            if (signal_ind % 1000 == 0) {
-                RMC_LOG_INFO("queued signal [%lu]",  signal_ind);
-            }
         }
 
         current_ts = rmc_usec_monotonic_timestamp();        // Check if we are to drop the packet.
