@@ -116,7 +116,7 @@ typedef struct rmc_connection {
     // are tied toegther through the circ_buf_init() call.
     // One byte extra needed by circ buf for housekeeping reasons.
     // FIXME: Use shared circular buffer across all rmc_connections for both read and write.
-    uint8_t read_buf_data[RMC_MAX_PAYLOAD + 1];
+    uint8_t read_buf_data[RMC_MAX_PACKET];
 
     // Circular buffer of pending data read.
     circ_buf_t write_buf;
