@@ -97,6 +97,7 @@ int rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
 
     if (res) {
         *op_res = RMC_ERROR;
+        RMC_LOG_ERROR("Circular buffer read failed: %s", strerror(errno));
         return res;
     }
     
@@ -124,8 +125,11 @@ int rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
             // Roll back the command
             if (res != 0) {
                 if (res != EAGAIN) {
+                    RMC_LOG_ERROR("Dispatch failed: %s", strerror(errno));
                     *op_res = RMC_ERROR;
-                }
+                } else
+                    RMC_LOG_DEBUG("Dispatch needs more data");
+
                 // We either have a protocol error, or not enough data
                 // to process the current packet.
                 // In both cases we need to return.
@@ -137,6 +141,7 @@ int rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
         // No hit in the dispatch table?
         if (!current->dispatch) {
             *op_res = RMC_ERROR;
+            RMC_LOG_ERROR("Unknown command byte: %d", command);
             return EPROTO;
         }
 
@@ -152,6 +157,7 @@ int rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
         // Read the command byte.
         res = circ_buf_read(&conn->read_buf, &command, 1, 0);
         if (res) {
+            RMC_LOG_ERROR("Circular buffer read failed: %s", strerror(errno));
             *op_res = RMC_ERROR;
             return res;
         }
@@ -177,7 +183,11 @@ int rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
     uint32_t available = circ_buf_available(&conn->read_buf);
     uint32_t orig_in_use = circ_buf_in_use(&conn->read_buf);
     int ret = 0;
-    usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
+
+    if (!available) {
+        *op_res = RMC_ERROR;
+        return ENOMEM;
+    }
 
     // Grab as much data as we can.
     // The call will only return available
@@ -187,14 +197,14 @@ int rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
                          &seg1, &seg1_len,
                          &seg2, &seg2_len);
 
-    RMC_LOG_DEBUG("alloc: %lu", rmc_usec_monotonic_timestamp() - current_ts);
+    
     // Did we fail?
     if (res) {
         *op_res = RMC_ERROR;
         return res;
     }
 
-    // Setup a zero-copy scattered socket write
+    // Setup a zero-copy scattered socket read
     iov[0].iov_base = seg1;
     iov[0].iov_len = seg1_len;
     iov[1].iov_base = seg2;
@@ -203,7 +213,12 @@ int rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
     errno = 0;
     
     res = readv(conn->descriptor, iov, 2);
-    RMC_LOG_DEBUG("read(%lu): %lu", res, rmc_usec_monotonic_timestamp() - current_ts);
+    RMC_LOG_DEBUG("read(): Wanted %d + %d -> %d bytes. Got %ld %s", 
+                  seg1_len,
+                  seg2_len,
+                  seg1_len + seg2_len,
+                  res,
+                  (res == -1)?strerror(errno):"");
 
 
     if (res == -1 || res == 0) {
@@ -220,11 +235,8 @@ int rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
     // Trim the end of read_buf so that we ony have our original read_buf data plus
     // the bytes we actually read.
     circ_buf_trim(&conn->read_buf, res + orig_in_use);
-    RMC_LOG_DEBUG("trim: %lu", rmc_usec_monotonic_timestamp() - current_ts);
-
     ret = rmc_conn_process_tcp_read(conn_vec, s_ind, op_res,
                                     dispatch_table, user_data);
 
-    RMC_LOG_DEBUG("process: %lu", rmc_usec_monotonic_timestamp() - current_ts);
     return ret;
 }

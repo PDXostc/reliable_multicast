@@ -290,7 +290,7 @@ static int process_events(rmc_sub_context_t* ctx,
             errno = 0;
             res = rmc_sub_read(ctx, c_ind, &op_res);
             // Did we read a loopback message we sent ourselves?
-            RMC_LOG_DEBUG("resul:t %s - %s", _op_res_string(op_res),   strerror(res));
+            RMC_LOG_DEBUG("read result: %s - %s", _op_res_string(op_res),   strerror(res));
         }
 
         if (events[nfds].events & EPOLLOUT) {
