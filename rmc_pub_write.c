@@ -96,8 +96,10 @@ static int send_single_multicast_packet(rmc_pub_context_t* ctx, pub_packet_t* pa
     res = sendmsg(ctx->mcast_send_descriptor, &msg_hdr, MSG_DONTWAIT);
 
     if (res == -1) {
-        if ( errno != EAGAIN && errno != EWOULDBLOCK)
+        if ( errno != EAGAIN && errno != EWOULDBLOCK) {
+            RMC_LOG_WARNING("sendmsg(): %d/%s", errno, strerror(errno));
             return errno;
+        }
 
         // We are ok with an EAGAIN error since we can retry later to
         // send the packet.
@@ -136,6 +138,7 @@ static int process_multicast_write(rmc_pub_context_t* ctx)
         ++count;
         pack = pub_next_queued_packet(pctx);
     }
+    RMC_LOG_DEBUG("%d", res);
     return res;
 }
 
@@ -153,10 +156,12 @@ int rmc_pub_resend_packet(rmc_pub_context_t* ctx,
     
     // Do we have enough circular buffer meomory available?
     if (circ_buf_available(&conn->write_buf) < 1 + sizeof(packet_header_t) + pack->payload_len) {
-        RMC_LOG_DEBUG("Resend packet needed %d bytes, got %d",
-                     1 + sizeof(packet_header_t) + pack->payload_len,
-                     circ_buf_available(&conn->write_buf));
-        return ENOMEM;
+        RMC_LOG_DEBUG("Resend packet needed %d+%d+%d=%d bytes, got %d",
+                      1, sizeof(packet_header_t),pack->payload_len,
+                      1 + sizeof(packet_header_t) + pack->payload_len,
+                      circ_buf_available(&conn->write_buf));
+        res = EAGAIN;
+        goto rearm;
     }
     
     // Allocate memory for command
@@ -207,6 +212,7 @@ int rmc_pub_resend_packet(rmc_pub_context_t* ctx,
                  1 + sizeof(packet_header_t) + pack->payload_len);
 
 
+rearm:
     // Setup the poll write action
     if (!(conn->action & RMC_POLLWRITE)) {
         rmc_poll_action_t old_action = conn->action;
@@ -220,7 +226,8 @@ int rmc_pub_resend_packet(rmc_pub_context_t* ctx,
                                          conn->action);
     }    
     
-    return 0;
+    RMC_LOG_DEBUG("%d/%s", res, strerror(res));
+    return res;
 }    
 
 
@@ -238,6 +245,7 @@ int rmc_pub_write(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
         if (op_res)
             *op_res = RMC_WRITE_MULTICAST;
         // Write as many multicast packets as we can.
+        RMC_LOG_DEBUG("Processing multicast write");
         return process_multicast_write(ctx);
     }
 
@@ -273,6 +281,7 @@ int rmc_pub_write(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
         *op_res = RMC_WRITE_TCP;
     
     res = rmc_conn_process_tcp_write(conn, &bytes_left_after);
+    RMC_LOG_DEBUG("Processing tcp write: %d", res);
     
     if (bytes_left_after == 0) 
         conn->action &= ~RMC_POLLWRITE;
