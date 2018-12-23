@@ -184,6 +184,7 @@ int rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
     uint32_t orig_in_use = circ_buf_in_use(&conn->read_buf);
     int ret = 0;
 
+    *op_res = RMC_READ_TCP;
     if (!available) {
         *op_res = RMC_ERROR;
         return ENOMEM;
@@ -213,13 +214,13 @@ int rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
     errno = 0;
     
     res = readv(conn->descriptor, iov, 2);
-    RMC_LOG_DEBUG("read(): Wanted %d + %d -> %d bytes. Got %ld %s", 
+    RMC_LOG_DEBUG("read(%d): Wanted %d + %d -> %d bytes. Got %ld %s", 
+                  s_ind,
                   seg1_len,
                   seg2_len,
                   seg1_len + seg2_len,
                   res,
                   (res == -1)?strerror(errno):"");
-
 
     if (res == -1 || res == 0) {
         *op_res = RMC_READ_DISCONNECT;
