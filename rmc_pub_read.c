@@ -18,7 +18,7 @@
 #include <arpa/inet.h>
 
 
-static int _process_cmd_ack_interval(rmc_connection_t* conn, user_data_t user_data)
+static int process_cmd_ack_interval(rmc_connection_t* conn, user_data_t user_data)
 {
     cmd_ack_interval_t ack;
     rmc_pub_context_t* ctx = (rmc_pub_context_t*) user_data.ptr;
@@ -31,7 +31,7 @@ static int _process_cmd_ack_interval(rmc_connection_t* conn, user_data_t user_da
     // Read and free.
     circ_buf_read_offset(&conn->read_buf, 1, (uint8_t*) &ack, sizeof(ack), 0);
     circ_buf_free(&conn->read_buf, sizeof(ack) + 1, 0);
-    RMC_LOG_COMMENT("_process_cmd_ack_interval(): interval[%lu:%lu]", ack.first_pid, ack.last_pid);
+    RMC_LOG_COMMENT("process_cmd_ack_interval(): interval[%lu:%lu]", ack.first_pid, ack.last_pid);
 
     // Mark all packets in the interval as acknwoledged, and call the
     // payload free function provided to rmc_pub_init_context(). If no
@@ -81,9 +81,12 @@ int rmc_pub_read(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
 {
     int res = 0;
     uint8_t dummy_res = 0;
+    payload_len_t write_buf_sz = 0;
     rmc_connection_t* conn = 0;
+    rmc_poll_action_t old_action = 0;
+
     static rmc_conn_command_dispatch_t dispatch_table[] = {
-        { .command = RMC_CMD_ACK_INTERVAL, .dispatch = _process_cmd_ack_interval },
+        { .command = RMC_CMD_ACK_INTERVAL, .dispatch = process_cmd_ack_interval },
         { .command = 0, .dispatch = 0 }
     };
 
@@ -174,13 +177,18 @@ int rmc_pub_read(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
     }
 
     // Read poll is always active. Callback to re-arm.
-    if (ctx->conn_vec.poll_modify) {
+    old_action = conn->action;
+    rmc_conn_get_pending_send_length(conn, &write_buf_sz);
+
+    conn->action = RMC_POLLREAD | ((write_buf_sz > 0)?RMC_POLLWRITE:0);
+
+    if (ctx->conn_vec.poll_modify) 
         (*ctx->conn_vec.poll_modify)(ctx->user_data, 
                                      conn->descriptor, 
                                      s_ind, 
-                                     RMC_POLLREAD, 
-                                     RMC_POLLREAD);
-    }
+                                     old_action,
+                                     conn->action);
+
     return res;
 }
 
