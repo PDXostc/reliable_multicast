@@ -310,7 +310,14 @@ void test_rmc_proto_pub(char* mcast_group_addr,
                 rmc_pub_timeout_process(ctx);
  
             current_ts = rmc_usec_monotonic_timestamp();
-        }  
+        } 
+        
+        process_events(ctx, epollfd, 0, 2);
+        rmc_pub_timeout_process(ctx);
+
+        RMC_LOG_COMMENT("queued packets[%d] inflight[%d]",
+                        pub_packet_list_size(&ctx->pub_ctx.queued),
+                        pub_packet_list_size(&ctx->pub_ctx.inflight));
     }
 
     
