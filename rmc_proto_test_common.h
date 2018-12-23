@@ -20,6 +20,14 @@
 #include <unistd.h>
 #include <errno.h>
 
+typedef struct  __attribute__((packed))
+signal {
+    uint32_t node_id;         // 4
+    uint32_t signal_id;       // 4
+    uint32_t max_signal_id;   // 4
+    uint64_t filler;          // 8 
+} signal_t;                   // 20 bytes.
+
 extern char* _index(rmc_index_t index, char* res);
 
 extern void* _test_proto_alloc(payload_len_t plen);

@@ -92,24 +92,18 @@ static uint8_t announce_cb(struct rmc_sub_context* ctx,
 
 
 static int process_incoming_signal(rmc_sub_context_t* ctx,
-                                   char* signal,
+                                   char* data,
                                    sub_expect_t* expect,
                                    int expect_sz)
                                    
                                  
 {
-    rmc_context_id_t node_id = 0;
-    uint64_t max_expected = 0;
-    uint64_t current = 0;
+    signal_t *signal = (signal_t*) data;
+    rmc_context_id_t node_id = signal->node_id;
+    uint64_t max_expected = signal->max_signal_id;
+    uint64_t current = signal->signal_id;
 
-    // Sscanf is slow as hell, so dissect this one manually.
     
-    if (sscanf(signal, "%u:%lu:%lu", &node_id, &current, &max_expected) != 3) {
-        RMC_LOG_FATAL("Payload [%s] could not be scanned by [%%u:%%lu:%%lu]",
-               (char*) signal);
-        exit(255);
-    }
-
     // Is context ID within our expetcted range
     if (node_id >= expect_sz) {
         RMC_LOG_FATAL("ContextID [%u] is out of range (0-%d)",
@@ -228,18 +222,10 @@ static int process_incoming_packet(rmc_sub_context_t* ctx,
 
 
     while(pack_ind < pack->payload_len) {
-        char signal[64];
-        int len = strlen(pack->payload + pack_ind);        
-
-        if (len >= 64) {
-            RMC_LOG_FATAL("Signal len too long at [%d]", len);
-            exit(255);
-        }
-            
-        strcpy(signal, pack->payload + pack_ind);
-        pack_ind += len + 1; // Skip string and 0.
-        if (!process_incoming_signal(ctx, signal, expect, expect_sz))
+        if (!process_incoming_signal(ctx, pack->payload + pack_ind, expect, expect_sz))
             return 0;
+
+        pack_ind += sizeof(signal_t);
     }
 
     // Will free payload
@@ -386,7 +372,7 @@ void test_rmc_proto_sub(char* mcast_group_addr,
 
         RMC_LOG_COMMENT("timeout [%ld] msec", (timeout_ts == -1)?-1:(timeout_ts  - current_ts)/1000);
         if (process_events(ctx, epollfd, timeout_ts) == ETIME) {
-            RMC_LOG_INFO("Got timeout");
+            RMC_LOG_COMMENT("Got timeout");
             continue;
         }
         else 

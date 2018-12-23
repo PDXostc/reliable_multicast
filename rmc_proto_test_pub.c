@@ -87,8 +87,6 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
             if (res == EAGAIN)
                 continue;       
 
-            _test("rmc_proto_test[%d.%d] process_events():rmc_read(): %s\n", major, 1, res);
-                
             // If this was a connection call processed, we can continue.
             if (op_res == RMC_READ_ACCEPT)
                 continue;
@@ -97,7 +95,8 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
         }
 
         if (events[nfds].events & EPOLLOUT) {
-            if (rmc_pub_write(ctx, c_ind, &op_res) != 0) 
+            res = rmc_pub_write(ctx, c_ind, &op_res);
+            if (res != 0 && res != EAGAIN && res != ENODATA)  
                 rmc_pub_close_connection(ctx, c_ind);
         }
     }
@@ -261,17 +260,15 @@ void test_rmc_proto_pub(char* mcast_group_addr,
 
 
         // Fill single packet payload with as many signals as we can
-        while(signal_ind <= count) {
-            char buf[64];
-            int len = 0;
-            sprintf(buf, "%u:%lu:%lu", node_id, signal_ind, count);
+        while(signal_ind <= count && payload_len + sizeof(signal_t) <= RMC_MAX_PAYLOAD) {
+            *((signal_t*) (payload + payload_len)) = (signal_t) {
+                .node_id = node_id,
+                .signal_id = signal_ind,
+                .max_signal_id = count,
+                .filler = 0
+            };
 
-            len = strlen(buf) + 1;
-            if (payload_len + len >= RMC_MAX_PAYLOAD)
-                break;
-
-            memcpy(payload + payload_len, buf, len);
-            payload_len += len;
+            payload_len += sizeof(signal_t);
             ++signal_ind;
         }
 
