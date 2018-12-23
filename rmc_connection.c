@@ -233,7 +233,7 @@ int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
     if (conn_vec->connections[c_ind].descriptor == -1)
         return errno;
  
-    RMC_LOG_INDEX_COMMENT(c_ind, "addr[%s:%d]", c_ind, inet_ntoa(sock_addr.sin_addr), ntohs(sock_addr.sin_port));
+    RMC_LOG_INDEX_COMMENT(c_ind, "addr[%s:%d]", inet_ntoa(sock_addr.sin_addr), ntohs(sock_addr.sin_port));
     
     res = connect(conn_vec->connections[c_ind].descriptor,
                   (struct sockaddr*) &sock_addr,

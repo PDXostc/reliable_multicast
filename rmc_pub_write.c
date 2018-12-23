@@ -232,8 +232,6 @@ rearm:
                                          conn->action);
     }    
     
-    RMC_LOG_INDEX_DEBUG(conn->connection_index,
-                  "%d/%s", res, strerror(res));
     return res;
 }    
 
@@ -289,8 +287,6 @@ int rmc_pub_write(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
         *op_res = RMC_WRITE_TCP;
     
     res = rmc_conn_process_tcp_write(conn, &bytes_left_after);
-    RMC_LOG_INDEX_DEBUG(conn->connection_index, 
-                        "Processing tcp write: %d", res);
     
     if (bytes_left_after == 0) 
         conn->action &= ~RMC_POLLWRITE;

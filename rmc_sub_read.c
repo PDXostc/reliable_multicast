@@ -74,7 +74,7 @@ static int decode_subscribed_multicast(rmc_sub_context_t* ctx,
     if (sub_packet_is_duplicate(pub, pack_hdr->pid)) {
         RMC_LOG_INDEX_DEBUG(RMC_MULTICAST_INDEX,
                             "pid %lu  is duplicate or pre-connect straggler",
-                      pack_hdr->pid);
+                            pack_hdr->pid);
         return 0;
     }
 
@@ -138,9 +138,9 @@ static int process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res, uin
                 
     if (len < sizeof(packet_header_t) + pack_hdr->payload_len) {
         RMC_LOG_ERROR("Corrupt packet. Needed [%lu + %d = %lu] header + payload bytes. Got %lu\n",
-                sizeof(packet_header_t),
-                pack_hdr->payload_len, 
-                sizeof(packet_header_t) + pack_hdr->payload_len, len);
+                      sizeof(packet_header_t),
+                      pack_hdr->payload_len, 
+                      sizeof(packet_header_t) + pack_hdr->payload_len, len);
 
         return EPROTO;
     }
@@ -253,8 +253,9 @@ static int process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
     // have atomically processed or rejeceted the command.
     //
     if (circ_buf_in_use(&conn->read_buf) < 1 + sizeof(packet_header_t)) {
-        RMC_LOG_COMMENT("Incomplete header data. Want [%lu] Got[%d]",
-               1 + sizeof(packet_header_t), circ_buf_in_use(&conn->read_buf));
+        RMC_LOG_INDEX_COMMENT(conn->connection_index,
+                              "Incomplete header data. Want [%lu] Got[%d]",
+                              1 + sizeof(packet_header_t), circ_buf_in_use(&conn->read_buf));
 
         // Don't free any memory since we will get called again when we have more data.
         return EAGAIN;
@@ -266,8 +267,9 @@ static int process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
     // Now we know how big the payload is. Check if we have enough memory for an atomic
     // process or reject.
     if (circ_buf_in_use(&conn->read_buf) < 1 + sizeof(packet_header_t) + pack_hdr.payload_len) {
-        RMC_LOG_COMMENT("Incomplete payload data. Want [%d] Got[%d]",
-                        1 + sizeof(packet_header_t) + pack_hdr.payload_len, circ_buf_in_use(&conn->read_buf));
+        RMC_LOG_INDEX_COMMENT(conn->connection_index,
+                              "Incomplete payload data. Want [%d] Got[%d]",
+                              1 + sizeof(packet_header_t) + pack_hdr.payload_len, circ_buf_in_use(&conn->read_buf));
 
         // Don't free any memory since we will get called again when we have more data.
         return EAGAIN;
@@ -279,7 +281,8 @@ static int process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
 
     // Is the packet a duplicate?
     if (sub_packet_is_duplicate(&ctx->publishers[conn->connection_index], pack_hdr.pid)) {
-        RMC_LOG_DEBUG("Duplicate: %lu", pack_hdr.pid);
+        RMC_LOG_INDEX_DEBUG(conn->connection_index,
+                            "Duplicate: %lu", pack_hdr.pid);
 
         // Free payload
         circ_buf_free(&conn->read_buf, pack_hdr.payload_len, 0);
@@ -293,7 +296,8 @@ static int process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
         payload = malloc(pack_hdr.payload_len);
 
     if (!payload) {
-        RMC_LOG_FATAL("memory allocation failed");
+        RMC_LOG_INDEX_FATAL(conn->connection_index,
+                            "memory allocation failed");
         exit(255);
     }
 
@@ -302,7 +306,8 @@ static int process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
     circ_buf_read(&conn->read_buf, payload, pack_hdr.payload_len, 0);
     circ_buf_free(&conn->read_buf, pack_hdr.payload_len, 0);
 
-    RMC_LOG_INFO("Received resend pid: %lu", pack_hdr.pid);
+    RMC_LOG_INDEX_INFO(conn->connection_index,
+                       "Received resend pid: %lu", pack_hdr.pid);
     
     // Since we are getting this via TCP command channel,
     // we do not need to ack it.
