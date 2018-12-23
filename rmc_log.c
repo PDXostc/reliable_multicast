@@ -9,6 +9,7 @@
 
 
 #include "rmc_common.h"
+#include "reliable_multicast.h"
 #include "rmc_log.h"
 #include "string.h"
 #include <unistd.h>
@@ -37,7 +38,7 @@ int rmc_set_log_level(int log_level)
 {
     if (log_level < RMC_LOG_LEVEL_NONE || log_level > RMC_LOG_LEVEL_DEBUG) {
 
-        rmc_log(RMC_LOG_LEVEL_WARNING, __FUNCTION__, __FILE__, __LINE__,
+        rmc_log(RMC_LOG_LEVEL_WARNING, __FUNCTION__, __FILE__, __LINE__, -1, 
                 "Illegal log level: %d. Legal values [%d-%d]", log_level, RMC_LOG_LEVEL_NONE, RMC_LOG_LEVEL_DEBUG);
         return 1;
     }
@@ -65,51 +66,119 @@ const char* rmc_log_color_flashing_red()
     return _rmc_log_use_color?"\033[5;38;2;192;0;0m":"";
 }
 
-// Red
+const char* rmc_log_color_light_red() 
+{
+    return _rmc_log_use_color?"\033[38;2;255;204;204m":"";
+}
+
 const char* rmc_log_color_red() 
 {
     return _rmc_log_use_color?"\033[38;2;192;0;0m":"";
 }
 
-// Orange
+const char* rmc_log_color_dark_red() 
+{
+    return _rmc_log_use_color?"\033[38;2;255;0;0m":"";
+}
+
 const char* rmc_log_color_orange() 
 {
     return _rmc_log_use_color?"\033[38;2;255;128;0m":"";
 }
 
-// Blue
+const char* rmc_log_color_yellow() 
+{
+    return _rmc_log_use_color?"\033[38;2;255;255;0m":"";
+}
+
+const char* rmc_log_color_light_blue()
+{
+    return _rmc_log_use_color?"\033[38;2;0;255;255m":"";
+}
+
 const char* rmc_log_color_blue()
 {
     return _rmc_log_use_color?"\033[38;2;0;128;255m":"";
 }
 
-// Green
+const char* rmc_log_color_dark_blue()
+{
+    return _rmc_log_use_color?"\033[38;2;0;0;255m":"";
+}
+
+const char* rmc_log_color_light_green()
+{
+    return _rmc_log_use_color?"\033[38;2;153;255;153m":"";
+}
+
+
 const char* rmc_log_color_green()
+{
+    return _rmc_log_use_color?"\033[38;2;0;255;0m":"";
+}
+
+
+const char* rmc_log_color_dark_green()
 {
     return _rmc_log_use_color?"\033[38;2;0;204;0m":"";
 }
 
-// Faint
 const char* rmc_log_color_faint()
 {
     return _rmc_log_use_color?"\033[2m":"";
 }
 
-// None
 const char* rmc_log_color_none()
 {
     return _rmc_log_use_color?"\033[0m":"";
 }
 
 
+const char* rmc_index_color(int index)
+{
+    switch(index) {
+    case -1:
+        return rmc_log_color_faint();
 
-void rmc_log(int log_level, const char* func, const char* file, int line, const char* fmt, ...)
+    case 0:
+        return rmc_log_color_green();
+
+    case 1:
+        return rmc_log_color_blue();
+
+    case 2:
+        return rmc_log_color_red();
+
+    case 3:
+        return rmc_log_color_light_green();
+
+    case 4:
+        return rmc_log_color_light_blue();
+
+    case 5:
+        return rmc_log_color_light_red();
+
+    case 6:
+        return rmc_log_color_dark_green();
+
+    case 7:
+        return rmc_log_color_dark_blue();
+
+    case 8:
+        return rmc_log_color_dark_red();
+
+    default:
+        return rmc_log_color_none();
+    }
+}
+
+void rmc_log(int log_level, const char* func, const char* file, int line, int index, const char* fmt, ...)
 {
     const char* color = 0;
     const char* tag = 0;
+    char index_str[32];
     va_list ap;
     
-
     // Default rmc_log_file, if not set.
     if (!_rmc_log_file)
         _rmc_log_file = stdout;
@@ -122,6 +191,23 @@ void rmc_log(int log_level, const char* func, const char* file, int line, const 
             _rmc_log_use_color = 1;
         else
             _rmc_log_use_color = 0;
+    }
+
+    switch(index) {
+    case RMC_UNUSED_INDEX:
+        strcpy(index_str, "     ");
+        break;
+
+    case RMC_MULTICAST_INDEX:
+        sprintf(index_str, "%s[UDP]%s", rmc_log_color_orange(), rmc_log_color_none());
+        break;
+
+    case RMC_LISTEN_INDEX:
+        sprintf(index_str, "%s[CTL]%s", rmc_log_color_yellow(), rmc_log_color_none());
+        break;
+
+    default:
+        sprintf(index_str, "%s[%.3d]%s", rmc_index_color(index), index, rmc_log_color_none());
     }
 
     switch(log_level) {
@@ -162,16 +248,17 @@ void rmc_log(int log_level, const char* func, const char* file, int line, const 
     }
 
 
-
-    fprintf(_rmc_log_file, "%s%s %ld%s %s%s:%d%s ",
+    fprintf(_rmc_log_file, "%s%s%s %ld %s %s%s:%d%s ",
             color,
             tag,
-            start_time?((rmc_usec_monotonic_timestamp() - start_time)/1000):0 ,
             rmc_log_color_none(),
+            start_time?((rmc_usec_monotonic_timestamp() - start_time)/1000):0 ,
+            index_str,
             rmc_log_color_faint(),
             file,
             line,
             rmc_log_color_none());
+
     va_start(ap, fmt);
     vfprintf(_rmc_log_file, fmt, ap);
     va_end(ap);

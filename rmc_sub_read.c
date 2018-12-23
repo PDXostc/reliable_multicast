@@ -65,19 +65,22 @@ static int decode_subscribed_multicast(rmc_sub_context_t* ctx,
 
     // Skip announce packets.
     if (!pack_hdr->pid) {
-        RMC_LOG_COMMENT("Already subscribing - Ignoring announce");
+        RMC_LOG_INDEX_COMMENT(RMC_MULTICAST_INDEX,
+                              "Already subscribing - Ignoring announce");
         return 0;
     }
 
     // Check that we do not have a duplicate
     if (sub_packet_is_duplicate(pub, pack_hdr->pid)) {
-        RMC_LOG_DEBUG("pid %lu  is duplicate or pre-connect straggler",
+        RMC_LOG_INDEX_DEBUG(RMC_MULTICAST_INDEX,
+                            "pid %lu  is duplicate or pre-connect straggler",
                       pack_hdr->pid);
         return 0;
     }
 
 
-    RMC_LOG_DEBUG("Len[%d] Pid[%lu]", pack_hdr->payload_len, pack_hdr->pid);
+    RMC_LOG_INDEX_DEBUG(RMC_MULTICAST_INDEX,
+                        "Len[%d] Pid[%lu]", pack_hdr->payload_len, pack_hdr->pid);
 
     // Use the provided memory allocator to reserve memory for
     // incoming payload.
@@ -93,7 +96,8 @@ static int decode_subscribed_multicast(rmc_sub_context_t* ctx,
         payload_copy = malloc(pack_hdr->payload_len);
     
     if (!payload_copy) {
-        RMC_LOG_FATAL("malloc(%d): %s", pack_hdr->payload_len, strerror(errno));
+        RMC_LOG_INDEX_FATAL(RMC_MULTICAST_INDEX,
+                            "malloc(%d): %s", pack_hdr->payload_len, strerror(errno));
         exit(255);
     }
 
@@ -113,7 +117,7 @@ static int decode_subscribed_multicast(rmc_sub_context_t* ctx,
 
     sub_process_received_packets(pub, &ctx->dispatch_ready);
 
-    RMC_LOG_COMMENT("Received multicast pid: %lu", pack_hdr->pid);
+    RMC_LOG_INDEX_COMMENT(RMC_MULTICAST_INDEX, "Received pid: %lu", pack_hdr->pid);
 
     return 0;
 }
@@ -321,7 +325,7 @@ static int process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
 
 int rmc_sub_close_connection(rmc_sub_context_t* ctx, rmc_index_t s_ind)
 {
-    RMC_LOG_COMMENT("index[%d]", s_ind);
+    RMC_LOG_INDEX_COMMENT(s_ind, "rmc_sub_close_connection(): called");
 
     rmc_conn_close_connection(&ctx->conn_vec, s_ind);
 
@@ -378,7 +382,7 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
                              dispatch_table, user_data_ptr(ctx));
 
     if (res == ENOMEM) {
-        RMC_LOG_WARNING("Cannot read tcp control channel for index [%d] since buffer is full.");
+        RMC_LOG_INDEX_WARNING(s_ind, "Cannot read tcp control channel since buffer is full.");
         res = ENOMEM;
         goto rearm;
     }
@@ -386,7 +390,7 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
     // Are we disconnected?
     if (res == EPIPE) {
         *op_res = RMC_READ_DISCONNECT;
-        RMC_LOG_COMMENT("Index %d got disconnected", s_ind);
+        RMC_LOG_INDEX_COMMENT(s_ind, "Got EPIPE disconnect");
         rmc_sub_close_connection(ctx, s_ind);
         return 0; // This is not an error, just regular disconnect.
     }

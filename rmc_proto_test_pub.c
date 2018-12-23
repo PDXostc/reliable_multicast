@@ -58,7 +58,7 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
 
     nfds = epoll_wait(epollfd, events, RMC_MAX_CONNECTIONS, (timeout == -1)?-1:((timeout / 1000) + 1));
     if (nfds == -1) {
-        perror("epoll_wait");
+        RMC_LOG_FATAL("epoll_wait");
         exit(255);
     }
 
@@ -71,11 +71,12 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
         uint8_t op_res = 0;
         rmc_index_t c_ind = events[nfds].data.u32;
 
-        RMC_LOG_DEBUG("pub_poll_wait(%s:%d)%s%s%s",
-               _index(c_ind, buf), _descriptor(ctx, c_ind),
-             ((events[nfds].events & EPOLLIN)?" read":""),
-               ((events[nfds].events & EPOLLOUT)?" write":""),
-               ((events[nfds].events & EPOLLHUP)?" disconnect":""));
+        RMC_LOG_INDEX_DEBUG(c_ind,
+                            "pub_poll_wait(%d)%s%s%s",
+                            _descriptor(ctx, c_ind),
+                            ((events[nfds].events & EPOLLIN)?" read":""),
+                            ((events[nfds].events & EPOLLOUT)?" write":""),
+                            ((events[nfds].events & EPOLLHUP)?" disconnect":""));
 
 
         if (events[nfds].events & EPOLLIN) {
@@ -83,7 +84,8 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
             res = rmc_pub_read(ctx, c_ind, &op_res);
             // Did we read a loopback message we sent ourselves?
 
-            RMC_LOG_DEBUG("%s:%s", _op_res_string(op_res), strerror(res));
+            RMC_LOG_INDEX_DEBUG(c_ind,
+                                "%s:%s", _op_res_string(op_res), strerror(res));
             if (res == EAGAIN)
                 continue;       
 

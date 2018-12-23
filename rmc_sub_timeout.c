@@ -56,18 +56,20 @@ int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
    while(inode) {
         sub_publisher_t* pub = &ctx->publishers[inode->data];
         sub_pid_interval_t pid_intv;
-
+        
 
         // If it is not yet time to send acks for this publisher, then
         // break out of loop and return.
         if (sub_oldest_unacknowledged_packet(pub) + ctx->ack_timeout > current_ts) {
-            RMC_LOG_COMMENT("%ld msec until timeout - returning",
-                   sub_oldest_unacknowledged_packet(pub) + ctx->ack_timeout - current_ts);
+            RMC_LOG_INDEX_COMMENT(inode->data,
+                                  "%ld usec until timeout - returning",
+                                  sub_oldest_unacknowledged_packet(pub) + ctx->ack_timeout - current_ts);
             break;
         }
         
-        RMC_LOG_COMMENT("past timeout by [%ld] msec -processing",
-               current_ts - sub_oldest_unacknowledged_packet(pub)  + ctx->ack_timeout);
+        RMC_LOG_INDEX_COMMENT(inode->data,
+                              "past timeout by [%ld] msec - processing",
+                              current_ts - sub_oldest_unacknowledged_packet(pub) + ctx->ack_timeout);
 
         // For each publisher that we have a timed out ack  for, we will ack
         // all pending packets in one go.
@@ -75,7 +77,7 @@ int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
             int res = 0;
             res = rmc_sub_packet_interval_acknowledged(ctx, inode->data, &pid_intv);
             if (res) {
-                RMC_LOG_INFO("Failed to send packet ack: %s", strerror(res));
+                RMC_LOG_INDEX_INFO(inode->data,"Failed to send packet ack: %s", strerror(res));
                 return res;
             }
         }

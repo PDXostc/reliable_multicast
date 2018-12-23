@@ -56,13 +56,14 @@ int _rmc_sub_write_interval_acknowledgement(rmc_sub_context_t* ctx,
 
         strcpy(group_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }));
         strcpy(remote_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(conn->remote_address) }));
-        RMC_LOG_COMMENT("interval[%lu:%lu] mcast[%s:%d] remote[%s:%d]",
-               interval->first_pid,
-               interval->last_pid,
-               group_addr,
-               ctx->mcast_port,
-               remote_addr,
-               conn->remote_port);
+        RMC_LOG_INDEX_COMMENT(conn->connection_index,
+                              "interval[%lu:%lu] mcast[%s:%d] remote[%s:%d]",
+                              interval->first_pid,
+                              interval->last_pid,
+                              group_addr,
+                              ctx->mcast_port,
+                              remote_addr,
+                              conn->remote_port);
 
         // Allocate memory for command
         res = circ_buf_alloc(&conn->write_buf, 1,

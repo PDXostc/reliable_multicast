@@ -61,7 +61,6 @@ void usage(char* prog)
     fprintf(stderr, "       -l <ip-addr>   Listen interface IP (default: %s)\n", LISTEN_IF_ADDR_DEFAULT);
     fprintf(stderr, "       -P <port>      Multicast port (default: %d)\n", PORT_DEFAULT);
     fprintf(stderr, "       -p <port>      Listen  port (default: %d)\n\n", PORT_DEFAULT);
-    
     fprintf(stderr, "       -c <count>     Number of packets to transmit (publisher only). Default 1\n");
     fprintf(stderr, "       -i <id>        Unique node ID among all publishers and subscribers. Legal value 1-1000. Default = 1\n");
     fprintf(stderr, "       -r <seed>      Random seed number. Default 1\n");

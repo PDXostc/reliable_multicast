@@ -265,18 +265,18 @@ static int process_events(rmc_sub_context_t* ctx,
         uint8_t op_res = 0;
         rmc_index_t c_ind = events[nfds].data.u32;
 
-        RMC_LOG_COMMENT("%s:%d - %s%s%s",
-               _index(c_ind, buf), _descriptor(ctx, c_ind),
-               ((events[nfds].events & EPOLLIN)?" read":""),
-               ((events[nfds].events & EPOLLOUT)?" write":""),
-               ((events[nfds].events & EPOLLHUP)?" disconnect":""));
+        RMC_LOG_INDEX_COMMENT(c_ind, "%d - %s%s%s",
+                              _descriptor(ctx, c_ind),
+                              ((events[nfds].events & EPOLLIN)?" read":""),
+                              ((events[nfds].events & EPOLLOUT)?" write":""),
+                              ((events[nfds].events & EPOLLHUP)?" disconnect":""));
 
 
         if (events[nfds].events & EPOLLIN) {
             errno = 0;
             res = rmc_sub_read(ctx, c_ind, &op_res);
             // Did we read a loopback message we sent ourselves?
-            RMC_LOG_DEBUG("read result: %s - %s", _op_res_string(op_res),   strerror(res));
+            RMC_LOG_INDEX_DEBUG(c_ind, "read result: %s - %s", _op_res_string(op_res),   strerror(res));
         }
 
         if (events[nfds].events & EPOLLOUT) {

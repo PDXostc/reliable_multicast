@@ -18,8 +18,8 @@
 
 
 static void setup_packet_header(rmc_pub_context_t* ctx,
-                               pub_packet_t* pack,
-                               packet_header_t* pack_hdr)
+                                pub_packet_t* pack,
+                                packet_header_t* pack_hdr)
 {
     // Setup context id. 
     pack_hdr->context_id = ctx->context_id;
@@ -73,8 +73,8 @@ static int send_single_multicast_packet(rmc_pub_context_t* ctx, pub_packet_t* pa
 
     // Setup the scattered-write io vector with header and payload
     io_vec[0] = (struct iovec) {
-            .iov_base = (void*) &pack_hdr,
-            .iov_len = sizeof(pack_hdr)
+        .iov_base = (void*) &pack_hdr,
+        .iov_len = sizeof(pack_hdr)
     };
     
     io_vec[1] = (struct iovec) {
@@ -97,7 +97,8 @@ static int send_single_multicast_packet(rmc_pub_context_t* ctx, pub_packet_t* pa
 
     if (res == -1) {
         if ( errno != EAGAIN && errno != EWOULDBLOCK) {
-            RMC_LOG_WARNING("sendmsg(): %d/%s", errno, strerror(errno));
+            RMC_LOG_INDEX_WARNING(RMC_MULTICAST_INDEX,
+                                  "sendmsg(): %d/%s", errno, strerror(errno));
             return errno;
         }
 
@@ -138,7 +139,7 @@ static int process_multicast_write(rmc_pub_context_t* ctx)
         ++count;
         pack = pub_next_queued_packet(pctx);
     }
-    RMC_LOG_DEBUG("%d", res);
+    RMC_LOG_INDEX_DEBUG(RMC_MULTICAST_INDEX, "%d", res);
     return res;
 }
 
@@ -156,10 +157,11 @@ int rmc_pub_resend_packet(rmc_pub_context_t* ctx,
     
     // Do we have enough circular buffer meomory available?
     if (circ_buf_available(&conn->write_buf) < 1 + sizeof(packet_header_t) + pack->payload_len) {
-        RMC_LOG_DEBUG("Resend packet needed %d+%d+%d=%d bytes, got %d",
-                      1, sizeof(packet_header_t),pack->payload_len,
-                      1 + sizeof(packet_header_t) + pack->payload_len,
-                      circ_buf_available(&conn->write_buf));
+        RMC_LOG_INDEX_DEBUG(conn->connection_index,
+                            "Resend packet needed %d+%d+%d=%d bytes, got %d",
+                            1, sizeof(packet_header_t),pack->payload_len,
+                            1 + sizeof(packet_header_t) + pack->payload_len,
+                            circ_buf_available(&conn->write_buf));
         res = EAGAIN;
         goto rearm;
     }
@@ -171,7 +173,8 @@ int rmc_pub_resend_packet(rmc_pub_context_t* ctx,
 
     // We checked above that we have memory, so an error here is final
     if (res) {
-        RMC_LOG_FATAL("Could not allocate one byte: %s\n", strerror(errno));
+        RMC_LOG_INDEX_FATAL(conn->connection_index,
+                            "Could not allocate one byte: %s\n", strerror(errno));
         exit(255);
     }
     *seg1 = RMC_CMD_PACKET;
@@ -184,7 +187,8 @@ int rmc_pub_resend_packet(rmc_pub_context_t* ctx,
                          &seg2, &seg2_len);
 
     if (res) {
-        RMC_LOG_FATAL("Could not allocate %lu header bytes: %s\n", sizeof(pack_hdr), strerror(errno));
+        RMC_LOG_INDEX_FATAL(conn->connection_index,
+                            "Could not allocate %lu header bytes: %s\n", sizeof(pack_hdr), strerror(errno));
         exit(255);
     }
 
@@ -199,7 +203,8 @@ int rmc_pub_resend_packet(rmc_pub_context_t* ctx,
                          &seg2, &seg2_len);
 
     if (res) {
-        RMC_LOG_FATAL("Could not allocate %d payload bytes: %s\n", pack->payload_len, strerror(errno));
+        RMC_LOG_INDEX_FATAL(conn->connection_index,
+                      "Could not allocate %d payload bytes: %s\n", pack->payload_len, strerror(errno));
         exit(255);
     }
 
@@ -208,7 +213,8 @@ int rmc_pub_resend_packet(rmc_pub_context_t* ctx,
     if (seg2_len) 
         memcpy(seg2, ((uint8_t*) pack->payload) + seg1_len, seg2_len);
 
-    RMC_LOG_DEBUG("Queued %d bytes",
+    RMC_LOG_INDEX_DEBUG(conn->connection_index,
+                  "Queued %d bytes",
                  1 + sizeof(packet_header_t) + pack->payload_len);
 
 
@@ -226,7 +232,8 @@ rearm:
                                          conn->action);
     }    
     
-    RMC_LOG_DEBUG("%d/%s", res, strerror(res));
+    RMC_LOG_INDEX_DEBUG(conn->connection_index,
+                  "%d/%s", res, strerror(res));
     return res;
 }    
 
@@ -245,7 +252,8 @@ int rmc_pub_write(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
         if (op_res)
             *op_res = RMC_WRITE_MULTICAST;
         // Write as many multicast packets as we can.
-        RMC_LOG_DEBUG("Processing multicast write");
+        RMC_LOG_INDEX_DEBUG(RMC_MULTICAST_INDEX, 
+                            "Processing multicast write");
         return process_multicast_write(ctx);
     }
 
@@ -281,7 +289,8 @@ int rmc_pub_write(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
         *op_res = RMC_WRITE_TCP;
     
     res = rmc_conn_process_tcp_write(conn, &bytes_left_after);
-    RMC_LOG_DEBUG("Processing tcp write: %d", res);
+    RMC_LOG_INDEX_DEBUG(conn->connection_index, 
+                        "Processing tcp write: %d", res);
     
     if (bytes_left_after == 0) 
         conn->action &= ~RMC_POLLWRITE;

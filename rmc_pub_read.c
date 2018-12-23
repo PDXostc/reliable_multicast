@@ -31,7 +31,8 @@ static int process_cmd_ack_interval(rmc_connection_t* conn, user_data_t user_dat
     // Read and free.
     circ_buf_read_offset(&conn->read_buf, 1, (uint8_t*) &ack, sizeof(ack), 0);
     circ_buf_free(&conn->read_buf, sizeof(ack) + 1, 0);
-    RMC_LOG_COMMENT("process_cmd_ack_interval(): interval[%lu:%lu]", ack.first_pid, ack.last_pid);
+    RMC_LOG_INDEX_COMMENT(conn->connection_index,
+                          "process_cmd_ack_interval(): interval[%lu:%lu]", ack.first_pid, ack.last_pid);
 
     // Mark all packets in the interval as acknwoledged, and call the
     // payload free function provided to rmc_pub_init_context(). If no
@@ -67,7 +68,7 @@ int rmc_pub_close_connection(rmc_pub_context_t* ctx, rmc_index_t s_ind)
 
     rmc_conn_close_connection(&ctx->conn_vec, s_ind);
 
-    RMC_LOG_INFO("rmc_pub_close_connection(): index[%d] - ok", s_ind);
+    RMC_LOG_INDEX_INFO(s_ind, "rmc_pub_close_connection() - ok");
     pub_reset_subscriber(&ctx->subscribers[s_ind],
                          lambda(void, (void* payload, payload_len_t payload_len, user_data_t user_data) {
                                  if (ctx->payload_free)
@@ -143,11 +144,11 @@ int rmc_pub_read(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
                        (struct sockaddr*) &src_addr, &addr_len);
 
         if (len == -1) {
-            RMC_LOG_WARNING("recvfrom(MULTICAST): %s", strerror(errno));
+            RMC_LOG_INDEX_WARNING(RMC_MULTICAST_INDEX, "recvfrom(): %s", strerror(errno));
             *op_res = RMC_ERROR;
             return errno;
         }
-        RMC_LOG_INFO("recvfrom(MULTICAST): Ignored loopback");
+        RMC_LOG_INDEX_INFO(RMC_MULTICAST_INDEX, "recvfrom(MULTICAST): Ignored loopback");
         if (ctx->conn_vec.poll_modify)
             (*ctx->conn_vec.poll_modify)(ctx->user_data,
                                          ctx->mcast_send_descriptor,
@@ -171,7 +172,7 @@ int rmc_pub_read(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
     // zero bytes in a read (happens after we issued a close).
     // or read return -1. In both cases we close the conneciton.
     if (res == EPIPE) { 
-        RMC_LOG_COMMENT("tcp read returned EPIPE");
+        RMC_LOG_INDEX_COMMENT(s_ind, "tcp read returned EPIPE");
         rmc_pub_close_connection(ctx, s_ind);
         return 0; // This is not an error, just regular maintenance.
     }

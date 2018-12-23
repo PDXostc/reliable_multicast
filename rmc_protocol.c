@@ -50,13 +50,13 @@ int rmc_conn_process_tcp_write(rmc_connection_t* conn, uint32_t* bytes_left)
     // How did that write go?
     if (res == -1) { 
         *bytes_left = circ_buf_in_use(&conn->write_buf);
-        RMC_LOG_INFO("writev");
+        RMC_LOG_INDEX_INFO(conn->connection_index, "writev");
         return errno;
     }
 
     if (res == 0) { 
         *bytes_left = circ_buf_in_use(&conn->write_buf);
-        RMC_LOG_INFO("Failed to send data");
+        RMC_LOG_INDEX_INFO(conn->connection_index, "Failed to send data");
         return 0;
     }
 
@@ -65,7 +65,7 @@ int rmc_conn_process_tcp_write(rmc_connection_t* conn, uint32_t* bytes_left)
     // At the same time grab number of bytes left to
     // send from the buffer.,
     circ_buf_free(&conn->write_buf, res, bytes_left);
-    RMC_LOG_DEBUG("Wrote [%ld] bytes", res);
+    RMC_LOG_INDEX_DEBUG(conn->connection_index, "wrote [%ld] bytes", res);
 
     return 0;
 }
@@ -97,7 +97,7 @@ int rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
 
     if (res) {
         *op_res = RMC_ERROR;
-        RMC_LOG_ERROR("Circular buffer read failed: %s", strerror(errno));
+        RMC_LOG_INDEX_ERROR(s_ind, "Circular buffer read failed: %s", strerror(errno));
         return res;
     }
     
@@ -125,10 +125,10 @@ int rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
             // Roll back the command
             if (res != 0) {
                 if (res != EAGAIN) {
-                    RMC_LOG_ERROR("Dispatch failed: %s", strerror(errno));
+                    RMC_LOG_INDEX_ERROR(s_ind, "Dispatch failed: %s", strerror(errno));
                     *op_res = RMC_ERROR;
                 } else
-                    RMC_LOG_DEBUG("Dispatch needs more data");
+                    RMC_LOG_INDEX_DEBUG(s_ind, "Dispatch needs more data");
 
                 // We either have a protocol error, or not enough data
                 // to process the current packet.
@@ -141,7 +141,7 @@ int rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
         // No hit in the dispatch table?
         if (!current->dispatch) {
             *op_res = RMC_ERROR;
-            RMC_LOG_ERROR("Unknown command byte: %d", command);
+            RMC_LOG_INDEX_ERROR(s_ind, "Unknown command byte: %d", command);
             return EPROTO;
         }
 
@@ -157,7 +157,7 @@ int rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
         // Read the command byte.
         res = circ_buf_read(&conn->read_buf, &command, 1, 0);
         if (res) {
-            RMC_LOG_ERROR("Circular buffer read failed: %s", strerror(errno));
+            RMC_LOG_INDEX_ERROR(s_ind, "Circular buffer read failed: %s", strerror(errno));
             *op_res = RMC_ERROR;
             return res;
         }
@@ -214,13 +214,13 @@ int rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
     errno = 0;
     
     res = readv(conn->descriptor, iov, 2);
-    RMC_LOG_DEBUG("read(%d): Wanted %d + %d -> %d bytes. Got %ld %s", 
-                  s_ind,
-                  seg1_len,
-                  seg2_len,
-                  seg1_len + seg2_len,
-                  res,
-                  (res == -1)?strerror(errno):"");
+    RMC_LOG_INDEX_DEBUG(s_ind,
+                        "readv(): Wanted %d + %d -> %d bytes. Got %ld %s", 
+                        seg1_len,
+                        seg2_len,
+                        seg1_len + seg2_len,
+                        res,
+                        (res == -1)?strerror(errno):"");
 
     if (res == -1 || res == 0) {
         *op_res = RMC_READ_DISCONNECT;

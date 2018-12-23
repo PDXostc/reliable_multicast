@@ -28,8 +28,6 @@ signal {
     uint64_t filler;          // 8 
 } signal_t;                   // 20 bytes.
 
-extern char* _index(rmc_index_t index, char* res);
-
 extern void* _test_proto_alloc(payload_len_t plen);
 
 extern void test_proto_free(void* payload, payload_len_t plen);
