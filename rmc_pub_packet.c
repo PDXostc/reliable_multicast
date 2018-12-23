@@ -15,8 +15,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// FIXME: Upper limit to how many packets we can queue before
-//        returning ENOMEM
 int rmc_pub_queue_packet(rmc_pub_context_t* ctx,
                          void* payload,
                          payload_len_t payload_len,
@@ -57,37 +55,6 @@ int rmc_pub_queue_packet(rmc_pub_context_t* ctx,
 }
 
 
-
-int rmc_pub_queue_announcement(rmc_pub_context_t* ctx,
-                               void* payload,
-                               payload_len_t payload_len)
-{
-    pub_packet_t *pack;
-
-    if (!ctx || !payload || !payload_len)
-        return EINVAL;
-     
-    // Check if we already have queued packets. If not, we need to enable RMC_POLLWRITE
-    // on the descriptor.
-    pack = pub_next_queued_packet(&ctx->pub_ctx);    
- 
-    // FIXME: Upper limit to how many packets we can queue before
-    //        returning ENOMEM
-    pub_queue_packet(&ctx->pub_ctx, payload, payload_len, user_data_nil());
-
-    if (ctx->conn_vec.poll_modify)  {
-        // Did we already have a packet pending for send prior
-        // to queueing the lastest packet? If so, old action
-        // was POLLWRITE, if not, it was 0.
-        (*ctx->conn_vec.poll_modify)(ctx->user_data,
-                                     ctx->mcast_send_descriptor,
-                                     RMC_MULTICAST_INDEX,
-                                     (pack?RMC_POLLWRITE:0),
-                                     RMC_POLLWRITE);
-    }
-
-    return 0;
-}
 
 
 int rmc_pub_packet_ack(rmc_pub_context_t* ctx, rmc_connection_t* conn, packet_id_t pid)
