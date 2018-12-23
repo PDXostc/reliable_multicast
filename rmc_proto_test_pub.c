@@ -90,8 +90,6 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
             // If this was a connection call processed, we can continue.
             if (op_res == RMC_READ_ACCEPT)
                 continue;
-
-
         }
 
         if (events[nfds].events & EPOLLOUT) {
@@ -298,7 +296,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
         //
         // Process events until it is time to send the next packet.
         //
-        while(current_ts < tout) {
+        while(current_ts < tout || rmc_pub_queue_length(ctx) > 100 ) {
             usec_timestamp_t event_tout = 0;
 
             rmc_pub_timeout_get_next(ctx, &event_tout);
