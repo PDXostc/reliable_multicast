@@ -96,12 +96,13 @@ int main(int argc, char* argv[])
     int e_arg_set = 0;
     int log_level = RMC_LOG_LEVEL_NONE;
 
+
     strcpy(mcast_if_addr, MULTICAST_IF_ADDR_DEFAULT);
     strcpy(listen_if_addr, LISTEN_IF_ADDR_DEFAULT);
     strcpy(mcast_group_addr, MULTICAST_ADDR_DEFAULT);
     memset(expected_node_id, 0, sizeof(expected_node_id));
 
-    while ((opt = getopt(argc, argv, "SP:M:m:l:p:c:n:r:s:j:d:e:E:L:")) != -1) {
+    while ((opt = getopt(argc, argv, "SP:M:m:l:p:c:n:r:s:j:d:e:E:L:i:")) != -1) {
         switch (opt) {
 
         case 'L':
