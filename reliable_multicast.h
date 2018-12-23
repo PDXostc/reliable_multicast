@@ -518,6 +518,8 @@ extern int rmc_pub_queue_packet(rmc_pub_context_t* ctx,
                                 payload_len_t payload_len,
                                 uint8_t announce_flag);
 
+extern uint32_t rmc_pub_queue_length(rmc_pub_context_t* ctx);
+
 extern int rmc_pub_packet_ack(rmc_pub_context_t* ctx, rmc_connection_t* conn, packet_id_t pid);
 
 // Get stats on what is pending to be sent out.

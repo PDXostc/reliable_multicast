@@ -55,6 +55,14 @@ int rmc_pub_queue_packet(rmc_pub_context_t* ctx,
 }
 
 
+uint32_t rmc_pub_queue_length(rmc_pub_context_t* ctx)
+{
+    if (!ctx)
+        return 0;
+
+    return  pub_queue_size(&ctx->pub_ctx);
+}
+
 
 
 int rmc_pub_packet_ack(rmc_pub_context_t* ctx, rmc_connection_t* conn, packet_id_t pid)
