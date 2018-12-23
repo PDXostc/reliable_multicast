@@ -298,7 +298,7 @@ static int process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
     circ_buf_read(&conn->read_buf, payload, pack_hdr.payload_len, 0);
     circ_buf_free(&conn->read_buf, pack_hdr.payload_len, 0);
 
-    RMC_LOG_COMMENT("Received resend pid: %lu", pack_hdr.pid);
+    RMC_LOG_INFO("Received resend pid: %lu", pack_hdr.pid);
     
     // Since we are getting this via TCP command channel,
     // we do not need to ack it.
@@ -379,7 +379,8 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
 
     if (res == ENOMEM) {
         RMC_LOG_WARNING("Cannot read tcp control channel for index [%d] since buffer is full.");
-        return ENOMEM;
+        res = ENOMEM;
+        goto rearm;
     }
         
     // Are we disconnected?
@@ -401,6 +402,8 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
     }
         
     *op_res = RMC_READ_TCP;
+
+rearm:
 
     // Read poll is always active. Callback to re-arm.
     if (ctx->conn_vec.poll_modify) {
