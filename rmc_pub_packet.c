@@ -9,6 +9,7 @@
 
 #define _GNU_SOURCE
 #include "reliable_multicast.h"
+#include "rmc_log.h"
 #include <string.h>
 #include <errno.h>
 #include <stdio.h>
@@ -26,8 +27,11 @@ int rmc_pub_queue_packet(rmc_pub_context_t* ctx,
     if (!ctx || !payload)
         return EINVAL;
      
-    // Check if we already have queued packets. If not, we need to enable RMC_POLLWRITE
-    // on the descriptor.
+    if (payload_len > RMC_MAX_PAYLOAD) {
+        RMC_LOG_ERROR("Oversized packet [%d] bytes. Max size[%d]\n", payload_len, RMC_MAX_PAYLOAD);
+        return EMSGSIZE;
+
+    }
     pack = pub_next_queued_packet(&ctx->pub_ctx);    
  
 
