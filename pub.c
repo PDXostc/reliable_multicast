@@ -114,16 +114,17 @@ static packet_id_t pub_queue_packet_with_pid(pub_context_t* ctx,
     // We will pop off this list at the tail to get the next
     // node to send in pub_next_queued_packet().
     //
-    // Set parent node to the list_node_t representing
-    // the pending packet in ctx->queued for quick unlinking.
-    //
     ppack->parent_node =
         pub_packet_list_insert_sorted(&ctx->queued,
                                       ppack,
-                                      lambda(int, (pub_packet_t* n_dt, pub_packet_t* o_dt) {
-                                              (n_dt->pid > o_dt->pid)?1:
-                                                  ((n_dt->pid < o_dt->pid)?-1:
-                                                   0);
+                                      lambda(int, (pub_packet_t* new_pack, pub_packet_t* existing_pack) {
+                                              if (new_pack->pid > existing_pack->pid)
+                                                  return 1;
+
+                                               if (new_pack->pid < existing_pack->pid)
+                                                   return -1;
+
+                                               return 0;
                                           }
                                           ));
 
@@ -204,11 +205,11 @@ void pub_packet_sent(pub_context_t* ctx,
     // Sorted on ascending pid.
     pub_packet_list_insert_sorted_node(&ctx->inflight,
                                        pack->parent_node,
-                                       lambda(int, (pub_packet_t* n_dt, pub_packet_t* o_dt) {
-                                               if (n_dt->pid > o_dt->pid)
+                                       lambda(int, (pub_packet_t* new_pack, pub_packet_t* existing_pack) {
+                                               if (new_pack->pid > existing_pack->pid)
                                                    return 1;
 
-                                               if (n_dt->pid < o_dt->pid)
+                                               if (new_pack->pid < existing_pack->pid)
                                                    return -1;
 
                                                return 0;
@@ -227,11 +228,11 @@ void pub_packet_sent(pub_context_t* ctx,
         // packet_id sorted list of the subscriber's inflight packets.
         pub_packet_list_insert_sorted(&sub->inflight,
                                 pack,
-                                lambda(int, (pub_packet_t* n_dt, pub_packet_t* o_dt) {
-                                   if (n_dt->pid < o_dt->pid)
+                                lambda(int, (pub_packet_t* new_pack, pub_packet_t* existing_pack) {
+                                   if (new_pack->pid < existing_pack->pid)
                                        return -1;
 
-                                   if (n_dt->pid > o_dt->pid)
+                                   if (new_pack->pid > existing_pack->pid)
                                        return 1;
 
                                    return 0;
