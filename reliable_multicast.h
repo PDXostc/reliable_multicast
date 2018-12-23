@@ -16,8 +16,9 @@
 #include "rmc_protocol.h"
 
 
-// Max UDP size is 0xFFE3 (65507). Subtract 0x20 (32) bytes for RMC
-// header data.
+// Max UDP size is 0xFFE3 (65507).
+// Max TCP segment that seems to fit comfortably is 0xFF78.
+// Subtract some headers to get max payload
 #define RMC_MAX_PACKET 0xFF78
 #define RMC_MAX_PAYLOAD (RMC_MAX_PACKET - sizeof(packet_header_t) - 1)
 
