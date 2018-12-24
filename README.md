@@ -27,7 +27,7 @@ Start subscriber that:
 
 1. Waits for an announce packet from a publisher
 2. Connects to publisher and sets up subscribtion
-3. Reveives however many packets that the publisher has to send
+3. Receives however many packets that the publisher has to send
 4. Validates all packets
 5. Extits
 
