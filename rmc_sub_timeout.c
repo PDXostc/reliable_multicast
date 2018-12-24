@@ -99,7 +99,7 @@ int rmc_sub_timeout_get_next(rmc_sub_context_t* ctx, usec_timestamp_t* result)
     
     // We may not have anything to ack at all.
     if (!rmc_index_list_size(&ctx->pub_ack_list)) {
-        RMC_LOG_COMMENT("No publishers found with pending timeouts");
+        RMC_LOG_DEBUG("No publishers found with pending timeouts");
         *result = -1;
         return 0;
     }

@@ -279,11 +279,11 @@ static int process_events(rmc_sub_context_t* ctx,
         uint8_t op_res = 0;
         rmc_index_t c_ind = events[nfds].data.u32;
 
-        RMC_LOG_INDEX_COMMENT(c_ind, "%d - %s%s%s",
-                              _descriptor(ctx, c_ind),
-                              ((events[nfds].events & EPOLLIN)?" read":""),
-                              ((events[nfds].events & EPOLLOUT)?" write":""),
-                              ((events[nfds].events & EPOLLHUP)?" disconnect":""));
+        RMC_LOG_INDEX_DEBUG(c_ind, "%d - %s%s%s",
+                            _descriptor(ctx, c_ind),
+                            ((events[nfds].events & EPOLLIN)?" read":""),
+                            ((events[nfds].events & EPOLLOUT)?" write":""),
+                            ((events[nfds].events & EPOLLHUP)?" disconnect":""));
 
 
         if (events[nfds].events & EPOLLIN) {

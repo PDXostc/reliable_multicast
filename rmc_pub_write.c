@@ -139,7 +139,7 @@ static int process_multicast_write(rmc_pub_context_t* ctx)
         ++count;
         pack = pub_next_queued_packet(pctx);
     }
-    RMC_LOG_INDEX_DEBUG(RMC_MULTICAST_INDEX, "%d", res);
+
     return res;
 }
 

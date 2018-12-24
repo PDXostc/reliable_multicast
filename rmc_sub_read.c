@@ -79,8 +79,7 @@ static int decode_subscribed_multicast(rmc_sub_context_t* ctx,
     }
 
 
-    RMC_LOG_INDEX_DEBUG(RMC_MULTICAST_INDEX,
-                        "Len[%d] Pid[%lu]", pack_hdr->payload_len, pack_hdr->pid);
+    
 
     // Use the provided memory allocator to reserve memory for
     // incoming payload.
@@ -117,7 +116,8 @@ static int decode_subscribed_multicast(rmc_sub_context_t* ctx,
 
     sub_process_received_packets(pub, &ctx->dispatch_ready);
 
-    RMC_LOG_INDEX_COMMENT(RMC_MULTICAST_INDEX, "Received pid: %lu", pack_hdr->pid);
+    RMC_LOG_INDEX_COMMENT(conn->connection_index,
+                        "Multicast receive - len[%d] pid[%lu]", pack_hdr->payload_len, pack_hdr->pid);
 
     return 0;
 }
@@ -161,6 +161,7 @@ static int process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res, uin
     // Drop the recived packet
 
     if (!conn || conn->mode == RMC_CONNECTION_MODE_CONNECTING) {
+        RMC_LOG_INDEX_DEBUG(conn?conn->connection_index:-1, "mode[%d]", conn?conn->mode:-1);
         res = decode_unsubscribed_multicast(ctx,
                                             pack_hdr,
                                             data);
