@@ -352,9 +352,6 @@ void test_rmc_proto_pub(char* mcast_group_addr,
 
     RMC_LOG_INFO("Done");
 
-    RMC_LOG_INFO("TO TEST: Multiple publishers. Single subscriber");
-
-    RMC_LOG_INFO("TO TEST: Multiple subscribers. Single publisher");
     RMC_LOG_INFO("TO TEST: Publishers that repeatedly connects and disconnects");
     RMC_LOG_INFO("TO TEST: Subscribers that repeatedly connects and disconnects");
     exit(0);
