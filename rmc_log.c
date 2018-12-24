@@ -28,6 +28,11 @@ void rmc_log_set_start_time(void)
     start_time = rmc_usec_monotonic_timestamp();
 }
 
+usec_timestamp_t rmc_log_get_start_time(void)
+{
+    return start_time;
+}
+
 void rmc_log_use_color(int use_color)
 {
     _rmc_log_use_color = use_color;

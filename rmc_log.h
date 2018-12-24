@@ -21,6 +21,7 @@
 
 extern char* rmc_log_timestamp(char* target);
 extern void rmc_log_set_start_time(void);
+extern usec_timestamp_t rmc_log_get_start_time(void);
 extern void rmc_log_use_color(int use_color);
 extern int rmc_set_log_level(int log_level);
 extern void rmc_log(int log_level, const char* func, const char* file, int line, int index, const char* fmt, ...);
