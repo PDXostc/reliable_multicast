@@ -19,7 +19,7 @@
 #include <signal.h>
 
 #include "rmc_list_template.h"
-RMC_LIST_IMPL(rmc_index_list, rmc_index_node, uint32_t) 
+RMC_LIST_IMPL(rmc_index_list, rmc_index_node, int32_t) 
 
 // =============
 // CONTEXT MANAGEMENT

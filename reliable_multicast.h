@@ -52,7 +52,7 @@
 #define RMC_CONNECTION_MODE_CONNECTED 2
 
 
-typedef uint32_t rmc_index_t;
+typedef int32_t rmc_index_t;
 typedef uint16_t rmc_poll_action_t;
 
 // Called when a new connection is created by rmc.
@@ -264,7 +264,7 @@ typedef struct rmc_pub_context {
 } rmc_pub_context_t;
 
 
-RMC_LIST(rmc_index_list, rmc_index_node, uint32_t) 
+RMC_LIST(rmc_index_list, rmc_index_node, int32_t) 
 typedef rmc_index_list rmc_index_list_t;
 typedef rmc_index_node rmc_index_node_t;
 
