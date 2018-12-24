@@ -32,6 +32,7 @@ extern const char* rmc_log_color_blue();
 extern const char* rmc_log_color_orange();
 extern const char* rmc_log_color_red();
 extern const char* rmc_log_color_flashing_red();
+extern const char* rmc_index_color(int index);
 
 extern int _rmc_log_level;
 

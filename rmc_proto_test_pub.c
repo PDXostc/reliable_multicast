@@ -231,6 +231,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
     RMC_LOG_INFO("context: ctx[%.9X] mcast_addr[%s] mcast_port[%d]",
                  rmc_pub_context_id(ctx), mcast_group_addr, mcast_port);
 
+    puts("Publisher ready. Run ./rmc_text -S in another window to setup a subscriber.");
     // Wait for the correct number of subscribers to connect before we start sending.
     while(subscriber_count < expected_subscriber_count) {
         usec_timestamp_t event_tout = 0;

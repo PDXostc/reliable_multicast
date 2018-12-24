@@ -182,10 +182,10 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
         
         // Check if we are complete
         if (current == max_expected) {
-            int pack_sec = 0;
-            RMC_LOG_INDEX_INFO(index,
-                               "rmc_proto_test_sub(): ContextID [%u] %s**COMPLETE*%s* at[%lu]",
-                               node_id, rmc_log_color_green(), rmc_log_color_none(), current);
+            int signal_sec = 0;
+            printf("%s[%.3d]%s ContextID [%u] %s**COMPLETE*%s* at[%lu]\n",
+                   rmc_index_color(index), index, rmc_log_color_none(), 
+                   node_id, rmc_log_color_green(), rmc_log_color_none(), current);
             
             // Did we see data corruption?
             if (expect[node_id].expect_sum !=  expect[node_id].calc_sum) {
@@ -199,16 +199,20 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
             expect[node_id].status = RMC_TEST_SUB_COMPLETED;
             expect[node_id].stop_ts = rmc_usec_monotonic_timestamp();
 
-            pack_sec = (int) expect[node_id].max_received /
+            signal_sec = (int) expect[node_id].max_received /
                 ((double) (expect[node_id].stop_ts - expect[node_id].start_ts) / 1000000.0);
 
-            RMC_LOG_INDEX_INFO(index,
-                               "[%lu] packets in [%lu] msec -> %s%d packets / sec%s",
-                               expect[node_id].max_received,
-                               (expect[node_id].stop_ts - expect[node_id].start_ts) / 1000,
-                               rmc_log_color_green(),
-                               pack_sec,
-                               rmc_log_color_none());
+            printf("%s[%.3d]%s %lu signals (%ld bytes each) in %lu msec -> %s%d signals / sec%s -> %s%ld kbyte / sec%s\ne",
+                   rmc_index_color(index), index, rmc_log_color_none(), 
+                   expect[node_id].max_received,
+                   sizeof(signal_t),
+                   (expect[node_id].stop_ts - expect[node_id].start_ts) / 1000,
+                   rmc_log_color_green(),
+                   signal_sec,
+                   rmc_log_color_none(),
+                   rmc_log_color_green(),
+                   signal_sec * sizeof(signal_t) / 1024,
+                   rmc_log_color_none());
 
             // Check if this is the last one out.
             if (check_exit_condition(expect, expect_sz))
