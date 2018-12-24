@@ -9,6 +9,8 @@
 
 #define _GNU_SOURCE
 #include "reliable_multicast.h"
+#include "rmc_log.h"
+#include <string.h>
 #include <errno.h>
 
 #include <stdio.h>
@@ -73,14 +75,14 @@ int rmc_pub_init_context(rmc_pub_context_t* ctx,
         control_listen_if_addr = "0.0.0.0";
 
     if (!inet_aton(mcast_group_addr, &addr)) {
-        fprintf(stderr, "rmc_init_pub_context(multicast_group_addr): Could not resolve %s to IP address\n",
+        RMC_LOG_WARNING("Could not resolve multicast address %s to IP address\n",
                 mcast_group_addr);
         return EINVAL;
     }
     ctx->mcast_group_addr = ntohl(addr.s_addr);
 
     if (!inet_aton(control_listen_if_addr, &addr)) {
-        fprintf(stderr, "rmc_init_pub_context(listen_if_addr): Could not resolve %s to IP address\n",
+        RMC_LOG_WARNING("Could not resolve tcp listen address %s to IP address\n",
                 control_listen_if_addr);
         return EINVAL;
     }
@@ -137,7 +139,7 @@ int rmc_pub_activate_context(rmc_pub_context_t* ctx)
     ctx->mcast_send_descriptor = socket (AF_INET, SOCK_DGRAM, 0);
 
     if (ctx->mcast_send_descriptor == -1) {
-        perror("rmc_init_pub_context(): socket(multicast)");
+        RMC_LOG_WARNING("socket(multicast): %s", strerror(errno));
         goto error;
     }
 
@@ -145,19 +147,19 @@ int rmc_pub_activate_context(rmc_pub_context_t* ctx)
     // Did we specify a local interface address to bind to?
     ctx->listen_descriptor = socket (AF_INET, SOCK_STREAM, 0);
     if (ctx->listen_descriptor == -1) {
-        perror("rmc_init_pub_context(): socket(listen)");
+        RMC_LOG_WARNING("rmc_init_pub_context(): socket(listen): %s", strerror(errno));
         goto error;
     }
 
     if (setsockopt(ctx->listen_descriptor, SOL_SOCKET,
                    SO_REUSEADDR, &on_flag, sizeof(on_flag)) < 0) {
-        perror("rmc_init_pub_context(): setsockopt(REUSEADDR)");
+        RMC_LOG_WARNING("rmc_init_pub_context(): setsockopt(REUSEADDR): %s", strerror(errno));
         goto error;
     }
 
     if (setsockopt(ctx->listen_descriptor, SOL_SOCKET,
                    SO_REUSEPORT, &on_flag, sizeof(on_flag)) < 0) {
-        perror("rmc_init_pub_context(): setsockopt(SO_REUSEPORT)");
+        RMC_LOG_WARNING("rmc_init_pub_context(): setsockopt(SO_REUSEPORT): %s", strerror(errno));
         goto error;
     }
 
@@ -169,13 +171,24 @@ int rmc_pub_activate_context(rmc_pub_context_t* ctx)
 
     if (bind(ctx->listen_descriptor,
              (struct sockaddr *) &sock_addr, sizeof(sock_addr)) < 0) {
-        perror("rmc_init_pub_context(): bind()");
+        RMC_LOG_WARNING("rmc_init_pub_context(): bind(): %s", strerror(errno));
         goto error;
     }
 
     if (listen(ctx->listen_descriptor, RMC_LISTEN_SOCKET_BACKLOG) != 0) {
-        perror("rmc_init_pub_context(): listen()");
+        RMC_LOG_WARNING("rmc_init_pub_context(): listen(): %s", strerror(errno));
         goto error;
+    }
+
+    // If control_listen_port is 0, use getsockname() to grab the os-assigned ephereal port.
+    if (!ctx->control_listen_port) {
+        sock_len = sizeof(sock_addr);
+        if (getsockname(ctx->listen_descriptor, (struct sockaddr*) &sock_addr, &sock_len)) {
+            RMC_LOG_FATAL("getsockname(bind): %s", strerror(errno));
+            goto error;
+        }
+        ctx->control_listen_port = ntohs(sock_addr.sin_port);
+        RMC_LOG_INFO("Ephereal tcp port picked by OS to use as control port: %d", ctx->control_listen_port);
     }
 
 

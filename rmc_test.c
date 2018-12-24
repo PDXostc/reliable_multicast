@@ -46,7 +46,8 @@ extern void test_circular_buffer(void);
 #define LISTEN_IF_ADDR_DEFAULT "0.0.0.0"
 #define MULTICAST_IF_ADDR_DEFAULT "0.0.0.0"
 #define MULTICAST_ADDR_DEFAULT "239.0.0.1"
-#define PORT_DEFAULT 4723
+#define MULTICAST_PORT_DEFAULT 4723
+#define TCP_PORT_DEFAULT 0
 
 
 void usage(char* prog)
@@ -59,8 +60,8 @@ void usage(char* prog)
     fprintf(stderr, "       -M <ip-addr>   Multicast IP address (default: %s)\n", MULTICAST_ADDR_DEFAULT);
     fprintf(stderr, "       -m <ip-addr>   Multicast interface IP (default: %s)\n", MULTICAST_IF_ADDR_DEFAULT);
     fprintf(stderr, "       -l <ip-addr>   Listen interface IP (default: %s)\n", LISTEN_IF_ADDR_DEFAULT);
-    fprintf(stderr, "       -P <port>      Multicast port (default: %d)\n", PORT_DEFAULT);
-    fprintf(stderr, "       -p <port>      Listen  port (default: %d)\n\n", PORT_DEFAULT);
+    fprintf(stderr, "       -P <port>      Multicast port (default: %d)\n", MULTICAST_PORT_DEFAULT);
+    fprintf(stderr, "       -p <port>      Listen  port (defaultL %d - random port)\n\n", TCP_PORT_DEFAULT);
     fprintf(stderr, "       -c <count>     Number of packets to transmit (publisher only). Default 1\n");
     fprintf(stderr, "       -i <id>        Unique node ID among all publishers and subscribers. Legal value 1-1000. Default = 1\n");
     fprintf(stderr, "       -r <seed>      Random seed number. Default 1\n");
@@ -80,8 +81,8 @@ int main(int argc, char* argv[])
     char mcast_group_addr[80] = { 0 };
     char mcast_if_addr[80] = { 0 };
     char listen_if_addr[80];
-    int listen_port = PORT_DEFAULT;
-    int mcast_port = PORT_DEFAULT;
+    int listen_port = TCP_PORT_DEFAULT;
+    int mcast_port = MULTICAST_PORT_DEFAULT;
     pid_t ch_pid = 0;
     int rand_seed = 1;
     uint64_t packet_count = 1;
