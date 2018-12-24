@@ -14,21 +14,22 @@ Start a publisher that:
 3. Sends a single packet (in a single multicast packet)
 4. Exits
 
+Window 1:
 
     ./rmc_test -c 1
 
-    
+
 Start subscriber that:
 
-1. Waits for an announce packet from a publisher.
+1. Waits for an announce packet from a publisher
 2. Connects to publisher and sets up subscribtion
-3. Reveives however many packets that the publisher has to send.
-4. Validates all packets.
-5. Extits.
+3. Reveives however many packets that the publisher has to send
+4. Validates all packets
+5. Extits
 
+Window 2:
 
     ./rmc_test -S
-
 
 
 ## Send a million signals between one publisher and one subscriber
