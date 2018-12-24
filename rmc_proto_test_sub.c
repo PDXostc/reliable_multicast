@@ -82,9 +82,13 @@ static uint8_t announce_cb(struct rmc_sub_context* ctx,
                            void* payload,
                            payload_len_t payload_len)
 {
-    RMC_LOG_INFO("Announce detected. Starting tests");
 
-    rmc_log_set_start_time();
+    if (!rmc_log_get_start_time()) {
+        RMC_LOG_INFO("Announce detected. Starting clock");
+        rmc_log_set_start_time();
+    } else
+        RMC_LOG_INFO("Announce detected. Clock already running.");
+        
     return 1;
 }
 
@@ -92,6 +96,7 @@ static uint8_t announce_cb(struct rmc_sub_context* ctx,
 
 
 static int process_incoming_signal(rmc_sub_context_t* ctx,
+                                   rmc_index_t index,
                                    char* data,
                                    sub_expect_t* expect,
                                    int expect_sz)
@@ -106,22 +111,25 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
     
     // Is context ID within our expetcted range
     if (node_id >= expect_sz) {
-        RMC_LOG_FATAL("ContextID [%u] is out of range (0-%d)",
-               node_id, expect_sz);
+        RMC_LOG_INDEX_FATAL(index,
+                            "ContextID [%u] is out of range (0-%d)",
+                            node_id, expect_sz);
         exit(255);
      }
 
     // Is this context expected?
     if (expect[node_id].status == RMC_TEST_SUB_INACTIVE) {
-        RMC_LOG_FATAL("ContextID [%u] not expected. Use -e %u to setup subscriber expectations.",
-               node_id, node_id);
+        RMC_LOG_INDEX_FATAL(index,
+                            "ContextID [%u] not expected. Use -e %u to setup subscriber expectations.",
+                            node_id, node_id);
         exit(255);
     }
 
     // Have we already completed all expected packages here?
     if (expect[node_id].status == RMC_TEST_SUB_COMPLETED) {
-        RMC_LOG_FATAL("ContextID [%u] have already processed its [%lu] packets. Got Current[%lu] Max[%lu].",
-               node_id, expect[node_id].max_received, current, max_expected);
+        RMC_LOG_INDEX_FATAL(index,
+                            "ContextID [%u] have already processed its [%lu] packets. Got Current[%lu] Max[%lu].",
+                            node_id, expect[node_id].max_received, current, max_expected);
         exit(255);
     }
 
@@ -141,8 +149,9 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
         for(ind = 1; ind <= max_expected; ++ind)
             expect[node_id].expect_sum += ind;
 
-        RMC_LOG_INFO("Activate: node_id[%u] current[%lu] max_expected[%lu] expected sum[%lu]",
-                     node_id, current, max_expected, expect[node_id].calc_sum);
+        RMC_LOG_INDEX_INFO(index,
+                           "Activate: node_id[%u] current[%lu] max_expected[%lu] expected sum[%lu]",
+                           node_id, current, max_expected, expect[node_id].calc_sum);
 
         // Fall through to the next if statement
     }
@@ -154,15 +163,17 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
 
         // Check that max_expected hasn't changed.
         if (max_expected != expect[node_id].max_expected) {
-            RMC_LOG_FATAL("ContextID [%u] max_expected changed from [%lu] to [%lu]",
-                   node_id, expect[node_id].max_expected, max_expected);
+            RMC_LOG_INDEX_FATAL(index,
+                                "ContextID [%u] max_expected changed from [%lu] to [%lu]",
+                                node_id, expect[node_id].max_expected, max_expected);
             exit(255);
         }
         
         // Check that packet is consecutive.
         if (current != expect[node_id].max_received + 1) {
-            RMC_LOG_FATAL("ContextID [%u] Wanted[%lu] Got[%lu]",
-                   node_id, expect[node_id].max_received + 1, current);
+            RMC_LOG_INDEX_FATAL(index,
+                                "ContextID [%u] Wanted[%lu] Got[%lu]",
+                                node_id, expect[node_id].max_received + 1, current);
             exit(255);
         }
 
@@ -172,14 +183,15 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
         // Check if we are complete
         if (current == max_expected) {
             int pack_sec = 0;
-            RMC_LOG_INFO("rmc_proto_test_sub(): ContextID [%u] %s**COMPLETE*%s* at[%lu]",
-                         node_id, rmc_log_color_green(), rmc_log_color_none(), current);
+            RMC_LOG_INDEX_INFO(index,
+                               "rmc_proto_test_sub(): ContextID [%u] %s**COMPLETE*%s* at[%lu]",
+                               node_id, rmc_log_color_green(), rmc_log_color_none(), current);
             
             // Did we see data corruption?
             if (expect[node_id].expect_sum !=  expect[node_id].calc_sum) {
-                printf("DATA CORRUPTION! Expected total sum: %lu. Got %lu\n",
-                       expect[node_id].expect_sum,
-                       expect[node_id].calc_sum);
+                RMC_LOG_INDEX_FATAL(index, "DATA CORRUPTION! Expected total sum: %lu. Got %lu\n",
+                                    expect[node_id].expect_sum,
+                                    expect[node_id].calc_sum);
                 exit(0);
             }
 
@@ -190,12 +202,13 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
             pack_sec = (int) expect[node_id].max_received /
                 ((double) (expect[node_id].stop_ts - expect[node_id].start_ts) / 1000000.0);
 
-            RMC_LOG_INFO("[%lu] packets in [%lu] msec -> %s%d packets / sec%s",
-                         expect[node_id].max_received,
-                         (expect[node_id].stop_ts - expect[node_id].start_ts) / 1000,
-                         rmc_log_color_green(),
-                         pack_sec,
-                         rmc_log_color_none());
+            RMC_LOG_INDEX_INFO(index,
+                               "[%lu] packets in [%lu] msec -> %s%d packets / sec%s",
+                               expect[node_id].max_received,
+                               (expect[node_id].stop_ts - expect[node_id].start_ts) / 1000,
+                               rmc_log_color_green(),
+                               pack_sec,
+                               rmc_log_color_none());
 
             // Check if this is the last one out.
             if (check_exit_condition(expect, expect_sz))
@@ -204,11 +217,12 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
 
         return 1;
     }
-
-    printf("rmc_proto_test_sub(): Eh? expect[%u:%lu:%lu] status[%d]  data[%u:%lu:%lu]\n",
-           node_id, expect[node_id].max_received, expect[node_id].max_expected,
-           expect[node_id].status,
-           node_id, current, max_expected);
+    
+    RMC_LOG_INDEX_FATAL(index,
+                        "Eh? expect[%u:%lu:%lu] status[%d]  data[%u:%lu:%lu]\n",
+                        node_id, expect[node_id].max_received, expect[node_id].max_expected,
+                        expect[node_id].status,
+                        node_id, current, max_expected);
 
     exit(255);
 }
@@ -222,7 +236,7 @@ static int process_incoming_packet(rmc_sub_context_t* ctx,
 
 
     while(pack_ind < pack->payload_len) {
-        if (!process_incoming_signal(ctx, pack->payload + pack_ind, expect, expect_sz))
+        if (!process_incoming_signal(ctx, sub_packet_user_data(pack).u32, pack->payload + pack_ind, expect, expect_sz))
             return 0;
 
         pack_ind += sizeof(signal_t);
