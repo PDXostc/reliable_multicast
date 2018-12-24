@@ -146,31 +146,31 @@ const char* rmc_index_color(int index)
         return rmc_log_color_faint();
 
     case 0:
-        return rmc_log_color_green();
+        return rmc_log_color_dark_blue();
 
     case 1:
-        return rmc_log_color_blue();
+        return rmc_log_color_dark_green();
 
     case 2:
-        return rmc_log_color_red();
+        return rmc_log_color_light_blue();
 
     case 3:
         return rmc_log_color_light_green();
 
     case 4:
-        return rmc_log_color_light_blue();
-
-    case 5:
         return rmc_log_color_light_red();
 
+    case 5:
+        return rmc_log_color_green();
+
     case 6:
-        return rmc_log_color_dark_green();
+        return rmc_log_color_blue();
 
     case 7:
-        return rmc_log_color_dark_blue();
+        return rmc_log_color_dark_red();
 
     case 8:
-        return rmc_log_color_dark_red();
+        return rmc_log_color_red();
 
     default:
         return rmc_log_color_none();
