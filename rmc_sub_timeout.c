@@ -33,7 +33,6 @@ int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
     if (!ctx)
         return EINVAL;
 
-    RMC_LOG_DEBUG("called");
 
     // Go through all publishers with unackowledged packets and
     // process those whose acks are due to be sent.
