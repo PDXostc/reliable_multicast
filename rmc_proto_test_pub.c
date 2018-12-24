@@ -86,12 +86,6 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
 
             RMC_LOG_INDEX_DEBUG(c_ind,
                                 "%s:%s", _op_res_string(op_res), strerror(res));
-            if (res == EAGAIN)
-                continue;       
-
-            // If this was a connection call processed, we can continue.
-            if (op_res == RMC_READ_ACCEPT)
-                continue;
         }
 
         if (events[nfds].events & EPOLLOUT) {
