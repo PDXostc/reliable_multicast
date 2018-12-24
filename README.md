@@ -3,6 +3,10 @@ Reliable UDP Multicast using a separate TCP ack channel per subscriber.
 
 # TESTING
 
+Please note that a wireshark dissector plugin is available.
+
+    make wireshark
+
 ## Test program usage
 ./rmc_test -?
 
