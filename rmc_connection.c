@@ -29,19 +29,23 @@ rmc_connection_t* rmc_conn_find_by_address(rmc_connection_vector_t* conn_vec,
                                             uint16_t remote_port)
 {
     rmc_index_t ind = 0;
-    char want_addr_str[80];
-    char have_addr_str[80];
+//    char want_addr_str[80]; 
+//    char have_addr_str[80]; 
 
     // Do we have any connections in use at all?
     if (conn_vec->max_connection_ind == -1)
         return 0;
     
     // FIXME: Replace with hash table search to speed up.
-    strcpy(want_addr_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(remote_address) }));
-
+//    strcpy(want_addr_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(remote_address) }));
+    
+//    RMC_LOG_DEBUG("ind[%d] max_ind[%d]", ind, conn_vec->max_connection_ind);
     while(ind <= conn_vec->max_connection_ind) {
-        strcpy(have_addr_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(conn_vec->connections[ind].remote_address)}));
-        
+//        strcpy(have_addr_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(conn_vec->connections[ind].remote_address)}));
+//        RMC_LOG_DEBUG("  Want[%s:%d] Have[%s:%d]",
+//                      want_addr_str, remote_port,
+//                      have_addr_str, conn_vec->connections[ind].remote_port);
+
         if (conn_vec->connections[ind].descriptor != -1 &&  
             remote_address == conn_vec->connections[ind].remote_address &&
             remote_port == conn_vec->connections[ind].remote_port)
@@ -74,9 +78,10 @@ static rmc_index_t _get_free_slot(rmc_connection_vector_t* conn_vec)
 
     while(ind < RMC_MAX_CONNECTIONS) {
         if (conn_vec->connections[ind].descriptor == -1) {
-            if (conn_vec->max_connection_ind > ind)
+            if (conn_vec->max_connection_ind < ind)
                 conn_vec->max_connection_ind = ind;
 
+            RMC_LOG_DEBUG("Allocating slot %d. max is %d", ind, conn_vec->max_connection_ind);
             return ind;
         }            
         ++ind;
