@@ -98,7 +98,6 @@ static gint dissect_rmc_ack_interval(proto_tree* tree, tvbuff_t *tvb, gint offse
 
 static guint get_rmc_packet_len(packet_info *pinfo, tvbuff_t *tvb,  int offset, void *data)
 {
-    printf("Packet Len = %d\n", tvb_get_guint16(tvb, offset+13, ENC_LITTLE_ENDIAN));
     return tvb_get_guint16(tvb, offset+13, ENC_LITTLE_ENDIAN) + 21;
 }
 
