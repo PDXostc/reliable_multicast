@@ -44,27 +44,39 @@ HDR= rmc_common.h \
 		circular_buffer.h \
 		rmc_protocol.h
 
-CFLAGS = -ggdb
+LIB_TARGET=librmc.a
+LIB_SO_TARGET=librmc.so
+TEST_TARGET=rmc_test
+WIRESHARK_TARGET=rmc_wireshark_plugin.so
+
+CFLAGS = -ggdb -fpic
 .PHONY: all clean etags
 
 
-all: $(OBJ) rmc_test etags
-wireshark: rmc_wireshark_plugin.so
+all: $(LIB_TARGET) $(LIB_SO_TARGET) $(TEST_TARGET)  etags
 
-rmc_test: $(OBJ) $(TEST_OBJ) 
-	$(CC) $(CFLAGS) $^ -o $@
+wireshark: $(WIRESHARK_TARGET)
+
+$(TEST_TARGET): $(LIB_TARGET) $(OBJ) $(TEST_OBJ)
+	$(CC) $(CFLAGS) -L. -lrmc $^ -o $@
+
+$(LIB_TARGET): $(OBJ)
+	ar q $(LIB_TARGET) $(OBJ)
+
+$(LIB_SO_TARGET): $(OBJ)
+	gcc -shared -o $(LIB_SO_TARGET) $(OBJ)
 
 etags: 
 	@rm -f TAGS
 	find . -name '*.h' -o -name '*.c' -print | etags -
 
 clean:
-	rm -f $(OBJ) *~ rmc_test.o rmc_test $(TEST_OBJ) rmc_wireshark_plugin.so
+	rm -f $(OBJ) *~ $(TEST_TARGET) $(TEST_OBJ) $(WIRESHARK_TARGET) $(LIB_TARGET) $(LIB_SO_TARGET)
 
 $(OBJ): $(HDR) Makefile 
 
 $(TEST_OBJ): $(HDR) Makefile
 
-rmc_wireshark_plugin.so: rmc_wireshark_plugin.c
+$(WIRESHARK_TARGET): rmc_wireshark_plugin.c
 	gcc `pkg-config --cflags wireshark` `pkg-config --libs wireshark` -fpic -shared $^ -o $@
 
