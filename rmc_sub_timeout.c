@@ -52,7 +52,7 @@ int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
 
     //
     // Retreive the publisher with the  
-   while(inode) {
+    while(inode) {
         sub_publisher_t* pub = &ctx->publishers[inode->data];
         sub_pid_interval_t pid_intv;
         

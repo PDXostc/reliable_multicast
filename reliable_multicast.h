@@ -51,7 +51,6 @@
 #define RMC_CONNECTION_MODE_CONNECTING 1
 #define RMC_CONNECTION_MODE_CONNECTED 2
 
-
 typedef int32_t rmc_index_t;
 typedef uint16_t rmc_poll_action_t;
 
@@ -140,10 +139,11 @@ typedef struct rmc_connection {
     uint32_t remote_address;  // In host format
 } rmc_connection_t;
 
-
-// Maximum number of subscribers an rmc_pub_context_t can have.
-// Maximum number of 
-#define RMC_MAX_CONNECTIONS 16
+// Returned by rmc_conn_get_connections
+typedef struct rmc_action {
+    int descriptor; // Socket descritor
+    rmc_poll_action_t action; // RMC_POLLWRITE | RMC_POLLREAD
+} rmc_action_t;
 
 
 // A an array of connections with its own resource management.
@@ -153,11 +153,11 @@ typedef struct rmc_connection_vector {
     // Number of elements in connections.
     uint32_t size;
 
-    // Number of elements in connections that are currently in usebr
-    uint32_t connection_count;
-
-    // Top connection index currently in use.
+    // Max connection index currently in use.
     rmc_index_t max_connection_ind;  
+
+    // Number of connections currently in use
+    rmc_index_t active_connection_count;
 
     // Array of connections.
     // Memory provided by rmc_init_connection_vector().
@@ -316,6 +316,12 @@ typedef struct rmc_sub_context {
     // looped back multicast messages.
     // Provided to rmc_sub_init_context() or generated to random number.
     rmc_context_id_t context_id; 
+
+    // Callback invoked when one or more packets become available for dispatch.
+    // Use rmc_sub_get_next_dispatch_ready() to retrieve the packet for processing.
+    // Use rmc_sub_packet_dispatched() to mark the packet as processed.
+    // Repeat until rmc_sub_get_next_dispatch_ready() return NULL.
+    void (*packet_ready_cb)(struct rmc_sub_context* ctx);
 
     // Callback invoked every time we receive an announce packet
     // from an unsubscribed-to publisher. 
@@ -485,6 +491,7 @@ extern int rmc_pub_set_announce_callback(rmc_pub_context_t* context,
                                                                 payload_len_t max_payload_len,
                                                                 payload_len_t* result_payload_len));
 
+
 // Set callback to be invoked when subscriber connects.
 // Return 1 if connection is allowed. 0 if rejected.
 // If callback is set to 0 (default) all incoming connections will be accepted.,
@@ -520,6 +527,12 @@ extern int rmc_pub_queue_packet(rmc_pub_context_t* ctx,
                                 uint8_t announce_flag);
 
 extern uint32_t rmc_pub_queue_length(rmc_pub_context_t* ctx);
+extern uint32_t rmc_pub_get_max_subscriber_count(rmc_pub_context_t* ctx);
+extern uint32_t rmc_pub_get_subscriber_count(rmc_pub_context_t* ctx);
+extern int rmc_pub_get_subscriber_actions(rmc_pub_context_t* ctx,
+                                          rmc_action_t* action_vec,
+                                          uint32_t action_vec_size,
+                                          uint32_t* action_vec_result);
 
 extern int rmc_pub_packet_ack(rmc_pub_context_t* ctx, rmc_connection_t* conn, packet_id_t pid);
 
@@ -551,6 +564,9 @@ extern int rmc_sub_set_announce_callback(rmc_sub_context_t* context,
                                                                 void* payload,
                                                                 payload_len_t payload_len));
 
+// Set callback to be invoked when a packet becomes available
+extern int rmc_sub_set_packet_ready_callback(rmc_sub_context_t* context,
+                                             void (*packet_ready_cb)(struct rmc_sub_context* ctx));
 
 extern int rmc_sub_set_user_data(rmc_sub_context_t* ctx, user_data_t user_data);
 extern user_data_t rmc_sub_user_data(rmc_sub_context_t* ctx);
@@ -587,6 +603,12 @@ extern int rmc_sub_packet_interval_acknowledged(rmc_sub_context_t* context,
                                                 sub_pid_interval_t* interval);
 
 extern rmc_index_t rmc_sub_packet_connection(sub_packet_t* packet);
+extern uint32_t rmc_sub_get_max_publisher_count(rmc_sub_context_t* ctx);
+extern uint32_t rmc_sub_get_publisher_count(rmc_sub_context_t* ctx);
+extern int rmc_sub_get_publisher_actions(rmc_sub_context_t* ctx,
+                                         rmc_action_t* action_vec,
+                                         uint32_t action_vec_size,
+                                         uint32_t* action_vec_result);
 
 
 // If a valid pointer, res will be set to:
@@ -656,8 +678,13 @@ extern int rmc_conn_process_accept(int listen_descriptor,
 
 extern int rmc_conn_get_pending_send_length(rmc_connection_t* conn, payload_len_t* result);
 extern int rmc_conn_get_max_index_in_use(rmc_connection_vector_t* conn_vec, rmc_index_t *result);
-extern int rmc_conn_get_poll_size(rmc_connection_vector_t* conn_vec, int *result);
-extern int rmc_conn_get_poll_vector(rmc_connection_vector_t* conn_vec, rmc_connection_t* result, int* len);
+extern int rmc_conn_get_vector_size(rmc_connection_vector_t* conn_vec, uint32_t *result);
+extern int rmc_conn_get_active_connection_count(rmc_connection_vector_t* conn_vec, rmc_index_t *result);
+extern int rmc_conn_get_active_connections(rmc_connection_vector_t* conn_vec,
+                                           rmc_action_t* action_vec,
+                                           uint32_t action_vec_size,
+                                           uint32_t* action_vec_result);
+
 
 extern int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
                                            in_addr_t address,

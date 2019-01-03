@@ -8,6 +8,10 @@
 #include "rmc_proto_test_common.h"
 #include "rmc_log.h"
 
+// Maximum number of publishers an rmc_sub_context_t can have.
+#define RMC_MAX_CONNECTIONS 16
+
+
 // Indexed by publisher node_id, as received in the
 // payload 
 typedef struct {
@@ -266,7 +270,9 @@ static int process_events(rmc_sub_context_t* ctx,
             timeout_ts = 0;
     }
             
-    nfds = epoll_wait(epollfd, events, RMC_MAX_CONNECTIONS, (timeout_ts == -1)?-1:(timeout_ts / 1000) + 1);
+    nfds = epoll_wait(epollfd, events,
+                      rmc_sub_get_max_publisher_count(ctx),
+                      (timeout_ts == -1)?-1:(timeout_ts / 1000) + 1);
 
     if (nfds == -1) {
         RMC_LOG_FATAL("epoll_wait(): %s", strerror(errno));

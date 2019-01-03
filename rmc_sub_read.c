@@ -62,6 +62,7 @@ static int decode_subscribed_multicast(rmc_sub_context_t* ctx,
     usec_timestamp_t pack_rec_time = 0;
     usec_timestamp_t start = 0;
     uint8_t* payload_copy = 0;
+    uint32_t packet_ready_sz = 0;
 
     // Skip announce packets.
     if (!pack_hdr->pid) {
@@ -113,11 +114,16 @@ static int decode_subscribed_multicast(rmc_sub_context_t* ctx,
 
     // Process received packages, moving consectutive ones
     // over to the ready queue.
-
+    
+    packet_ready_sz = sub_packet_list_size(&ctx->dispatch_ready);
     sub_process_received_packets(pub, &ctx->dispatch_ready);
 
     RMC_LOG_INDEX_COMMENT(conn->connection_index,
                         "Multicast receive - len[%d] pid[%lu]", pack_hdr->payload_len, pack_hdr->pid);
+
+    // Check if we have a packet ready callback and new pacekts are available for dispatching.
+    if (ctx->packet_ready_cb && sub_packet_list_size(&ctx->dispatch_ready) != packet_ready_sz)
+        (*ctx->packet_ready_cb)(ctx);
 
     return 0;
 }

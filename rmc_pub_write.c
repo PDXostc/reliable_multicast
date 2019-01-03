@@ -256,7 +256,7 @@ int rmc_pub_write(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
     }
 
     // Is s_ind within our connection vector?
-    if (s_ind >= RMC_MAX_CONNECTIONS) {
+    if (s_ind >= rmc_pub_get_max_subscriber_count(ctx)) {
         if (op_res)
             *op_res = RMC_ERROR;
 

@@ -62,6 +62,7 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
     ctx->context_id = context_id?context_id:rand_r(&seed);
     ctx->user_data = user_data;
     ctx->announce_cb = 0;
+    ctx->packet_ready_cb = 0;
     rmc_conn_init_connection_vector(&ctx->conn_vec,
                                     conn_vec,
                                     conn_vec_size,
@@ -282,5 +283,48 @@ rmc_context_id_t rmc_sub_context_id(rmc_sub_context_t* ctx)
         return 0;
 
     return ctx->context_id;
+}
+
+uint32_t rmc_sub_get_max_publisher_count(rmc_sub_context_t* ctx)
+{
+    uint32_t res = 0;
+
+    if (!ctx)
+        return 0;
+
+    rmc_conn_get_vector_size(&ctx->conn_vec, &res);
+    return res;
+}
+
+uint32_t rmc_sub_get_publisher_count(rmc_sub_context_t* ctx)
+{
+    uint32_t res = 0;
+
+    if (!ctx)
+        return 0;
+    
+    rmc_conn_get_active_connection_count(&ctx->conn_vec, &res);
+    return res;
+}
+
+int rmc_sub_get_publisher_actions(rmc_sub_context_t* ctx,
+                                  rmc_action_t* action_vec,
+                                  uint32_t action_vec_size,
+                                  uint32_t* action_vec_result)
+{
+    return rmc_conn_get_active_connections(&ctx->conn_vec,
+                                           action_vec,
+                                           action_vec_size,
+                                           action_vec_result);
+}
+
+int rmc_sub_set_packet_ready_callback(rmc_sub_context_t* ctx,
+                                      void (*packet_ready_cb)(struct rmc_sub_context* ctx))
+{
+    if (!ctx)
+        return EINVAL;
+
+    ctx->packet_ready_cb = packet_ready_cb;
+    return 0;
 }
 

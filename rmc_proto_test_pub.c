@@ -10,6 +10,9 @@
 #include "rmc_log.h"
 
 
+// Maximum number of subscribers an rmc_pub_context_t can have.
+#define RMC_MAX_CONNECTIONS 16
+
 static uint8_t _test_print_pending(pub_packet_node_t* node, void* dt)
 {
     pub_packet_t* pack = (pub_packet_t*) node->data;
@@ -45,7 +48,7 @@ static int _descriptor(rmc_pub_context_t* ctx,
 
 static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t timeout, int major)
 {
-    struct epoll_event events[RMC_MAX_CONNECTIONS];
+    struct epoll_event events[rmc_pub_get_max_subscriber_count(ctx)];
     char buf[16];
     int nfds = 0;
 
@@ -56,7 +59,9 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
     }
             
 
-    nfds = epoll_wait(epollfd, events, RMC_MAX_CONNECTIONS, (timeout == -1)?-1:((timeout / 1000) + 1));
+    nfds = epoll_wait(epollfd, events,
+                      rmc_pub_get_max_subscriber_count(ctx),
+                      (timeout == -1)?-1:((timeout / 1000) + 1));
     if (nfds == -1) {
         RMC_LOG_FATAL("epoll_wait");
         exit(255);

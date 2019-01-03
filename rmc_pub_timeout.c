@@ -18,8 +18,6 @@
 // =============
 // TIMEOUT MANAGEMENT
 // =============
-
-
 static int process_sent_packet_timeout(rmc_pub_context_t* ctx,
                                        pub_subscriber_t* sub,
                                        pub_packet_t* pack)

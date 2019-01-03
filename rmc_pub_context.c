@@ -355,3 +355,35 @@ int rmc_pub_set_user_data(rmc_pub_context_t* ctx, user_data_t user_data)
     return 0;
 }
 
+uint32_t rmc_pub_get_max_subscriber_count(rmc_pub_context_t* ctx)
+{
+    uint32_t res = 0;
+
+    if (!ctx)
+        return 0;
+    
+    rmc_conn_get_vector_size(&ctx->conn_vec, &res);
+    return res;
+}
+
+uint32_t rmc_pub_get_subscriber_count(rmc_pub_context_t* ctx)
+{
+    uint32_t res = 0;
+
+    if (!ctx)
+        return 0;
+    
+    rmc_conn_get_active_connection_count(&ctx->conn_vec, &res);
+    return res;
+}
+
+int rmc_pub_get_subscriber_actions(rmc_pub_context_t* ctx,
+                                   rmc_action_t* action_vec,
+                                   uint32_t action_vec_size,
+                                   uint32_t* action_vec_result)
+{
+    return rmc_conn_get_active_connections(&ctx->conn_vec,
+                                           action_vec,
+                                           action_vec_size,
+                                           action_vec_result);
+}

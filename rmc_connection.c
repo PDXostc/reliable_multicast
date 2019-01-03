@@ -36,10 +36,11 @@ rmc_connection_t* rmc_conn_find_by_address(rmc_connection_vector_t* conn_vec,
     if (conn_vec->max_connection_ind == -1)
         return 0;
     
-    // FIXME: Replace with hash table search to speed up.
 //    strcpy(want_addr_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(remote_address) }));
     
 //    RMC_LOG_DEBUG("ind[%d] max_ind[%d]", ind, conn_vec->max_connection_ind);
+
+    // FIXME: Replace with hash table search to speed up.
     while(ind <= conn_vec->max_connection_ind) {
 //        strcpy(have_addr_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(conn_vec->connections[ind].remote_address)}));
 //        RMC_LOG_DEBUG("  Want[%s:%d] Have[%s:%d]",
@@ -76,7 +77,7 @@ static rmc_index_t _get_free_slot(rmc_connection_vector_t* conn_vec)
 {
     rmc_index_t ind = 0;
 
-    while(ind < RMC_MAX_CONNECTIONS) {
+    while(ind < conn_vec->size) {
         if (conn_vec->connections[ind].descriptor == -1) {
             if (conn_vec->max_connection_ind < ind)
                 conn_vec->max_connection_ind = ind;
@@ -92,7 +93,7 @@ static rmc_index_t _get_free_slot(rmc_connection_vector_t* conn_vec)
 
 static void _reset_max_connection_ind(rmc_connection_vector_t* conn_vec)
 {
-    rmc_index_t ind = RMC_MAX_CONNECTIONS;
+    rmc_index_t ind = conn_vec->size;
 
     while(ind--) {
         if (conn_vec->connections[ind].descriptor != -1) {
@@ -130,7 +131,7 @@ void rmc_conn_init_connection_vector(rmc_connection_vector_t* conn_vec,
     // Translate byte size to element count.
     conn_vec->size = elem_count;
     conn_vec->max_connection_ind = -1;
-    conn_vec->connection_count = 0;
+    conn_vec->active_connection_count = 0;
     conn_vec->connections = (rmc_connection_t*) buffer;
     conn_vec->poll_add = poll_add;
     conn_vec->poll_modify = poll_modify;
@@ -247,7 +248,7 @@ int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
     conn_vec->connections[c_ind].remote_address = address;
     if (res == -1 && errno != EINPROGRESS) {
         err = errno; // Errno may be reset by close().
-        RMC_LOG_INFO("Already in progress: %s", strerror(errno));
+        RMC_LOG_INFO("Failed to connect: %s", strerror(errno));
         close(conn_vec->connections[c_ind].descriptor);
         conn_vec->connections[c_ind].descriptor = -1;
         _reset_max_connection_ind(conn_vec);
@@ -278,6 +279,7 @@ int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
     if (result_index)
         *result_index = c_ind;
 
+    conn_vec->active_connection_count++;
     return res;
 }
 
@@ -356,6 +358,7 @@ int rmc_conn_process_accept(int listen_descriptor,
     if (result_index)
         *result_index = c_ind;
 
+    conn_vec->active_connection_count++;
     return 0;
 }
 
@@ -367,7 +370,7 @@ int rmc_conn_close_connection(rmc_connection_vector_t* conn_vec, rmc_index_t s_i
     
     // Is s_ind within our connection vector?
 
-    if (s_ind >= RMC_MAX_CONNECTIONS)
+    if (s_ind >= conn_vec->size)
         return EINVAL;
 
     conn = &conn_vec->connections[s_ind];
@@ -396,12 +399,14 @@ int rmc_conn_close_connection(rmc_connection_vector_t* conn_vec, rmc_index_t s_i
                                  s_ind);
 
     if (close(conn->descriptor) != 0)
-        return errno;
+        RMC_LOG_WARNING("Could not close descriptor %d: %s", conn->descriptor, strerror(errno));
 
     rmc_conn_reset_connection(conn, s_ind);
 
     if (s_ind == conn_vec->max_connection_ind)
         _reset_max_connection_ind(conn_vec);
+
+    conn_vec->active_connection_count--;
 
     return 0;
 }
@@ -415,6 +420,15 @@ int rmc_conn_get_max_index_in_use(rmc_connection_vector_t* conn_vec, rmc_index_t
     *result = conn_vec->max_connection_ind;
 }
 
+int rmc_conn_get_active_connection_count(rmc_connection_vector_t* conn_vec, rmc_index_t *result)
+{
+    if (!conn_vec || !result)
+        return EINVAL;
+
+    *result = conn_vec->active_connection_count;
+}
+
+
 int rmc_conn_get_pending_send_length(rmc_connection_t* conn, payload_len_t* result)
 {
 
@@ -425,41 +439,46 @@ int rmc_conn_get_pending_send_length(rmc_connection_t* conn, payload_len_t* resu
     return 0;
 }
 
-int rmc_conn_get_poll_size(rmc_connection_vector_t* conn_vec, int *result)
+int rmc_conn_get_vector_size(rmc_connection_vector_t* conn_vec, uint32_t *result)
 {
     if (!conn_vec || !result)
         return EINVAL;
 
-    *result = conn_vec->connection_count;
+    *result = conn_vec->size;
 
     return 0;
 }
 
-
-int rmc_conn_get_poll_vector(rmc_connection_vector_t* conn_vec, rmc_connection_t* result, int* len)
+// Get all active connections.
+//
+int rmc_conn_get_active_connections(rmc_connection_vector_t* conn_vec,
+                                    rmc_action_t* action_vec,
+                                    uint32_t action_vec_size,
+                                    uint32_t* action_vec_result)
 {
-    int ind = 0;
-    int res_ind = 0;
-    int max_len = 0;
+    rmc_index_t ind = 0;
+    rmc_index_t max_ind = 0;
+    uint32_t count = 0;
 
-    if (!conn_vec || !result || !len)
+    if (!conn_vec || !action_vec || !action_vec_result)
         return EINVAL;
 
-    max_len = *len;
+    rmc_conn_get_max_index_in_use(conn_vec, &max_ind);
 
-    if (conn_vec->max_connection_ind == -1) {
-        *len = 0;
-        return 0;
+    // Walk through conn_vec and fill up action_vec with info on all
+    // connections that are either established or are in progress of being established.
+    while(ind <= max_ind && count < action_vec_size) {
+
+        if (conn_vec->connections[ind].mode != RMC_CONNECTION_MODE_CLOSED) {
+            action_vec[count++] = (rmc_action_t) {
+                .descriptor = conn_vec->connections[ind].descriptor,
+                .action = conn_vec->connections[ind].action
+            };
+        }
+        ++ind;
     }
 
-    while(ind < conn_vec->max_connection_ind && res_ind < max_len) {
-        if (conn_vec->connections[ind].descriptor != -1)
-            result[res_ind++] = conn_vec->connections[ind];
-
-        ind++;
-    }
-
-    *len = res_ind;
+    *action_vec_result = count;
     return 0;
 }
 

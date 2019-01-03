@@ -29,7 +29,7 @@ void poll_add(user_data_t user_data,
     int epollfd = user_data.i32;
     struct epoll_event ev = {
         .data.u32 = index,
-        .events = EPOLLONESHOT
+        .events = 0 // EPOLLONESHOT
     };
 
     if (action & RMC_POLLREAD)
@@ -62,9 +62,12 @@ void poll_modify(user_data_t user_data,
     int epollfd = user_data.i32;
     struct epoll_event ev = {
         .data.u32 = index,
-        .events = EPOLLONESHOT
+        .events = 0 // EPOLLONESHOT
     };
 
+    if (old_action == new_action)
+        return ;
+    
     if (new_action & RMC_POLLREAD)
         ev.events |= EPOLLIN;
 
