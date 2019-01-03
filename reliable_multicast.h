@@ -509,6 +509,7 @@ extern int rmc_pub_set_subscriber_disconnect_callback(rmc_pub_context_t* ctx,
                                                                             in_port_t remote_port));
 
 extern int rmc_pub_deactivate_context(rmc_pub_context_t* context);
+extern int rmc_pub_set_multicast_ttl(rmc_pub_context_t* ctx, int hops);
 extern int rmc_pub_set_user_data(rmc_pub_context_t* ctx, user_data_t user_data);
 extern user_data_t rmc_pub_user_data(rmc_pub_context_t* ctx);
 extern rmc_context_id_t rmc_pub_context_id(rmc_pub_context_t* ctx);

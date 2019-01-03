@@ -283,6 +283,21 @@ int rmc_pub_set_announce_interval(rmc_pub_context_t* ctx, uint32_t send_interval
         ctx->announce_next_send_ts = 0;
 }
 
+// Setup IP_MULTICAST_TTL for publishing multicast.
+// Can be called once the context is activated.
+int rmc_pub_set_multicast_ttl(rmc_pub_context_t* ctx, int hops)
+{
+    if (ctx->mcast_send_descriptor == -1)
+        return ENOTCONN;
+
+    if (setsockopt(ctx->mcast_send_descriptor, IPPROTO_IP,
+                   IP_MULTICAST_TTL, &hops, sizeof(hops)) < 0) {
+        RMC_LOG_WARNING("rmc_pub_set_multicast_ttl(): setsockopt(IP_MULTICAST_TTL): %s", strerror(errno));
+        return errno;
+    }
+    return 0;
+}
+
 int rmc_pub_set_announce_callback(rmc_pub_context_t* ctx,
                                          uint8_t (*announce_cb)(struct rmc_pub_context* ctx,
                                                                 void* payload,

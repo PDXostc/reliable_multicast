@@ -227,6 +227,9 @@ void test_rmc_proto_pub(char* mcast_group_addr,
           1, 1,
           rmc_pub_activate_context(ctx));
 
+    _test("rmc_proto_test_pub[%d.%d] set_ttl(): %s",
+          1, 1,
+          rmc_pub_set_multicast_ttl(ctx, 0));
     RMC_LOG_INFO("context: ctx[%.9X] mcast_addr[%s] mcast_port[%d]",
                  rmc_pub_context_id(ctx), mcast_group_addr, mcast_port);
 
