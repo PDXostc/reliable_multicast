@@ -110,6 +110,12 @@ typedef struct rmc_connection {
     // Socket TCP descriptor
     int descriptor;
 
+    // Node ID of publisher that a subscriber connected to.
+    // Derived from node ID of announce packet sent out by publisher
+    // that triggered subscriber to connect back to it.
+    // This field is unused by publisher-side and will remeain 0.
+    rmc_node_id_t node_id;
+
     // Circular buffer of pending data read.
     circ_buf_t read_buf;
 
@@ -209,9 +215,10 @@ typedef struct rmc_pub_context {
     int listen_descriptor;
 
     
-    // Randomly genrated context ID allowing us to recognize and drop
-    // looped back multicast messages.
-    rmc_context_id_t context_id; 
+    // Node ID allowing us to recognize and drop looped back multicast messages.
+    // Also allow subscribing parties to uniquely identify this publisher..
+    // Set by rmc_pub_init_context(), or generated randonly if set to 0.
+    rmc_node_id_t node_id; 
 
     // As a publisher, whendo we start re-sending packets via TCP
     // since they weren't acked when we sent them out via multicast
@@ -305,17 +312,16 @@ typedef struct rmc_sub_context {
     // Must be different for each process on same machine.
     // Multiple contexts within a single program can share listen port
     // to do load distribution on incoming connections
-
     int mcast_recv_descriptor;
 
     // usec between us receiving a packet and when we have to acknowledge it
     // to the sending publisher via the tcp control channel
     uint32_t ack_timeout; 
     
-    // Context ID  allowing us to recognize and drop
-    // looped back multicast messages.
-    // Provided to rmc_sub_init_context() or generated to random number.
-    rmc_context_id_t context_id; 
+    // Node ID allowing us to recognize and drop looped back multicast messages.
+    // Also allow publishing parties to uniquely identify this publisher.
+    // Set by rmc_pub_init_context(), or generated randonly if set to 0.
+    rmc_node_id_t node_id; 
 
     // Callback invoked when one or more packets become available for dispatch.
     // Use rmc_sub_get_next_dispatch_ready() to retrieve the packet for processing.
@@ -335,6 +341,8 @@ typedef struct rmc_sub_context {
     // This is the address that will be connected to by subscriber
     // if announce_cb returns non-zero. (See below).
     //
+    // node_id is the ID setup by the publisher when rmc_pub_init_cohntext() was called
+    //
     // If announce_cb returns a non-zero value, then a subscription will
     // be setup to the publisher that sent the announce packet.
     // If announce_cb returns 0 no subscription will be setup, and
@@ -345,6 +353,7 @@ typedef struct rmc_sub_context {
     uint8_t (*announce_cb)(struct rmc_sub_context* ctx,
                            char* listen_ip, // "1.2.3.4"
                            in_port_t listen_port,
+                           rmc_node_id_t node_id, 
                            void* payload,
                            payload_len_t payload_len);
 
@@ -366,7 +375,7 @@ typedef struct rmc_sub_context {
 // All functions return error codes from error
 extern int rmc_pub_init_context(rmc_pub_context_t* context,
                                 // Used to avoid loopback dispatch of published packets
-                                rmc_context_id_t context_id,
+                                rmc_node_id_t node_id,
                                 // Domain name or IP of multicast group to join.
                                 char* multicast_group_addr,  
                                 int multicast_port, 
@@ -416,7 +425,7 @@ extern int rmc_pub_init_context(rmc_pub_context_t* context,
 // All functions return error codes from error
 extern int rmc_sub_init_context(rmc_sub_context_t* context,
 
-                                rmc_context_id_t context_id,
+                                rmc_node_id_t node_id,
 
                                 // Domain name or IP of multicast group to join.
                                 char* multicast_group_addr,  
@@ -512,7 +521,7 @@ extern int rmc_pub_deactivate_context(rmc_pub_context_t* context);
 extern int rmc_pub_set_multicast_ttl(rmc_pub_context_t* ctx, int hops);
 extern int rmc_pub_set_user_data(rmc_pub_context_t* ctx, user_data_t user_data);
 extern user_data_t rmc_pub_user_data(rmc_pub_context_t* ctx);
-extern rmc_context_id_t rmc_pub_context_id(rmc_pub_context_t* ctx);
+extern rmc_node_id_t rmc_pub_node_id(rmc_pub_context_t* ctx);
 extern int rmc_pub_get_next_timeout(rmc_pub_context_t* context, usec_timestamp_t* result);
 extern int rmc_pub_process_timeout(rmc_pub_context_t* context);
 extern int rmc_pub_read(rmc_pub_context_t* context, rmc_index_t connection_index, uint8_t* op_res);
@@ -562,16 +571,19 @@ extern int rmc_sub_set_announce_callback(rmc_sub_context_t* context,
                                          uint8_t (*announce_cb)(struct rmc_sub_context* ctx,
                                                                 char* listen_ip, // "1.2.3.4"
                                                                 in_port_t listen_port,
+                                                                rmc_node_id_t node_id,
                                                                 void* payload,
                                                                 payload_len_t payload_len));
 
-// Set callback to be invoked when a packet becomes available
+// Set callback to be invoked when a packet becomes available for processing using
+// rmc_sub_get_next_dispatch_ready() and rmc_sub_packet_dispatched() calls.
 extern int rmc_sub_set_packet_ready_callback(rmc_sub_context_t* context,
                                              void (*packet_ready_cb)(struct rmc_sub_context* ctx));
 
+
 extern int rmc_sub_set_user_data(rmc_sub_context_t* ctx, user_data_t user_data);
 extern user_data_t rmc_sub_user_data(rmc_sub_context_t* ctx);
-extern rmc_context_id_t rmc_sub_context_id(rmc_sub_context_t* ctx);
+extern rmc_node_id_t rmc_sub_node_id(rmc_sub_context_t* ctx);
 
 extern int rmc_sub_packet_received(rmc_sub_context_t* ctx,
                                    rmc_index_t index, 
@@ -580,9 +592,25 @@ extern int rmc_sub_packet_received(rmc_sub_context_t* ctx,
                                    payload_len_t payload_len,
                                    usec_timestamp_t current_ts,
                                    user_data_t pkg_user_data);
+
 extern int rmc_sub_get_next_timeout(rmc_sub_context_t* context, usec_timestamp_t* result);
 extern int rmc_sub_process_timeout(rmc_sub_context_t* context);
 extern int rmc_sub_read(rmc_sub_context_t* context, rmc_index_t connection_index, uint8_t* op_res);
+
+
+// Queue a control message, sent via the tcp control channel, to the
+// publisher.
+//
+// Message will be delivered to publisher via the callback setup by
+// rmc_pub_set_control_message_callback().
+//
+// If callback has not been set, then control message will be dropped
+// by publisher.
+extern int rmc_sub_send_control_message(rmc_sub_context_t* context,
+                                        rmc_node_id_t node_id,
+                                        void* payload,
+                                        payload_len_t payload_len);
+
 extern int _rmc_sub_write_single_acknowledgement(rmc_sub_context_t* ctx,
                                                  rmc_connection_t* conn,
                                                  packet_id_t);
@@ -594,10 +622,21 @@ extern int rmc_sub_get_dispatch_ready_count(rmc_sub_context_t* context);
 extern sub_packet_t* rmc_sub_get_next_dispatch_ready(rmc_sub_context_t* context);
 extern int rmc_sub_packet_dispatched(rmc_sub_context_t* context, sub_packet_t* packet);
 
-extern int _rmc_sub_single_packet_acknowledged(rmc_sub_context_t* context, sub_packet_t* packet);
-extern int _rmc_sub_write_interval_acknowledgement(rmc_sub_context_t* ctx,
-                                                   rmc_connection_t* conn,
-                                                   sub_pid_interval_t* interval);
+extern int rmc_sub_write_interval_acknowledgement(rmc_sub_context_t* ctx,
+                                                  rmc_connection_t* conn,
+                                                  sub_pid_interval_t* interval);
+
+
+extern int rmc_sub_write_control_message_by_node_id(rmc_sub_context_t* ctx,
+                                                    rmc_node_id_t node_id,
+                                                    void* payload,
+                                                    payload_len_t payload_len);
+
+extern int rmc_sub_write_control_message_by_address(rmc_sub_context_t* ctx,
+                                                    uint32_t remote_address,
+                                                    uint16_t remote_port,
+                                                    void* payload,
+                                                    payload_len_t payload_len);
 
 extern int rmc_sub_packet_interval_acknowledged(rmc_sub_context_t* context,
                                                 rmc_index_t index,
@@ -673,6 +712,9 @@ extern rmc_connection_t* rmc_conn_find_by_address(rmc_connection_vector_t* conn_
                                                   uint32_t remote_address,
                                                   uint16_t remote_port);
 
+extern rmc_connection_t* rmc_conn_find_by_node_id(rmc_connection_vector_t* conn_vec,
+                                                  rmc_node_id_t node_id);
+
 extern int rmc_conn_process_accept(int listen_descriptor,
                                    rmc_connection_vector_t* conn_vec,
                                    rmc_index_t* result_index);
@@ -690,11 +732,13 @@ extern int rmc_conn_get_active_connections(rmc_connection_vector_t* conn_vec,
 extern int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
                                            in_addr_t address,
                                            in_port_t port,
+                                           rmc_node_id_t node_id,
                                            rmc_index_t* result_index);
 
 extern int rmc_conn_connect_tcp_by_host(rmc_connection_vector_t* conn_vec,
                                         char* server_addr,
                                         in_port_t port,
+                                        rmc_node_id_t node_id,
                                         rmc_index_t* result_index);
 
 

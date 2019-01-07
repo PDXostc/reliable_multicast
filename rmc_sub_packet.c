@@ -112,7 +112,7 @@ int rmc_sub_packet_interval_acknowledged(rmc_sub_context_t* ctx, rmc_index_t ind
     if (!conn || conn->mode != RMC_CONNECTION_MODE_CONNECTED)
         return EINVAL;
 
-    return _rmc_sub_write_interval_acknowledgement(ctx, conn, interval);
+    return rmc_sub_write_interval_acknowledgement(ctx, conn, interval);
 }
 
 

@@ -25,9 +25,9 @@
 // =============
 
 
-int _rmc_sub_write_interval_acknowledgement(rmc_sub_context_t* ctx,
-                                            rmc_connection_t* conn,
-                                            sub_pid_interval_t* interval)
+int rmc_sub_write_interval_acknowledgement(rmc_sub_context_t* ctx,
+                                           rmc_connection_t* conn,
+                                           sub_pid_interval_t* interval)
 {
         ssize_t res = 0;
         uint8_t *seg1 = 0;
@@ -56,6 +56,7 @@ int _rmc_sub_write_interval_acknowledgement(rmc_sub_context_t* ctx,
 
         strcpy(group_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }));
         strcpy(remote_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(conn->remote_address) }));
+
         RMC_LOG_INDEX_COMMENT(conn->connection_index,
                               "interval[%lu:%lu] mcast[%s:%d] remote[%s:%d]",
                               interval->first_pid,
@@ -65,13 +66,34 @@ int _rmc_sub_write_interval_acknowledgement(rmc_sub_context_t* ctx,
                               remote_addr,
                               conn->remote_port);
 
+        if (available < 1 + sizeof(ack)) {
+            RMC_LOG_INDEX_WARNING(conn->connection_index,
+                                  "Out of circ buf memory sending ack: interval[%lu:%lu] mcast[%s:%d] remote[%s:%d]",
+                                  interval->first_pid,
+                                  interval->last_pid,
+                                  group_addr,
+                                  ctx->mcast_port,
+                                  remote_addr,
+                                  conn->remote_port);
+            return ENOMEM;
+        }
+
         // Allocate memory for command
         res = circ_buf_alloc(&conn->write_buf, 1,
                              &seg1, &seg1_len,
                              &seg2, &seg2_len);
 
-        if (res) 
+        if (res) {
+            RMC_LOG_INDEX_ERROR(conn->connection_index,
+                                "Out of circ buf memory setting up ack command: interval[%lu:%lu] mcast[%s:%d] remote[%s:%d]",
+                                interval->first_pid,
+                                interval->last_pid,
+                                group_addr,
+                                ctx->mcast_port,
+                                remote_addr,
+                                conn->remote_port);
             return ENOMEM;
+        }
 
         *seg1 = RMC_CMD_ACK_INTERVAL;
 
@@ -80,8 +102,18 @@ int _rmc_sub_write_interval_acknowledgement(rmc_sub_context_t* ctx,
                              &seg1, &seg1_len,
                              &seg2, &seg2_len);
 
-        if (res) 
+
+        if (res) {
+            RMC_LOG_INDEX_ERROR(conn->connection_index,
+                                "Out of circ buf memory setting up ack header: interval[%lu:%lu] mcast[%s:%d] remote[%s:%d]",
+                                interval->first_pid,
+                                interval->last_pid,
+                                group_addr,
+                                ctx->mcast_port,
+                                remote_addr,
+                                conn->remote_port);
             return ENOMEM;
+        }
 
         // Copy in packet header
         memcpy(seg1, (uint8_t*) &ack, seg1_len);
@@ -100,6 +132,146 @@ int _rmc_sub_write_interval_acknowledgement(rmc_sub_context_t* ctx,
                                          conn->action);
         return 0;
 }
+
+
+
+int rmc_sub_write_control_message(rmc_sub_context_t* ctx,
+                                  rmc_connection_t* conn,
+                                  void* payload,
+                                  payload_len_t payload_len)
+{
+        ssize_t res = 0;
+        uint8_t *seg1 = 0;
+        uint32_t seg1_len = 0;
+        uint8_t *seg2 = 0;
+        uint32_t seg2_len = 0;
+        cmd_control_message_t msg = {
+            .payload_len = payload_len,
+        };
+        uint32_t available = 0;
+        uint32_t old_in_use = 0;
+        rmc_poll_action_t old_action = 0;
+
+        if (!ctx || !conn  || !payload || !payload_len)
+            return EINVAL;
+        
+        if (!conn->mode != RMC_CONNECTION_MODE_CONNECTED)
+            return ENOTCONN;
+
+        available = circ_buf_available(&conn->write_buf);
+
+        if (available < 1 + sizeof(cmd_control_message_t) + payload_len + 1) {
+            RMC_LOG_INDEX_WARNING(conn->connection_index, "Out of circ buf memory sending ctl message");
+            return ENOMEM;
+        }
+
+        old_in_use = circ_buf_in_use(&conn->write_buf);
+        old_action = conn->action;
+
+        // Allocate memory for command
+        res = circ_buf_alloc(&conn->write_buf, 1,
+                             &seg1, &seg1_len,
+                             &seg2, &seg2_len);
+
+        if (res) {
+            RMC_LOG_INDEX_ERROR(conn->connection_index,
+                          "Out of circ buf memory setting up ctl message cmd command");
+            return ENOMEM;
+        }
+
+
+        *seg1 = RMC_CMD_CONTROL_MESSAGE;
+
+        // Allocate memory for packet header
+        res = circ_buf_alloc(&conn->write_buf, sizeof(msg) ,
+                             &seg1, &seg1_len,
+                             &seg2, &seg2_len);
+
+
+        if (res) {
+            RMC_LOG_INDEX_ERROR(conn->connection_index,
+                                "Out of circ buf memory setting up ctl message cmd header");
+            return ENOMEM;
+        }
+
+
+        // Copy in packet header
+        memcpy(seg1, (uint8_t*) &msg, seg1_len);
+        if (seg2_len) 
+            memcpy(seg2, ((uint8_t*) &msg) + seg1_len, seg2_len);
+
+        // Allocate memory for payload
+        res = circ_buf_alloc(&conn->write_buf, payload_len ,
+                             &seg1, &seg1_len,
+                             &seg2, &seg2_len);
+
+        if (res) {
+            RMC_LOG_INDEX_ERROR(conn->connection_index,
+                                "Out of circ buf memory setting up ctl message payload");
+            return ENOMEM;
+        }
+
+        // Copy in packet header
+        memcpy(seg1, (uint8_t*) payload, seg1_len);
+ 
+       if (seg2_len) 
+            memcpy(seg2, ((uint8_t*) &payload) + seg1_len, seg2_len);
+
+
+        // We always want to read from the tcp  socket.
+        conn->action |= RMC_POLLWRITE;
+
+        if (ctx->conn_vec.poll_modify)
+            (*ctx->conn_vec.poll_modify)(ctx->user_data,
+                                         conn->descriptor,
+                                         conn->connection_index,
+                                         old_action,
+                                         conn->action);
+        return 0;
+}
+
+
+
+int rmc_sub_write_control_message_by_address(rmc_sub_context_t* ctx,
+                                             uint32_t remote_address,
+                                             uint16_t remote_port,
+                                             void* payload,
+                                             payload_len_t payload_len)
+{
+    rmc_connection_t* conn = 0;
+
+    if (!ctx  || !payload || !payload_len)
+        return EINVAL;
+        
+    conn = rmc_conn_find_by_address(&ctx->conn_vec, remote_address, remote_port);
+
+        
+    if (!conn || conn->mode != RMC_CONNECTION_MODE_CONNECTED)
+        return ENOTCONN;
+
+    return rmc_sub_write_control_message(ctx, conn, payload, payload_len);
+}
+
+
+
+int rmc_sub_write_control_message_by_node_id(rmc_sub_context_t* ctx,
+                                             rmc_node_id_t node_id,
+                                             void* payload,
+                                             payload_len_t payload_len)
+{
+    rmc_connection_t* conn = 0;
+    
+    if (!ctx  || !payload || !payload_len)
+        return EINVAL;
+        
+    conn = rmc_conn_find_by_node_id(&ctx->conn_vec, node_id);
+
+    if (!conn || conn->mode != RMC_CONNECTION_MODE_CONNECTED)
+        return ENOTCONN;
+
+    return rmc_sub_write_control_message(ctx, conn, payload, payload_len);
+}
+
 
 int rmc_sub_write(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
 {
@@ -164,3 +336,5 @@ int rmc_sub_write(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
         
     return res;
 }
+
+

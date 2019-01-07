@@ -144,7 +144,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
                         char* listen_if_addr,
                         int mcast_port,
                         int listen_port,
-                        rmc_context_id_t node_id,
+                        rmc_node_id_t node_id,
                         uint64_t count, // Number of signals to send
                         int expected_subscriber_count,
                         int seed,
@@ -188,7 +188,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
     memset(conn_vec_mem, 0, sizeof(rmc_connection_t)*RMC_MAX_CONNECTIONS);
 
     rmc_pub_init_context(ctx,
-                         0, // Random context id
+                         0, // Random node id
                          mcast_group_addr, mcast_port,
                          listen_if_addr, listen_port,
                          (user_data_t) { .i32 = epollfd },
@@ -231,7 +231,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
           1, 1,
           rmc_pub_set_multicast_ttl(ctx, 0));
     RMC_LOG_INFO("context: ctx[%.9X] mcast_addr[%s] mcast_port[%d]",
-                 rmc_pub_context_id(ctx), mcast_group_addr, mcast_port);
+                 rmc_pub_node_id(ctx), mcast_group_addr, mcast_port);
 
     puts("Publisher ready. Run ./rmc_text -S in another window to setup a subscriber.");
     // Wait for the correct number of subscribers to connect before we start sending.

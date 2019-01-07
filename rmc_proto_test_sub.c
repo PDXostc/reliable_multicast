@@ -83,6 +83,7 @@ static int check_exit_condition( sub_expect_t* expect, int expect_sz)
 static uint8_t announce_cb(struct rmc_sub_context* ctx,
                            char* listen_ip, // "1.2.3.4"
                            in_port_t listen_port,
+                           rmc_node_id_t node_id,
                            void* payload,
                            payload_len_t payload_len)
 {
@@ -108,12 +109,12 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
                                  
 {
     signal_t *signal = (signal_t*) data;
-    rmc_context_id_t node_id = signal->node_id;
+    rmc_node_id_t node_id = signal->node_id;
     uint64_t max_expected = signal->max_signal_id;
     uint64_t current = signal->signal_id;
 
     
-    // Is context ID within our expetcted range
+    // Is node ID within our expetcted range
     if (node_id >= expect_sz) {
         RMC_LOG_INDEX_FATAL(index,
                             "ContextID [%u] is out of range (0-%d)",
@@ -318,7 +319,7 @@ static int process_events(rmc_sub_context_t* ctx,
 void test_rmc_proto_sub(char* mcast_group_addr,
                         char* mcast_if_addr,
                         int mcast_port,
-                        rmc_context_id_t node_id,
+                        rmc_node_id_t node_id,
                         uint8_t* node_id_map,
                         int node_id_map_size)
 {
@@ -363,7 +364,7 @@ void test_rmc_proto_sub(char* mcast_group_addr,
     conn_vec_mem = malloc(sizeof(rmc_connection_t)*RMC_MAX_CONNECTIONS);
     memset(conn_vec_mem, 0, sizeof(rmc_connection_t)*RMC_MAX_CONNECTIONS);
     rmc_sub_init_context(ctx,
-                         0, // Assign random context id
+                         0, // Assign random node id
                          mcast_group_addr,
                          mcast_if_addr,
                          mcast_port,
@@ -379,7 +380,7 @@ void test_rmc_proto_sub(char* mcast_group_addr,
     rmc_sub_set_announce_callback(ctx, announce_cb);
 
     RMC_LOG_INFO("ctx[%.9X] mcast_addr[%s] mcast_port[%d]",
-                  rmc_sub_context_id(ctx), mcast_group_addr, mcast_port);
+                  rmc_sub_node_id(ctx), mcast_group_addr, mcast_port);
 
     while(1) {
         sub_packet_t* pack = 0;

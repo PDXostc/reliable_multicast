@@ -19,7 +19,7 @@
 //       rmc_xxx
 //
 typedef uint64_t packet_id_t;
-typedef uint32_t rmc_context_id_t;
+typedef uint32_t rmc_node_id_t;
 
 RMC_LIST(packet_id_list, packet_id_node, packet_id_t)
 

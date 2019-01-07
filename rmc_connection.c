@@ -23,7 +23,6 @@
 // =============
 // SOCKET SLOT MANAGEMENT
 // =============
-
 rmc_connection_t* rmc_conn_find_by_address(rmc_connection_vector_t* conn_vec,
                                             uint32_t remote_address,
                                             uint16_t remote_port)
@@ -33,7 +32,7 @@ rmc_connection_t* rmc_conn_find_by_address(rmc_connection_vector_t* conn_vec,
 //    char have_addr_str[80]; 
 
     // Do we have any connections in use at all?
-    if (conn_vec->max_connection_ind == -1)
+    if (!conn_vec || conn_vec->max_connection_ind == -1)
         return 0;
     
 //    strcpy(want_addr_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(remote_address) }));
@@ -73,6 +72,29 @@ rmc_connection_t* rmc_conn_find_by_index(rmc_connection_vector_t* conn_vec,
     return &conn_vec->connections[index];
 }
 
+
+rmc_connection_t* rmc_conn_find_by_node_id(rmc_connection_vector_t* conn_vec,
+                                           rmc_node_id_t node_id)
+{
+    rmc_index_t ind = 0;
+
+    // Do we have any connections in use at all?
+    if (!conn_vec || conn_vec->max_connection_ind == -1)
+        return 0;
+    
+
+    // FIXME: Replace with hash table search to speed up.
+    while(ind <= conn_vec->max_connection_ind) {
+        if (conn_vec->connections[ind].descriptor != -1 &&  
+            conn_vec->connections[ind].node_id == node_id)
+            return &conn_vec->connections[ind];
+
+        ++ind;
+    }
+    return 0;
+}
+
+
 static rmc_index_t _get_free_slot(rmc_connection_vector_t* conn_vec)
 {
     rmc_index_t ind = 0;
@@ -111,6 +133,7 @@ static void rmc_conn_reset_connection(rmc_connection_t* conn, uint32_t index)
     conn->action = 0;
     conn->connection_index = index;
     conn->descriptor = -1;
+    conn->node_id = 0;
     conn->mode = RMC_CONNECTION_MODE_CLOSED;
     circ_buf_init(&conn->read_buf, conn->read_buf_data, sizeof(conn->read_buf_data));
     circ_buf_init(&conn->write_buf, conn->write_buf_data, sizeof(conn->write_buf_data));
@@ -144,9 +167,9 @@ void rmc_conn_init_connection_vector(rmc_connection_vector_t* conn_vec,
 }
 
 
-// Complete async connect. Called from rmc_write().
+// Complete async connect. Called from rmc_sub_write().
 int rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
-                                  rmc_connection_t* conn)
+                                 rmc_connection_t* conn)
 {
     rmc_poll_action_t old_action = 0;
     int sock_err = 0;
@@ -211,9 +234,10 @@ int rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
 }
                                
 int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
-                                     uint32_t address,
-                                     in_port_t port,
-                                     rmc_index_t* result_index)
+                                    uint32_t address,
+                                    in_port_t port,
+                                    rmc_node_id_t node_id, 
+                                    rmc_index_t* result_index)
 {
     rmc_index_t c_ind = -1;
     int res = 0;
@@ -246,6 +270,7 @@ int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
                   sizeof(sock_addr));
 
     conn_vec->connections[c_ind].remote_address = address;
+    conn_vec->connections[c_ind].node_id = node_id;
     if (res == -1 && errno != EINPROGRESS) {
         err = errno; // Errno may be reset by close().
         RMC_LOG_INFO("Failed to connect: %s", strerror(errno));
@@ -285,9 +310,10 @@ int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
 
 
 int rmc_conn_connect_tcp_by_host(rmc_connection_vector_t* conn_vec,
-                                  char* server_addr,
-                                  in_port_t port,
-                                  rmc_index_t* result_index)
+                                 char* server_addr,
+                                 in_port_t port,
+                                 rmc_node_id_t node_id, 
+                                 rmc_index_t* result_index)
 {
     struct hostent* host = 0;
 
@@ -296,9 +322,10 @@ int rmc_conn_connect_tcp_by_host(rmc_connection_vector_t* conn_vec,
         return ENOENT;
 
     return rmc_conn_connect_tcp_by_address(conn_vec,
-                                            ntohl(*(uint32_t*) host->h_addr_list[0]),
-                                            port,
-                                            result_index);
+                                           ntohl(*(uint32_t*) host->h_addr_list[0]),
+                                           port,
+                                           node_id,
+                                           result_index);
 }
 
 

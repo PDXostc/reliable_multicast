@@ -21,8 +21,8 @@ static void setup_packet_header(rmc_pub_context_t* ctx,
                                 pub_packet_t* pack,
                                 packet_header_t* pack_hdr)
 {
-    // Setup context id. 
-    pack_hdr->context_id = ctx->context_id;
+    // Setup node id. 
+    pack_hdr->node_id = ctx->node_id;
     pack_hdr->payload_len = pack->payload_len; 
     pack_hdr->pid = pack->pid; 
 

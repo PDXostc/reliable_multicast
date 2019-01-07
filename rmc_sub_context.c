@@ -26,7 +26,7 @@ RMC_LIST_IMPL(rmc_index_list, rmc_index_node, int32_t)
 // =============
 int rmc_sub_init_context(rmc_sub_context_t* ctx,
                          // Used to avoid loopback dispatch of published packets
-                         rmc_context_id_t context_id,
+                         rmc_node_id_t node_id,
                          char* mcast_group_addr,
                          // Interface IP to bind mcast to. Default: "0.0.0.0" (IFADDR_ANY)
                          char* mcast_if_addr, 
@@ -59,7 +59,7 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
 
     signal(SIGPIPE, SIG_IGN);
     // We can throw away seed result since we will only call rand here.
-    ctx->context_id = context_id?context_id:rand_r(&seed);
+    ctx->node_id = node_id?node_id:rand_r(&seed);
     ctx->user_data = user_data;
     ctx->announce_cb = 0;
     ctx->packet_ready_cb = 0;
@@ -250,6 +250,7 @@ int rmc_sub_set_announce_callback(rmc_sub_context_t* ctx,
                                   uint8_t (*announce_cb)(struct rmc_sub_context* ctx,
                                                          char* listen_ip, // "1.2.3.4"
                                                          in_port_t listen_port,
+                                                         rmc_node_id_t node_id,
                                                          void* payload,
                                                          payload_len_t payload_len))
 {
@@ -277,12 +278,12 @@ int rmc_sub_set_user_data(rmc_sub_context_t* ctx, user_data_t user_data)
     return 0;
 }
 
-rmc_context_id_t rmc_sub_context_id(rmc_sub_context_t* ctx)
+rmc_node_id_t rmc_sub_node_id(rmc_sub_context_t* ctx)
 {
     if (!ctx)
         return 0;
 
-    return ctx->context_id;
+    return ctx->node_id;
 }
 
 uint32_t rmc_sub_get_max_publisher_count(rmc_sub_context_t* ctx)

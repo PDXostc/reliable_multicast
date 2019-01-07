@@ -26,7 +26,7 @@ extern void test_rmc_proto_pub(char* mcast_group_addr,
                                char* listen_if_addr,
                                int mcast_port,
                                int listen_port,
-                               rmc_context_id_t ctx_id,
+                               rmc_node_id_t ctx_id,
                                uint64_t count,
                                int expected_subscribers,
                                int seed,
@@ -37,7 +37,7 @@ extern void test_rmc_proto_pub(char* mcast_group_addr,
 extern void test_rmc_proto_sub(char* mcast_addr,
                                char* mcast_if_addr,
                                int mcast_port,
-                               rmc_context_id_t ctx_id,
+                               rmc_node_id_t ctx_id,
                                uint8_t* ctx_id_map,
                                int ctx_id_map_size);
 
@@ -86,7 +86,7 @@ int main(int argc, char* argv[])
     pid_t ch_pid = 0;
     int rand_seed = 1;
     uint64_t packet_count = 1;
-    rmc_context_id_t node_id = 1;
+    rmc_node_id_t node_id = 1;
     float drop_rate = 0.0;
     int send_interval = 0;
     int jitter = 0;

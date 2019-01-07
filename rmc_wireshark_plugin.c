@@ -32,7 +32,7 @@ static int proto_rmc_resend = -1;
 static int proto_rmc_ack_intv = -1;
 static int proto_rmc_control = -1;
 
-static int hf_rmc_context_id = -1;
+static int hf_rmc_node_id = -1;
 static int hf_rmc_payload_len = -1;
 static int hf_rmc_control_ip = -1;
 static int hf_rmc_control_port = -1;
@@ -108,7 +108,7 @@ static int dissect_packet_offset(tvbuff_t *tvb, packet_info *pinfo, proto_tree *
     proto_tree *rmc_tree = 0;
     u_int16_t payload_len = 0;
     u_int64_t pid = 0;
-    u_int32_t context_id = 0;
+    u_int32_t node_id = 0;
     gchar* ip = 0;
     char src_addr[64];
     u_int32_t ip_numeric = 0;
@@ -127,8 +127,8 @@ static int dissect_packet_offset(tvbuff_t *tvb, packet_info *pinfo, proto_tree *
     offset += 8;
 
     // Context - ID
-    context_id = tvb_get_guint32(tvb, offset, ENC_LITTLE_ENDIAN);
-    proto_tree_add_item(rmc_tree, hf_rmc_context_id, tvb, offset, 4, ENC_LITTLE_ENDIAN);
+    node_id = tvb_get_guint32(tvb, offset, ENC_LITTLE_ENDIAN);
+    proto_tree_add_item(rmc_tree, hf_rmc_node_id, tvb, offset, 4, ENC_LITTLE_ENDIAN);
     offset += 4;
 
     // Payload len
@@ -163,12 +163,12 @@ static int dissect_packet_offset(tvbuff_t *tvb, packet_info *pinfo, proto_tree *
         col_add_fstr(pinfo->cinfo,
                      COL_INFO,
                      "Pub ctx_id[0x%.8X] ctl_addr[%s:%d] len[%d] - announce",
-                     context_id, ip, port, payload_len);
+                     node_id, ip, port, payload_len);
     else
         col_add_fstr(pinfo->cinfo,
                      COL_INFO,
                      "Pub ctx_id[0x%.8X] ctl_addr[%s:%d] len[%d] pid[%lu]",
-                     context_id, ip, port, payload_len, pid);
+                     node_id, ip, port, payload_len, pid);
 
     return offset;
 }
@@ -270,11 +270,11 @@ void plugin_register_rmc(void)
     };
     
     static hf_register_info hf[] = {
-        { &hf_rmc_context_id,
-          { "context id", "rmc.context_id",
+        { &hf_rmc_node_id,
+          { "node id", "rmc.node_id",
             FT_UINT32, BASE_HEX,
             NULL, 0x0,
-            "Context ID of the pubisher sending the packet", HFILL }
+            "Node ID of the pubisher sending the packet", HFILL }
         },
         { &hf_rmc_payload_len,
           { "payload length", "rmc.payload_len",

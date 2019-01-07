@@ -26,7 +26,7 @@
 // =============
 int rmc_pub_init_context(rmc_pub_context_t* ctx,
                          // Used to avoid loopback dispatch of published packets
-                         rmc_context_id_t context_id,
+                         rmc_node_id_t node_id,
                          char* mcast_group_addr,
                          int multicast_port,
 
@@ -58,7 +58,7 @@ int rmc_pub_init_context(rmc_pub_context_t* ctx,
 
     signal(SIGPIPE, SIG_IGN);
     // We can throw away seed result since we will only call rand here.
-    ctx->context_id = context_id?context_id:rand_r(&seed);
+    ctx->node_id = node_id?node_id:rand_r(&seed);
     ctx->user_data = user_data;
 
     rmc_conn_init_connection_vector(&ctx->conn_vec,
@@ -353,12 +353,12 @@ user_data_t rmc_pub_user_data(rmc_pub_context_t* ctx)
     return ctx->user_data;
 }
 
-rmc_context_id_t rmc_pub_context_id(rmc_pub_context_t* ctx)
+rmc_node_id_t rmc_pub_node_id(rmc_pub_context_t* ctx)
 {
     if (!ctx)
         return 0;
 
-    return ctx->context_id;
+    return ctx->node_id;
 }
 
 int rmc_pub_set_user_data(rmc_pub_context_t* ctx, user_data_t user_data)
