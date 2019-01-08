@@ -207,7 +207,7 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
             signal_sec = (int) expect[node_id].max_received /
                 ((double) (expect[node_id].stop_ts - expect[node_id].start_ts) / 1000000.0);
 
-            printf("%s[%.3d]%s %lu signals (%ld bytes each) in %lu msec -> %s%d signals / sec%s -> %s%ld kbyte / sec%s\ne",
+            printf("%s[%.3d]%s %lu signals (%ld bytes each) in %lu msec -> %s%d signals / sec%s -> %s%ld kbyte / sec%s\n",
                    rmc_index_color(index), index, rmc_log_color_none(), 
                    expect[node_id].max_received,
                    sizeof(signal_t),

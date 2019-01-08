@@ -344,6 +344,22 @@ int rmc_pub_set_subscriber_disconnect_callback(rmc_pub_context_t* ctx,
 }
 
 
+int rmc_pub_set_control_message_callback(rmc_pub_context_t* ctx,
+                                         void (*control_message_cb)(struct rmc_pub_context* ctx,
+                                                                    uint32_t publisher_address,
+                                                                    uint16_t publisher_port,
+                                                                    rmc_node_id_t node_id,
+                                                                    void* payload,
+                                                                    payload_len_t payload_len))
+{
+    if (!ctx)
+        return EINVAL;
+
+    ctx->subscriber_control_message_cb = control_message_cb;
+
+    return 0;
+}
+
 
 user_data_t rmc_pub_user_data(rmc_pub_context_t* ctx)
 {

@@ -260,6 +260,16 @@ typedef struct rmc_pub_context {
                                      char* remote_ip, // "1.2.3.4"
                                      in_port_t remote_port);   // In host format.
 
+    // Callback invoked when a control message is received from the subscriber.
+    // Subscriber sends the message using  rmc_sub_write_control_message_by_address() or
+    //  rmc_sub_write_control_message_by_node_id()
+    void (*subscriber_control_message_cb)(struct rmc_pub_context* ctx,
+                                          uint32_t publisher_address,
+                                          uint16_t publisher_port,
+                                          rmc_node_id_t node_id,
+                                          void* payload,
+                                          payload_len_t payload_len);
+
     // Callback to free memory for packets that has been
     // successfully sent out. Memory is originally
     // provided as an argument to rmc_pub_queue_packet().
@@ -517,6 +527,18 @@ extern int rmc_pub_set_subscriber_disconnect_callback(rmc_pub_context_t* ctx,
                                                                             char* remote_ip, // "1.2.3.4"
                                                                             in_port_t remote_port));
 
+
+// Set the callback to be invoked when a control message is received from a subscriber.
+// Subscriber sends the message using  rmc_sub_write_control_message_by_address() or
+//  rmc_sub_write_control_message_by_node_id()
+extern int rmc_pub_set_control_message_callback(rmc_pub_context_t* context,
+                                                void (*control_message_cb)(struct rmc_pub_context* ctx,
+                                                                           uint32_t publisher_address,
+                                                                           uint16_t publisher_port,
+                                                                           rmc_node_id_t node_id,
+                                                                           void* payload,
+                                                                           payload_len_t payload_len));
+
 extern int rmc_pub_deactivate_context(rmc_pub_context_t* context);
 extern int rmc_pub_set_multicast_ttl(rmc_pub_context_t* ctx, int hops);
 extern int rmc_pub_set_user_data(rmc_pub_context_t* ctx, user_data_t user_data);
@@ -598,18 +620,6 @@ extern int rmc_sub_process_timeout(rmc_sub_context_t* context);
 extern int rmc_sub_read(rmc_sub_context_t* context, rmc_index_t connection_index, uint8_t* op_res);
 
 
-// Queue a control message, sent via the tcp control channel, to the
-// publisher.
-//
-// Message will be delivered to publisher via the callback setup by
-// rmc_pub_set_control_message_callback().
-//
-// If callback has not been set, then control message will be dropped
-// by publisher.
-extern int rmc_sub_send_control_message(rmc_sub_context_t* context,
-                                        rmc_node_id_t node_id,
-                                        void* payload,
-                                        payload_len_t payload_len);
 
 extern int _rmc_sub_write_single_acknowledgement(rmc_sub_context_t* ctx,
                                                  rmc_connection_t* conn,
@@ -627,14 +637,31 @@ extern int rmc_sub_write_interval_acknowledgement(rmc_sub_context_t* ctx,
                                                   sub_pid_interval_t* interval);
 
 
+// Queue a control message, sent via the tcp control channel, to the
+// publisher.
+//
+// Message will be delivered to publisher via the callbac sketup by
+// rmc_pub_set_control_message_callback().
+//
+// If callback has not been set, then control message will be dropped
+// by publisher.
+//
+// publisher_node_id will have been provided through a prior to
+// the callback specified by rmc_sub_set_announce_callback() when
+// the subscription was originally setup.
+//
 extern int rmc_sub_write_control_message_by_node_id(rmc_sub_context_t* ctx,
-                                                    rmc_node_id_t node_id,
+                                                    rmc_node_id_t publisher_node_id,
                                                     void* payload,
                                                     payload_len_t payload_len);
 
+// publisher_address and publisher_port will have been provided through a prior to
+// the callback specified by rmc_sub_set_announce_callback() when
+// the subscription was originally setup.
+//
 extern int rmc_sub_write_control_message_by_address(rmc_sub_context_t* ctx,
-                                                    uint32_t remote_address,
-                                                    uint16_t remote_port,
+                                                    uint32_t publisher_address,
+                                                    uint16_t publisher_port,
                                                     void* payload,
                                                     payload_len_t payload_len);
 
