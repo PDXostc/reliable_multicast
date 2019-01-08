@@ -106,6 +106,9 @@ int rmc_pub_init_context(rmc_pub_context_t* ctx,
 
     ctx->subscriber_connect_cb = 0;
     ctx->subscriber_disconnect_cb = 0;
+
+    ctx->subscriber_connect_cb = 0;
+
     ctx->announce_cb = 0;
     ctx->announce_send_interval = 0;
     ctx->announce_next_send_ts = 0;

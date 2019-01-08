@@ -38,10 +38,7 @@ static int decode_unsubscribed_multicast(rmc_sub_context_t* ctx,
     // If set, invoke callback and determine if we are to setup subscription to
     // publisher.
     if (ctx->announce_cb) {
-        char listen_ip_str[128];
-        strcpy(listen_ip_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(pack_hdr->listen_ip) }));
-
-        res = (*ctx->announce_cb)(ctx, listen_ip_str, pack_hdr->listen_port,
+        res = (*ctx->announce_cb)(ctx, pack_hdr->listen_ip, pack_hdr->listen_port,
                                   pack_hdr->node_id,
                                   payload, pack_hdr->payload_len);
     }

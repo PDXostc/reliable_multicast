@@ -81,7 +81,7 @@ static int check_exit_condition( sub_expect_t* expect, int expect_sz)
 
 
 static uint8_t announce_cb(struct rmc_sub_context* ctx,
-                           char* listen_ip, // "1.2.3.4"
+                           uint32_t listen_ip,
                            in_port_t listen_port,
                            rmc_node_id_t node_id,
                            void* payload,

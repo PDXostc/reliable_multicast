@@ -62,6 +62,7 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
     ctx->node_id = node_id?node_id:rand_r(&seed);
     ctx->user_data = user_data;
     ctx->announce_cb = 0;
+    ctx->subscribe_cb = 0;
     ctx->packet_ready_cb = 0;
     rmc_conn_init_connection_vector(&ctx->conn_vec,
                                     conn_vec,
@@ -248,7 +249,7 @@ int rmc_sub_deactivate_context(rmc_sub_context_t* ctx)
 
 int rmc_sub_set_announce_callback(rmc_sub_context_t* ctx,
                                   uint8_t (*announce_cb)(struct rmc_sub_context* ctx,
-                                                         char* listen_ip, // "1.2.3.4"
+                                                         uint32_t listen_ip,
                                                          in_port_t listen_port,
                                                          rmc_node_id_t node_id,
                                                          void* payload,
@@ -258,6 +259,19 @@ int rmc_sub_set_announce_callback(rmc_sub_context_t* ctx,
         return EINVAL;
 
     ctx->announce_cb = announce_cb;
+    return 0;
+}
+
+int rmc_sub_set_subscribe_callback(rmc_sub_context_t* ctx,
+                                  void (*subscribe_cb)(struct rmc_sub_context* ctx,
+                                                       uint32_t listen_ip,
+                                                       in_port_t listen_port,
+                                                       rmc_node_id_t node_id))
+{
+    if (!ctx)
+        return EINVAL;
+
+    ctx->subscribe_cb = subscribe_cb;
     return 0;
 }
 

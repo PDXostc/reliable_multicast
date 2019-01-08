@@ -348,10 +348,13 @@ typedef struct rmc_sub_context {
     //
     // Listen ip and port is the end point of the tcp control channel to
     // that the publisher accepts subscription connections to.
-    // This is the address that will be connected to by subscriber
-    // if announce_cb returns non-zero. (See below).
     //
-    // node_id is the ID setup by the publisher when rmc_pub_init_cohntext() was called
+    // Convert the IP address to an aaa.bbb.ccc.ddd IP address using the following
+    // statement:
+    //
+    //    inet_ntoa( (struct in_addr) { .s_addr = htonl( listen_ip) })
+    //
+    // node_id is the ID setup by the publisher when rmc_pub_init_context() was called
     //
     // If announce_cb returns a non-zero value, then a subscription will
     // be setup to the publisher that sent the announce packet.
@@ -359,13 +362,38 @@ typedef struct rmc_sub_context {
     // announce_cb will be invoked again the next time an announce packet
     // is received from the same publisher.
     //
-    // If announce_cb is not set then the subscription will always be setup.
+    // If announce_cb is not setup using rmc_sub_set_announce_callback(),
+    // then the subscription will always be setup.
     uint8_t (*announce_cb)(struct rmc_sub_context* ctx,
-                           char* listen_ip, // "1.2.3.4"
+                           uint32_t listen_ip, 
                            in_port_t listen_port,
                            rmc_node_id_t node_id, 
                            void* payload,
                            payload_len_t payload_len);
+
+    // Callback invoked every time we have setup a tcp control
+    // channel to a publisher, thereby activating a subscrtiption./
+    //
+    // This call will be invoked once the announce_cb callback above
+    // has returned 1,
+    //
+    // Listen ip and port is the end point of the tcp control channel to
+    // that the publisher accepts subscription connections to.
+    //
+    // Convert the IP address to an aaa.bbb.ccc.ddd IP address using the following
+    // statement:
+    // 
+    //    inet_ntoa( (struct in_addr) { .s_addr = htonl( listen_ip) })
+    //
+    // node_id is the ID setup by the publisher when rmc_pub_init_context() was called
+    //
+    //
+    // If subscribe_cb is not setup using rmc_sub_set_subscribe_callback(),
+    // then no notification will be issued about a successful connection.
+    void (*subscribe_cb)(struct rmc_sub_context* ctx,
+                         uint32_t listen_ip,
+                         in_port_t listen_port,
+                         rmc_node_id_t node_id);
 
     // Called to alloc memory for incoming data.
     // that needs to be processed.
@@ -589,9 +617,15 @@ extern int rmc_sub_deactivate_context(rmc_sub_context_t* context);
 
 extern int rmc_sub_close_connection(rmc_sub_context_t* ctx, rmc_index_t s_ind);
 
+extern int rmc_sub_set_subscriber_callback(rmc_sub_context_t* context,
+                                           void (*subscribe_cb)(struct rmc_sub_context* ctx,
+                                                                uint32_t listen_ip,
+                                                                in_port_t listen_port,
+                                                                rmc_node_id_t node_id));
+
 extern int rmc_sub_set_announce_callback(rmc_sub_context_t* context,
                                          uint8_t (*announce_cb)(struct rmc_sub_context* ctx,
-                                                                char* listen_ip, // "1.2.3.4"
+                                                                uint32_t listen_ip,
                                                                 in_port_t listen_port,
                                                                 rmc_node_id_t node_id,
                                                                 void* payload,
