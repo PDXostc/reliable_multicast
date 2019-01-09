@@ -43,15 +43,15 @@
 
 #define RMC_POLLREAD 0x01
 #define RMC_POLLWRITE 0x02
-#define RMC_UNUSED_INDEX 0xFFFFFFFD
-#define RMC_MULTICAST_INDEX 0xFFFFFFFE
-#define RMC_LISTEN_INDEX 0xFFFFFFFF
+#define RMC_NIL_INDEX 0x7FFF
+#define RMC_MULTICAST_INDEX 0x7FFE
+#define RMC_LISTEN_INDEX 0x7FFD
 
 #define RMC_CONNECTION_MODE_CLOSED 0
 #define RMC_CONNECTION_MODE_CONNECTING 1
 #define RMC_CONNECTION_MODE_CONNECTED 2
 
-typedef int32_t rmc_index_t;
+typedef uint16_t rmc_index_t;
 typedef uint16_t rmc_poll_action_t;
 
 // Called when a new connection is created by rmc.
@@ -157,7 +157,7 @@ typedef struct rmc_action {
 //
 typedef struct rmc_connection_vector {
     // Number of elements in connections.
-    uint32_t size;
+    rmc_index_t size;
 
     // Max connection index currently in use.
     rmc_index_t max_connection_ind;  
@@ -281,7 +281,7 @@ typedef struct rmc_pub_context {
 } rmc_pub_context_t;
 
 
-RMC_LIST(rmc_index_list, rmc_index_node, int32_t) 
+RMC_LIST(rmc_index_list, rmc_index_node, rmc_index_t) 
 typedef rmc_index_list rmc_index_list_t;
 typedef rmc_index_node rmc_index_node_t;
 
@@ -395,6 +395,9 @@ typedef struct rmc_sub_context {
                          in_port_t listen_port,
                          rmc_node_id_t node_id);
 
+    // FIXME: We need an unsubsribe callback to be invoked when a connection
+    //        to a publisher has been shut down.
+   
     // Called to alloc memory for incoming data.
     // that needs to be processed.
     void* (*payload_alloc)(payload_len_t payload_len,
@@ -587,7 +590,7 @@ extern int rmc_pub_queue_packet(rmc_pub_context_t* ctx,
                                 uint8_t announce_flag);
 
 extern uint32_t rmc_pub_queue_length(rmc_pub_context_t* ctx);
-extern uint32_t rmc_pub_get_max_subscriber_count(rmc_pub_context_t* ctx);
+extern rmc_index_t rmc_pub_get_max_subscriber_count(rmc_pub_context_t* ctx);
 extern uint32_t rmc_pub_get_subscriber_count(rmc_pub_context_t* ctx);
 extern int rmc_pub_get_subscriber_actions(rmc_pub_context_t* ctx,
                                           rmc_action_t* action_vec,
@@ -617,11 +620,11 @@ extern int rmc_sub_deactivate_context(rmc_sub_context_t* context);
 
 extern int rmc_sub_close_connection(rmc_sub_context_t* ctx, rmc_index_t s_ind);
 
-extern int rmc_sub_set_subscriber_callback(rmc_sub_context_t* context,
-                                           void (*subscribe_cb)(struct rmc_sub_context* ctx,
-                                                                uint32_t listen_ip,
-                                                                in_port_t listen_port,
-                                                                rmc_node_id_t node_id));
+extern int rmc_sub_set_subscribe_callback(rmc_sub_context_t* context,
+                                          void (*subscribe_cb)(struct rmc_sub_context* ctx,
+                                                               uint32_t listen_ip,
+                                                               in_port_t listen_port,
+                                                               rmc_node_id_t node_id));
 
 extern int rmc_sub_set_announce_callback(rmc_sub_context_t* context,
                                          uint8_t (*announce_cb)(struct rmc_sub_context* ctx,
@@ -704,8 +707,8 @@ extern int rmc_sub_packet_interval_acknowledged(rmc_sub_context_t* context,
                                                 sub_pid_interval_t* interval);
 
 extern rmc_index_t rmc_sub_packet_connection(sub_packet_t* packet);
-extern uint32_t rmc_sub_get_max_publisher_count(rmc_sub_context_t* ctx);
-extern uint32_t rmc_sub_get_publisher_count(rmc_sub_context_t* ctx);
+extern rmc_index_t rmc_sub_get_max_publisher_count(rmc_sub_context_t* ctx);
+extern rmc_index_t rmc_sub_get_publisher_count(rmc_sub_context_t* ctx);
 extern int rmc_sub_get_publisher_actions(rmc_sub_context_t* ctx,
                                          rmc_action_t* action_vec,
                                          uint32_t action_vec_size,
@@ -782,7 +785,7 @@ extern int rmc_conn_process_accept(int listen_descriptor,
 
 extern int rmc_conn_get_pending_send_length(rmc_connection_t* conn, payload_len_t* result);
 extern int rmc_conn_get_max_index_in_use(rmc_connection_vector_t* conn_vec, rmc_index_t *result);
-extern int rmc_conn_get_vector_size(rmc_connection_vector_t* conn_vec, uint32_t *result);
+extern int rmc_conn_get_vector_size(rmc_connection_vector_t* conn_vec, rmc_index_t *result);
 extern int rmc_conn_get_active_connection_count(rmc_connection_vector_t* conn_vec, rmc_index_t *result);
 extern int rmc_conn_get_active_connections(rmc_connection_vector_t* conn_vec,
                                            rmc_action_t* action_vec,

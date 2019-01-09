@@ -40,6 +40,9 @@ static int _descriptor(rmc_pub_context_t* ctx,
     case RMC_LISTEN_INDEX:
         return ctx->listen_descriptor;
 
+    case RMC_NIL_INDEX:
+        return -1;
+
     default:
         return ctx->conn_vec.connections[index].descriptor;
 
@@ -74,7 +77,7 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
     while(nfds--) {
         int res = 0;
         uint8_t op_res = 0;
-        rmc_index_t c_ind = events[nfds].data.u32;
+        rmc_index_t c_ind = (rmc_index_t) events[nfds].data.u32;
 
         RMC_LOG_INDEX_DEBUG(c_ind,
                             "pub_poll_wait(%d)%s%s%s",

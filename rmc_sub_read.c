@@ -17,7 +17,7 @@ static int decode_unsubscribed_multicast(rmc_sub_context_t* ctx,
                                          packet_header_t* pack_hdr,
                                          uint8_t* payload)
 {
-    int sock_ind = 0;
+    rmc_index_t sock_ind = 0;
     int res = 1;
 
     if (pack_hdr->pid) {

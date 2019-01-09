@@ -199,7 +199,7 @@ void rmc_log(int log_level, const char* func, const char* file, int line, int in
     }
 
     switch(index) {
-    case RMC_UNUSED_INDEX:
+    case RMC_NIL_INDEX:
         strcpy(index_str, "     ");
         break;
 

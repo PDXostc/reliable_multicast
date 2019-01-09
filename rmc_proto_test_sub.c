@@ -61,6 +61,10 @@ static int _descriptor(rmc_sub_context_t* ctx,
     case RMC_MULTICAST_INDEX:
         return ctx->mcast_recv_descriptor;
 
+    case RMC_NIL_INDEX:
+        return -1;
+
+
     default:
         return ctx->conn_vec.connections[index].descriptor;
 
@@ -288,7 +292,7 @@ static int process_events(rmc_sub_context_t* ctx,
     while(nfds--) {
         int res = 0;
         uint8_t op_res = 0;
-        rmc_index_t c_ind = events[nfds].data.u32;
+        rmc_index_t c_ind = (rmc_index_t) events[nfds].data.u32;
 
         RMC_LOG_INDEX_DEBUG(c_ind, "%d - %s%s%s",
                             _descriptor(ctx, c_ind),

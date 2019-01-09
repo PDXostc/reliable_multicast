@@ -32,7 +32,7 @@ rmc_connection_t* rmc_conn_find_by_address(rmc_connection_vector_t* conn_vec,
 //    char have_addr_str[80]; 
 
     // Do we have any connections in use at all?
-    if (!conn_vec || conn_vec->max_connection_ind == -1)
+    if (!conn_vec || conn_vec->max_connection_ind == RMC_NIL_INDEX)
         return 0;
     
 //    strcpy(want_addr_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(remote_address) }));
@@ -79,7 +79,7 @@ rmc_connection_t* rmc_conn_find_by_node_id(rmc_connection_vector_t* conn_vec,
     rmc_index_t ind = 0;
 
     // Do we have any connections in use at all?
-    if (!conn_vec || conn_vec->max_connection_ind == -1)
+    if (!conn_vec || conn_vec->max_connection_ind == RMC_NIL_INDEX)
         return 0;
     
 
@@ -101,7 +101,8 @@ static rmc_index_t _get_free_slot(rmc_connection_vector_t* conn_vec)
 
     while(ind < conn_vec->size) {
         if (conn_vec->connections[ind].descriptor == -1) {
-            if (conn_vec->max_connection_ind < ind)
+            if (conn_vec->max_connection_ind < ind ||
+                conn_vec->max_connection_ind == RMC_NIL_INDEX)
                 conn_vec->max_connection_ind = ind;
 
             RMC_LOG_DEBUG("Allocating slot %d. max is %d", ind, conn_vec->max_connection_ind);
@@ -110,7 +111,7 @@ static rmc_index_t _get_free_slot(rmc_connection_vector_t* conn_vec)
         ++ind;
     }
 
-    return -1;
+    return RMC_NIL_INDEX;
 }
 
 static void _reset_max_connection_ind(rmc_connection_vector_t* conn_vec)
@@ -123,7 +124,8 @@ static void _reset_max_connection_ind(rmc_connection_vector_t* conn_vec)
             return;
         }
     }
-    conn_vec->max_connection_ind = ind;
+    // No connections left.
+    conn_vec->max_connection_ind = RMC_NIL_INDEX;
     return;
 }
 
@@ -149,11 +151,11 @@ void rmc_conn_init_connection_vector(rmc_connection_vector_t* conn_vec,
                                       rmc_poll_modify_cb_t poll_modify,
                                       rmc_poll_remove_cb_t poll_remove)
 {
-    uint32_t ind = 0;
+    rmc_index_t ind = 0;
     
     // Translate byte size to element count.
     conn_vec->size = elem_count;
-    conn_vec->max_connection_ind = -1;
+    conn_vec->max_connection_ind = RMC_NIL_INDEX;;
     conn_vec->active_connection_count = 0;
     conn_vec->connections = (rmc_connection_t*) buffer;
     conn_vec->poll_add = poll_add;
@@ -239,7 +241,7 @@ int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
                                     rmc_node_id_t node_id, 
                                     rmc_index_t* result_index)
 {
-    rmc_index_t c_ind = -1;
+    rmc_index_t c_ind = RMC_NIL_INDEX;
     int res = 0;
     int err = 0;
     struct sockaddr_in sock_addr;
@@ -254,7 +256,7 @@ int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
 
     // Find a free slot.
     c_ind = _get_free_slot(conn_vec);
-    if (c_ind == -1)
+    if (c_ind == RMC_NIL_INDEX)
         return ENOMEM;
 
     
@@ -344,7 +346,7 @@ int rmc_conn_process_accept(int listen_descriptor,
     // Find a free slot.
     c_ind = _get_free_slot(conn_vec);
 
-    if (c_ind == -1)
+    if (c_ind == RMC_NIL_INDEX)
         return ENOMEM;
 
     conn_vec->connections[c_ind].descriptor = accept4(listen_descriptor,
@@ -466,7 +468,7 @@ int rmc_conn_get_pending_send_length(rmc_connection_t* conn, payload_len_t* resu
     return 0;
 }
 
-int rmc_conn_get_vector_size(rmc_connection_vector_t* conn_vec, uint32_t *result)
+int rmc_conn_get_vector_size(rmc_connection_vector_t* conn_vec, rmc_index_t *result)
 {
     if (!conn_vec || !result)
         return EINVAL;

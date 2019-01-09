@@ -19,7 +19,7 @@
 #include <signal.h>
 
 #include "rmc_list_template.h"
-RMC_LIST_IMPL(rmc_index_list, rmc_index_node, int32_t) 
+RMC_LIST_IMPL(rmc_index_list, rmc_index_node, rmc_index_t) 
 
 // =============
 // CONTEXT MANAGEMENT
@@ -300,9 +300,9 @@ rmc_node_id_t rmc_sub_node_id(rmc_sub_context_t* ctx)
     return ctx->node_id;
 }
 
-uint32_t rmc_sub_get_max_publisher_count(rmc_sub_context_t* ctx)
+rmc_index_t rmc_sub_get_max_publisher_count(rmc_sub_context_t* ctx)
 {
-    uint32_t res = 0;
+    rmc_index_t res = 0;
 
     if (!ctx)
         return 0;
@@ -311,9 +311,9 @@ uint32_t rmc_sub_get_max_publisher_count(rmc_sub_context_t* ctx)
     return res;
 }
 
-uint32_t rmc_sub_get_publisher_count(rmc_sub_context_t* ctx)
+rmc_index_t rmc_sub_get_publisher_count(rmc_sub_context_t* ctx)
 {
-    uint32_t res = 0;
+    rmc_index_t res = 0;
 
     if (!ctx)
         return 0;

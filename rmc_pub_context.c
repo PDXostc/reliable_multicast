@@ -389,9 +389,9 @@ int rmc_pub_set_user_data(rmc_pub_context_t* ctx, user_data_t user_data)
     return 0;
 }
 
-uint32_t rmc_pub_get_max_subscriber_count(rmc_pub_context_t* ctx)
+rmc_index_t rmc_pub_get_max_subscriber_count(rmc_pub_context_t* ctx)
 {
-    uint32_t res = 0;
+    rmc_index_t res = 0;
 
     if (!ctx)
         return 0;
@@ -402,7 +402,7 @@ uint32_t rmc_pub_get_max_subscriber_count(rmc_pub_context_t* ctx)
 
 uint32_t rmc_pub_get_subscriber_count(rmc_pub_context_t* ctx)
 {
-    uint32_t res = 0;
+    rmc_index_t res = 0;
 
     if (!ctx)
         return 0;

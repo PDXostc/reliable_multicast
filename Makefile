@@ -50,10 +50,13 @@ TEST_TARGET=rmc_test
 WIRESHARK_TARGET=rmc_wireshark_plugin.so
 
 CFLAGS = -ggdb -fpic
-.PHONY: all clean etags
+.PHONY: all clean etags print_obj
 
 
 all: $(LIB_TARGET) $(LIB_SO_TARGET) $(TEST_TARGET)  etags
+
+print_obj:
+	@echo $(patsubst %,${CURDIR}/%, $(OBJ))
 
 wireshark: $(WIRESHARK_TARGET)
 
