@@ -181,7 +181,7 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
         // Check that packet is consecutive.
         if (current != expect[node_id].max_received + 1) {
             RMC_LOG_INDEX_FATAL(index,
-                                "ContextID [%u] Wanted[%lu] Got[%lu]",
+                                "ContextID [%u] Wanted packet[%lu] Got[%lu]",
                                 node_id, expect[node_id].max_received + 1, current);
             exit(255);
         }
@@ -249,6 +249,7 @@ static int process_incoming_packet(rmc_sub_context_t* ctx,
 
 
     while(pack_ind < pack->payload_len) {
+        RMC_LOG_DEBUG(
         if (!process_incoming_signal(ctx, sub_packet_user_data(pack).u32, pack->payload + pack_ind, expect, expect_sz))
             return 0;
 
@@ -335,7 +336,6 @@ void test_rmc_proto_sub(char* mcast_group_addr,
     int rec_ind = 0;
     int epollfd = -1;
     pid_t sub_pid = 0;
-    user_data_t ud = { .u64 = 0 };
     int mode = 0;
     int ind = 0;
     usec_timestamp_t timeout_ts = 0;
@@ -389,7 +389,6 @@ void test_rmc_proto_sub(char* mcast_group_addr,
     while(1) {
         sub_packet_t* pack = 0;
         packet_id_t first_pid = 0;
-        packet_id_t last_pid = 0;
         usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
 
         rmc_sub_timeout_get_next(ctx, &timeout_ts);
@@ -413,7 +412,6 @@ void test_rmc_proto_sub(char* mcast_group_addr,
             if (!first_pid)
                 first_pid = pack->pid;
 
-            last_pid = pack->pid;
             if (!process_incoming_packet(ctx, pack, expect, node_id_map_size)) {
                 do_exit = 1;
                 break;
