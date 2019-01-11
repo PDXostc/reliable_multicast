@@ -109,6 +109,9 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
 
     // FIXME: Better memory management
     ctx->publishers = malloc(sizeof(sub_publisher_t) * conn_vec_size);
+
+    RMC_LOG_DEBUG("Subscriber Context init. node_id[%u] mcast_group[%s:%d] user_data[%u]",
+                  ctx->node_id, mcast_group_addr, multicast_port, user_data.u32);
     return 0;
 }
 
