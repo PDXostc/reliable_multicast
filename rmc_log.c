@@ -177,7 +177,7 @@ const char* rmc_index_color(int index)
     }
 }
 
-void rmc_log(int log_level, const char* func, const char* file, int line, int index, const char* fmt, ...)
+void rmc_log(int log_level, const char* func, const char* file, int line, uint16_t index, const char* fmt, ...)
 {
     const char* color = 0;
     const char* tag = 0;

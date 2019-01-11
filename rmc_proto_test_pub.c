@@ -8,7 +8,11 @@
 #include "rmc_proto_test_common.h"
 #include <stdlib.h>
 #include "rmc_log.h"
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
+  
 
 // Maximum number of subscribers an rmc_pub_context_t can have.
 #define RMC_MAX_CONNECTIONS 16
@@ -203,9 +207,12 @@ void test_rmc_proto_pub(char* mcast_group_addr,
 
     rmc_pub_set_subscriber_connect_callback(ctx,
                                             lambda(uint8_t, (rmc_pub_context_t*ctx,
-                                                             char* remote_addr,
+                                                             uint32_t remote_addr,
                                                              in_port_t remote_port) {
-                                                       RMC_LOG_INFO("Subscriber [%s:%d] connected", remote_addr, remote_port); 
+                                                       char* addr_str = inet_ntoa( (struct in_addr) { .s_addr = htonl( remote_addr) });
+                                                       RMC_LOG_INFO("Subscriber [%s:%d] connected",
+                                                                    addr_str,
+                                                                    remote_port); 
                                                        if (!subscriber_count)
                                                            rmc_log_set_start_time();
                                                            
@@ -216,9 +223,12 @@ void test_rmc_proto_pub(char* mcast_group_addr,
 
     rmc_pub_set_subscriber_disconnect_callback(ctx,
                                                lambda(void, (rmc_pub_context_t*ctx,
-                                                             char* remote_addr,
+                                                             uint32_t remote_addr,
                                                              in_port_t remote_port) {
-                                                          RMC_LOG_INFO("Subscriber %s:%d disconnected", remote_addr, remote_port);
+                                                          char* addr_str = inet_ntoa( (struct in_addr) { .s_addr = htonl( remote_addr) });
+                                                          RMC_LOG_INFO("Subscriber [%s:%d] disconnected",
+                                                                       addr_str,
+                                                                       remote_port); 
                                                           subscriber_count--;
                                                           return;
                                                       }));

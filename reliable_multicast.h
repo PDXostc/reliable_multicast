@@ -252,12 +252,12 @@ typedef struct rmc_pub_context {
     // If this subscriber is to be accepted, the callback shall return 1
     // If this subscriber is to be rejected, the callback shall return 0
     uint8_t (*subscriber_connect_cb)(struct rmc_pub_context* ctx,
-                                     char* remote_ip, // "1.2.3.4"
+                                     uint32_t remote_ip, // In host format
                                      in_port_t remote_port);
 
     // Callback invoked when a subscriber disconnects.
     void (*subscriber_disconnect_cb)(struct rmc_pub_context* ctx,
-                                     char* remote_ip, // "1.2.3.4"
+                                     uint32_t remote_ip,  // In host format
                                      in_port_t remote_port);   // In host format.
 
     // Callback invoked when a control message is received from the subscriber.
@@ -387,13 +387,12 @@ typedef struct rmc_sub_context {
     //
     // node_id is the ID setup by the publisher when rmc_pub_init_context() was called
     //
-    //
-    // If subscribe_cb is not setup using rmc_sub_set_subscribe_callback(),
+    // If subscribtion_complete_cb is not setup using rmc_sub_set_subscribe_callback(),
     // then no notification will be issued about a successful connection.
-    void (*subscribe_cb)(struct rmc_sub_context* ctx,
-                         uint32_t listen_ip,
-                         in_port_t listen_port,
-                         rmc_node_id_t node_id);
+    void (*subscribtion_complete_cb)(struct rmc_sub_context* ctx,
+                                     uint32_t listen_ip,
+                                     in_port_t listen_port,
+                                     rmc_node_id_t node_id);
 
     // FIXME: We need an unsubsribe callback to be invoked when a connection
     //        to a publisher has been shut down.
@@ -547,15 +546,15 @@ extern int rmc_pub_set_announce_callback(rmc_pub_context_t* context,
 // If callback is set to 0 (default) all incoming connections will be accepted.,
 extern int rmc_pub_set_subscriber_connect_callback(rmc_pub_context_t* ctx,
                                                    uint8_t (*connect_cb)(struct rmc_pub_context* ctx,
-                                                                             char* remote_ip, // "1.2.3.4"
-                                                                             in_port_t remote_port));
+                                                                         uint32_t remote_ip,
+                                                                         in_port_t remote_port));
 
 // Set callback to be invoked when subscriber disconnects.
 // Return 1 if connection is allowed. 0 if rejected.
 // If callback is set to 0 (default) all incoming connections will be accepted.,
 extern int rmc_pub_set_subscriber_disconnect_callback(rmc_pub_context_t* ctx,
                                                       void (*disconnect_cb)(struct rmc_pub_context* ctx,
-                                                                            char* remote_ip, // "1.2.3.4"
+                                                                            uint32_t remote_ip,
                                                                             in_port_t remote_port));
 
 
@@ -620,19 +619,21 @@ extern int rmc_sub_deactivate_context(rmc_sub_context_t* context);
 
 extern int rmc_sub_close_connection(rmc_sub_context_t* ctx, rmc_index_t s_ind);
 
-extern int rmc_sub_set_subscribe_callback(rmc_sub_context_t* context,
-                                          void (*subscribe_cb)(struct rmc_sub_context* ctx,
-                                                               uint32_t listen_ip,
-                                                               in_port_t listen_port,
-                                                               rmc_node_id_t node_id));
+extern int rmc_sub_set_subscription_complete_callback(rmc_sub_context_t* context,
+                                                      void (*subscribtion_complete_cb)
+                                                      (struct rmc_sub_context* ctx,
+                                                       uint32_t listen_ip,
+                                                       in_port_t listen_port,
+                                                       rmc_node_id_t node_id));
 
 extern int rmc_sub_set_announce_callback(rmc_sub_context_t* context,
-                                         uint8_t (*announce_cb)(struct rmc_sub_context* ctx,
-                                                                uint32_t listen_ip,
-                                                                in_port_t listen_port,
-                                                                rmc_node_id_t node_id,
-                                                                void* payload,
-                                                                payload_len_t payload_len));
+                                         uint8_t (*announce_cb)
+                                         (struct rmc_sub_context* ctx,
+                                          uint32_t listen_ip,
+                                          in_port_t listen_port,
+                                          rmc_node_id_t node_id,
+                                          void* payload,
+                                          payload_len_t payload_len));
 
 // Set callback to be invoked when a packet becomes available for processing using
 // rmc_sub_get_next_dispatch_ready() and rmc_sub_packet_dispatched() calls.

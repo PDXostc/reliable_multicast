@@ -299,7 +299,17 @@ int rmc_sub_write(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
             *op_res = RMC_COMPLETE_CONNECTION;
 
         sub_init_publisher(&ctx->publishers[s_ind]);
-        rmc_conn_complete_connection(&ctx->conn_vec, conn);
+        res = rmc_conn_complete_connection(&ctx->conn_vec, conn);
+        if (res) {
+            RMC_LOG_INDEX_INFO(s_ind, "Failed to complete connection: %s", strerror(errno));
+            rmc_conn_close_connection(&ctx->conn_vec, conn->connection_index); 
+            return res;
+        }
+        RMC_LOG_INDEX_ERROR(s_ind, "Yeah: %p", ctx->subscribtion_complete_cb);
+        if (ctx->subscribtion_complete_cb) {
+            RMC_LOG_INDEX_DEBUG(s_ind, "Invoking subscription complete callback");
+            (*ctx->subscribtion_complete_cb)(ctx, conn->remote_address, conn->remote_port, conn->node_id);
+        }
         return 0;
     }
 

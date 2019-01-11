@@ -168,7 +168,7 @@ static int process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res, uin
     // Drop the recived packet
 
     if (!conn || conn->mode == RMC_CONNECTION_MODE_CONNECTING) {
-        RMC_LOG_INDEX_DEBUG(conn?conn->connection_index:-1, "mode[%d]", conn?conn->mode:-1);
+        RMC_LOG_INDEX_DEBUG(conn?conn->connection_index:RMC_NIL_INDEX, "mode[%d]", conn?conn->mode:-1);
         res = decode_unsubscribed_multicast(ctx,
                                             pack_hdr,
                                             data);

@@ -61,9 +61,7 @@ int rmc_pub_close_connection(rmc_pub_context_t* ctx, rmc_index_t s_ind)
     // Disconnect callback, if specified through
     // rmc_pub_set_subscriber_connect_callback().
     if (ctx->subscriber_disconnect_cb) {
-        char remote_addr[256];
-        strcpy(remote_addr, inet_ntoa( (struct in_addr) {.s_addr = htonl(conn->remote_address) }));
-        (*ctx->subscriber_disconnect_cb)(ctx, remote_addr, conn->remote_port);
+        (*ctx->subscriber_disconnect_cb)(ctx, conn->remote_address, conn->remote_port);
     }
 
     rmc_conn_close_connection(&ctx->conn_vec, s_ind);
@@ -116,11 +114,8 @@ int rmc_pub_read(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
         *op_res = RMC_READ_ACCEPT;
         // Check if we should accept subscriber
         if (ctx->subscriber_connect_cb) {
-            char remote_addr[256];
-            
-            strcpy(remote_addr, inet_ntoa( (struct in_addr) {.s_addr = htonl(conn->remote_address) }));
-
-            if (!(*ctx->subscriber_connect_cb)(ctx, remote_addr, conn->remote_port))
+            RMC_LOG_COMMENT("Invoking callback for new subscriber connection");
+            if (!(*ctx->subscriber_connect_cb)(ctx, conn->remote_address, conn->remote_port))
                 rmc_pub_close_connection(ctx, s_ind);
         }
 

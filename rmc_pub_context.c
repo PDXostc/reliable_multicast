@@ -320,8 +320,8 @@ int rmc_pub_set_announce_callback(rmc_pub_context_t* ctx,
 
 int rmc_pub_set_subscriber_connect_callback(rmc_pub_context_t* ctx,
                                             uint8_t (*connect_cb)(struct rmc_pub_context* ctx,
-                                                                             char* remote_ip, // "1.2.3.4"
-                                                                             uint16_t remote_port))
+                                                                  uint32_t remote_ip,
+                                                                  uint16_t remote_port))
 {
     if (!ctx)
         return EINVAL;
@@ -335,7 +335,7 @@ int rmc_pub_set_subscriber_connect_callback(rmc_pub_context_t* ctx,
 
 int rmc_pub_set_subscriber_disconnect_callback(rmc_pub_context_t* ctx,
                                                void (*disconnect_cb)(struct rmc_pub_context* ctx,
-                                                                     char* remote_ip, // "1.2.3.4"
+                                                                     uint32_t remote_ip,
                                                                      uint16_t remote_port))
 {
     if (!ctx)
