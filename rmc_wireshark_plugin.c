@@ -25,12 +25,13 @@ const gchar plugin_release[] = "2.6";
 
 static dissector_handle_t handle_rmc_multicast;
 static dissector_handle_t handle_rmc_tcp;
-
+static dissector_table_t tcp_port_dissector_table = 0;
 static int proto_rmc = -1;
-static int proto_rmc_packet = -1;
-static int proto_rmc_resend = -1;
-static int proto_rmc_ack_intv = -1;
+//static int proto_rmc_packet = -1;
+//static int proto_rmc_resend = -1;
+//static int proto_rmc_ack_intv = -1;
 static int proto_rmc_control = -1;
+//static int proto_rmc_ctl_msg = -1;
 
 static int hf_rmc_node_id = -1;
 static int hf_rmc_payload_len = -1;
@@ -42,6 +43,8 @@ static int hf_rmc_packet_payload = -1;
 static int hf_rmc_control_command = -1;
 static int hf_rmc_ack_intv_first_pid = -1;
 static int hf_rmc_ack_intv_last_pid = -1;
+static int hf_rmc_ctl_msg_payload_len = -1;
+static int hf_rmc_ctl_msg_payload = -1;
 
 void plugin_register(void);
 
@@ -49,6 +52,7 @@ static int ett_rmc = -1;
 static int ett_rmc_control = -1;
 static int ett_rmc_packet = -1;
 static int ett_rmc_ack_intv = -1;
+static int ett_rmc_ctl_msg = -1;
 static int ett_rmc_resend = -1;
 
 static void hex_dump(tvbuff_t* tvb, int start, int stop)
@@ -68,7 +72,6 @@ static void hex_dump(tvbuff_t* tvb, int start, int stop)
         else
             putchar('\n');
     }
-
 }
 
 static gint dissect_rmc_ack_interval(proto_tree* tree, tvbuff_t *tvb, gint offset,
@@ -77,11 +80,11 @@ static gint dissect_rmc_ack_interval(proto_tree* tree, tvbuff_t *tvb, gint offse
     proto_item *ti = 0;
     proto_tree *rmc_ack_intv_tree = 0;
 
-    ti = proto_tree_add_item(tree, proto_rmc_ack_intv, tvb, offset, -1, ENC_NA);
+    ti = proto_tree_add_item(tree, proto_rmc_control, tvb, offset, -1, ENC_NA);
     rmc_ack_intv_tree = proto_item_add_subtree(ti, ett_rmc_ack_intv);
 
     // Do we have header data?
-    if (tvb_captured_length_remaining(tvb, 0) < 16) {
+    if (tvb_captured_length_remaining(tvb, offset) < 16) {
 //        printf("Partial ack interval. Wanted [16]. Got [%d]\n", tvb_captured_length_remaining(tvb, offset));
         return 0;
     }
@@ -95,6 +98,38 @@ static gint dissect_rmc_ack_interval(proto_tree* tree, tvbuff_t *tvb, gint offse
 
     return 16;
 }
+
+static gint dissect_rmc_ctl_msg(proto_tree* tree, tvbuff_t *tvb, gint offset,
+                                u_int16_t* res_payload_len)
+{
+    proto_item *ti = 0;
+    proto_tree *rmc_ctl_msg_tree = 0;
+    u_int16_t payload_len = 0;
+
+    *res_payload_len = 0;
+    ti = proto_tree_add_item(tree, proto_rmc_control, tvb, offset, -1, ENC_NA);
+    rmc_ctl_msg_tree = proto_item_add_subtree(ti, ett_rmc_ctl_msg);
+
+    // Do we have header data?
+    if (tvb_captured_length_remaining(tvb, offset) < 2) {
+        return 0;
+    }
+
+    // Payload len
+    payload_len = tvb_get_guint16(tvb, offset, ENC_LITTLE_ENDIAN);
+
+    if (tvb_captured_length_remaining(tvb, offset + 2) < payload_len) {
+        return 0;
+    }
+
+    proto_tree_add_item(rmc_ctl_msg_tree, hf_rmc_ctl_msg_payload_len, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+    offset += 2;
+    proto_tree_add_item(rmc_ctl_msg_tree, hf_rmc_ctl_msg_payload, tvb, offset, payload_len, ENC_NA);
+
+    *res_payload_len = payload_len;
+    return 2 + payload_len;
+}
+
 
 static guint get_rmc_packet_len(packet_info *pinfo, tvbuff_t *tvb,  int offset, void *data)
 {
@@ -159,11 +194,26 @@ static int dissect_packet_offset(tvbuff_t *tvb, packet_info *pinfo, proto_tree *
     proto_tree_add_item(rmc_tree, hf_rmc_packet_payload, tvb, offset, payload_len, ENC_NA);
 
     col_clear(pinfo->cinfo, COL_INFO);
-    if (!pid)
+    if (!pid) {
         col_add_fstr(pinfo->cinfo,
                      COL_INFO,
                      "Pub ctx_id[0x%.8X] ctl_addr[%s:%d] len[%d] - announce",
                      node_id, ip, port, payload_len);
+
+        // Add the rmc control sub dissector to this port, it is not already there.
+
+        // Do we need to dig out the tcp.port dissector table?
+        if (tcp_port_dissector_table == 0) {
+            tcp_port_dissector_table = find_dissector_table("tcp.port");
+        }
+
+        if (tcp_port_dissector_table) {
+            if (!dissector_get_uint_handle(tcp_port_dissector_table, port)) {
+                dissector_add_uint("tcp.port", port, handle_rmc_tcp);
+            } else {
+            }
+        }
+    }
     else
         col_add_fstr(pinfo->cinfo,
                      COL_INFO,
@@ -223,7 +273,7 @@ static int dissect_rmc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
             if (!cval || !*cval)
                 col_add_fstr(pinfo->cinfo,
                          COL_INFO,
-                         "SUB->PUB ack [%lu-%lu] ",
+                         "Sub->Pub ack [%lu-%lu] ",
                          first_pid, last_pid);
             else
                 col_append_fstr(pinfo->cinfo,
@@ -235,6 +285,23 @@ static int dissect_rmc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
 
         case RMC_CMD_PACKET:
             tcp_dissect_pdus(tvb, pinfo, rmc_tree, 1, 15, get_rmc_packet_len, dissect_rmc_packet, &resend_count);
+            break;
+
+        case RMC_CMD_CONTROL_MESSAGE:
+            proto_tree_add_item(rmc_tree, hf_rmc_control_command, tvb, offset, 1, ENC_NA);
+            res = dissect_rmc_ctl_msg(rmc_tree, tvb, offset + 1, &payload_len);
+            cval = col_get_text(pinfo->cinfo, COL_INFO);
+            if (!cval || !*cval)
+                col_add_fstr(pinfo->cinfo,
+                         COL_INFO,
+                         "Ctl Msg %d bytes. ",
+                         payload_len);
+            else
+                col_append_fstr(pinfo->cinfo,
+                                COL_INFO,
+                                "Ctl Nsg %d bytes. ",
+                                payload_len);
+                
             break;
 
         default:
@@ -252,7 +319,7 @@ static int dissect_rmc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
     }
 
     if (resend_count) 
-        col_add_fstr(pinfo->cinfo, COL_INFO, "PUB->SUB resend %d packets", resend_count);
+        col_add_fstr(pinfo->cinfo, COL_INFO, "Pub->Sub resend %d packets", resend_count);
 
 
     return tvb_captured_length(tvb);
@@ -341,6 +408,20 @@ void plugin_register_rmc(void)
         },
 
     };
+    static hf_register_info hf_ctl_msg[] = {
+        { &hf_rmc_ctl_msg_payload_len,
+          { "payload len", "rmc.control.message.payload_len",
+            FT_UINT32, BASE_DEC,
+            NULL, 0x0,
+            "Payload Length", HFILL }
+        },
+        { &hf_rmc_ctl_msg_payload,
+          { "payload", "rmc.control.message.payload",
+            FT_STRING, BASE_NONE,
+            NULL, 0x0,
+            "Packet payload", HFILL }
+        },
+    };
     
 
    /* Setup protocol subtree array */
@@ -348,31 +429,28 @@ void plugin_register_rmc(void)
         &ett_rmc,
         &ett_rmc_packet,
         &ett_rmc_ack_intv,
+        &ett_rmc_ctl_msg,
         &ett_rmc_control
     };
 
     
-    proto_rmc = proto_register_protocol("Reliable Multicast - Data", "RMC", "rmc");
+    proto_rmc = proto_register_protocol("Reliable Multicast - Data", "RMC", "rmc_data");
     proto_register_field_array(proto_rmc, hf, array_length(hf));
     handle_rmc_multicast = create_dissector_handle(dissect_packet_multicast, proto_rmc);
 
-    proto_rmc_packet = proto_register_protocol("Packet", "RMC packet", "rmc.packet");
-    proto_register_field_array(proto_rmc_packet, hf_packet, array_length(hf_packet));
-
+//    proto_rmc_packet = proto_register_protocol("Packet", "RMC packet", "rmc.packet");
+//    proto_register_field_array(proto_rmc_packet, hf_packet, array_length(hf_packet));
+    proto_register_field_array(proto_rmc, hf_packet, array_length(hf_packet));
 
     dissector_add_uint("udp.port", RMC_UDP_PORT, handle_rmc_multicast);
 
-
-    proto_rmc_control = proto_register_protocol("Reliable Multicast - Control", "RMC Control", "rmc.control");
+    proto_rmc_control = proto_register_protocol("Reliable Multicast - Control", "RMC Control", "rmc_ctl");
     proto_register_field_array(proto_rmc_control, hf_control, array_length(hf_control));
     handle_rmc_tcp = create_dissector_handle(dissect_rmc_tcp, proto_rmc_control);
 
-//    proto_rmc_resend = proto_register_protocol("Packet resend", "Resend UDP packets via tcp", "rmc.control.resend");
+    proto_register_field_array(proto_rmc_control, hf_ack_interval, array_length(hf_ack_interval));
+    proto_register_field_array(proto_rmc_control, hf_ctl_msg, array_length(hf_ctl_msg));
 
-    proto_rmc_ack_intv = proto_register_protocol("Interval Acknowledgement", "Interval Ack", "rmc.control.ack_interval");
-    proto_register_field_array(proto_rmc_ack_intv, hf_ack_interval, array_length(hf_ack_interval));
-
-    dissector_add_uint("tcp.port", RMC_TCP_PORT, handle_rmc_tcp);
 
     proto_register_subtree_array(ett, array_length(ett));
 }
