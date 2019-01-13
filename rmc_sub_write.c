@@ -155,7 +155,7 @@ int rmc_sub_write_control_message(rmc_sub_context_t* ctx,
         if (!ctx || !conn  || !payload || !payload_len)
             return EINVAL;
         
-        if (!conn->mode != RMC_CONNECTION_MODE_CONNECTED) {
+        if (conn->mode != RMC_CONNECTION_MODE_CONNECTED) {
             RMC_LOG_INDEX_WARNING(conn->connection_index, "Socket not connected. [%d] Cannot write control message.",
                 conn->mode);
             return ENOTCONN;
@@ -310,9 +310,9 @@ int rmc_sub_write(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
             rmc_conn_close_connection(&ctx->conn_vec, conn->connection_index); 
             return res;
         }
-        if (ctx->subscribtion_complete_cb) {
+        if (ctx->subscription_complete_cb) {
             RMC_LOG_INDEX_DEBUG(s_ind, "Invoking subscription complete callback");
-            (*ctx->subscribtion_complete_cb)(ctx, conn->remote_address, conn->remote_port, conn->node_id);
+            (*ctx->subscription_complete_cb)(ctx, conn->remote_address, conn->remote_port, conn->node_id);
         }
         return 0;
     }

@@ -249,7 +249,6 @@ static int process_incoming_packet(rmc_sub_context_t* ctx,
 
 
     while(pack_ind < pack->payload_len) {
-        RMC_LOG_DEBUG(
         if (!process_incoming_signal(ctx, sub_packet_user_data(pack).u32, pack->payload + pack_ind, expect, expect_sz))
             return 0;
 

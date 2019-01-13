@@ -387,9 +387,9 @@ typedef struct rmc_sub_context {
     //
     // node_id is the ID setup by the publisher when rmc_pub_init_context() was called
     //
-    // If subscribtion_complete_cb is not setup using rmc_sub_set_subscribe_callback(),
+    // If subscription_complete_cb is not setup using rmc_sub_set_subscribe_callback(),
     // then no notification will be issued about a successful connection.
-    void (*subscribtion_complete_cb)(struct rmc_sub_context* ctx,
+    void (*subscription_complete_cb)(struct rmc_sub_context* ctx,
                                      uint32_t listen_ip,
                                      in_port_t listen_port,
                                      rmc_node_id_t node_id);
@@ -620,7 +620,7 @@ extern int rmc_sub_deactivate_context(rmc_sub_context_t* context);
 extern int rmc_sub_close_connection(rmc_sub_context_t* ctx, rmc_index_t s_ind);
 
 extern int rmc_sub_set_subscription_complete_callback(rmc_sub_context_t* context,
-                                                      void (*subscribtion_complete_cb)
+                                                      void (*subscription_complete_cb)
                                                       (struct rmc_sub_context* ctx,
                                                        uint32_t listen_ip,
                                                        in_port_t listen_port,

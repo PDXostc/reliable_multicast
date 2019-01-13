@@ -43,6 +43,46 @@ static int process_cmd_ack_interval(rmc_connection_t* conn, user_data_t user_dat
 }
 
 
+static int process_control_message(rmc_connection_t* conn, user_data_t user_data)
+{
+    cmd_control_message_t msg;
+    rmc_pub_context_t* ctx = (rmc_pub_context_t*) user_data.ptr;
+
+    // Do we have enough data?
+    if (circ_buf_in_use(&conn->read_buf) < sizeof(msg) + 1)
+        return EAGAIN;
+
+    // Read message header
+    circ_buf_read_offset(&conn->read_buf, 1, (uint8_t*) &msg, sizeof(msg), 0);
+
+    // Do we have enough data for payload?
+    if (circ_buf_in_use(&conn->read_buf) < sizeof(msg) + 1 + msg.payload_len)
+        return EAGAIN;
+
+    RMC_LOG_INDEX_COMMENT(conn->connection_index,
+                          "process_control_message(): payload_len[%d] callback[%s]",
+                          msg.payload_len, ctx->subscriber_control_message_cb?"yes":"no");
+ 
+   // Make a callback if defined
+    if (ctx->subscriber_control_message_cb) {
+        char payload[msg.payload_len];
+
+        // Read payload.
+        circ_buf_read_offset(&conn->read_buf, 1 + sizeof(msg), (uint8_t*) payload, msg.payload_len, 0);
+
+        (*ctx->subscriber_control_message_cb)(ctx,
+                                   conn->remote_address,
+                                   conn->remote_port,
+                                   conn->node_id,
+                                   payload, msg.payload_len);
+    }
+
+    // Free it all
+    circ_buf_free(&conn->read_buf, sizeof(msg) + 1 + msg.payload_len, 0);
+    return 0;
+}
+
+
 int rmc_pub_close_connection(rmc_pub_context_t* ctx, rmc_index_t s_ind)
 {
     rmc_connection_t* conn = 0;
@@ -86,6 +126,7 @@ int rmc_pub_read(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
 
     static rmc_conn_command_dispatch_t dispatch_table[] = {
         { .command = RMC_CMD_ACK_INTERVAL, .dispatch = process_cmd_ack_interval },
+        { .command = RMC_CMD_CONTROL_MESSAGE, .dispatch = process_control_message },
         { .command = 0, .dispatch = 0 }
     };
 

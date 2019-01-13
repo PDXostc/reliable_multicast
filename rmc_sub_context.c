@@ -62,7 +62,7 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
     ctx->node_id = node_id?node_id:rand_r(&seed);
     ctx->user_data = user_data;
     ctx->announce_cb = 0;
-    ctx->subscribtion_complete_cb = 0;
+    ctx->subscription_complete_cb = 0;
     ctx->packet_ready_cb = 0;
     rmc_conn_init_connection_vector(&ctx->conn_vec,
                                     conn_vec,
@@ -266,7 +266,7 @@ int rmc_sub_set_announce_callback(rmc_sub_context_t* ctx,
 }
 
 int rmc_sub_set_subscription_complete_callback(rmc_sub_context_t* ctx,
-                                               void (*subscribtion_complete_cb)
+                                               void (*subscription_complete_cb)
                                                (struct rmc_sub_context* ctx,
                                                 uint32_t listen_ip,
                                                 in_port_t listen_port,
@@ -275,7 +275,7 @@ int rmc_sub_set_subscription_complete_callback(rmc_sub_context_t* ctx,
     if (!ctx)
         return EINVAL;
 
-    ctx->subscribtion_complete_cb = subscribtion_complete_cb;
+    ctx->subscription_complete_cb = subscription_complete_cb;
     return 0;
 }
 
