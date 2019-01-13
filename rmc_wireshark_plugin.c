@@ -161,7 +161,7 @@ static int dissect_packet_offset(tvbuff_t *tvb, packet_info *pinfo, proto_tree *
     proto_tree_add_item(rmc_tree, hf_rmc_packet_id, tvb, offset, 8, ENC_LITTLE_ENDIAN);
     offset += 8;
 
-    // Context - ID
+    // Node - ID
     node_id = tvb_get_guint32(tvb, offset, ENC_LITTLE_ENDIAN);
     proto_tree_add_item(rmc_tree, hf_rmc_node_id, tvb, offset, 4, ENC_LITTLE_ENDIAN);
     offset += 4;
@@ -365,19 +365,19 @@ void plugin_register_rmc(void)
 
     static hf_register_info hf_packet[] = {
         { &hf_rmc_packet_id,
-          { "packet id", "rmc.packet.pid",
+          { "packet id", "rmc_data.packet.pid",
             FT_UINT64, BASE_DEC,
             NULL, 0x0,
             "Packet ID", HFILL }
         },
         { &hf_rmc_packet_payload_len,
-          { "packet payload len", "rmc.packet.payload_len",
+          { "packet payload len", "rmc_data.packet.payload_len",
             FT_UINT16, BASE_DEC,
             NULL, 0x0,
             "Packet payload length", HFILL }
         },
         { &hf_rmc_packet_payload,
-          { "packet payload", "rmc.packet.payload",
+          { "packet payload", "rmc_data.packet.payload",
             FT_STRING, BASE_NONE,
             NULL, 0x0,
             "Packet payload", HFILL }
@@ -386,7 +386,7 @@ void plugin_register_rmc(void)
 
     static hf_register_info hf_control[] = {
         { &hf_rmc_control_command,
-          { "command id", "rmc.control.command",
+          { "command id", "rmc_ctl.ctl.command",
             FT_UINT8, BASE_HEX,
             VALS(command_names), 0x0,
             "Command", HFILL }
@@ -395,13 +395,13 @@ void plugin_register_rmc(void)
 
     static hf_register_info hf_ack_interval[] = {
         { &hf_rmc_ack_intv_first_pid,
-          { "first pid", "rmc.ack.first_pid",
+          { "first pid", "rmc_ctl.ack.first_pid",
             FT_UINT64, BASE_DEC,
             NULL, 0x0,
             "Last PID", HFILL }
         },
         { &hf_rmc_ack_intv_last_pid,
-          { "last pid", "rmc.ack.last_pid",
+          { "last pid", "rmc_ctl.ack.last_pid",
             FT_UINT64, BASE_DEC,
             NULL, 0x0,
             "Last PID", HFILL }
@@ -410,13 +410,13 @@ void plugin_register_rmc(void)
     };
     static hf_register_info hf_ctl_msg[] = {
         { &hf_rmc_ctl_msg_payload_len,
-          { "payload len", "rmc.control.message.payload_len",
+          { "payload len", "rmc_ctl.msg.payload_len",
             FT_UINT32, BASE_DEC,
             NULL, 0x0,
             "Payload Length", HFILL }
         },
         { &hf_rmc_ctl_msg_payload,
-          { "payload", "rmc.control.message.payload",
+          { "payload", "rmc_ctl.msg.payload",
             FT_STRING, BASE_NONE,
             NULL, 0x0,
             "Packet payload", HFILL }
