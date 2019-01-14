@@ -148,8 +148,10 @@ static int dissect_packet_offset(tvbuff_t *tvb, packet_info *pinfo, proto_tree *
     char src_addr[64];
     u_int32_t ip_numeric = 0;
     u_int16_t port = 0;
-     u_int64_t max_pid = 0;
-    col_set_str(pinfo->cinfo, COL_PROTOCOL, "RMC Packet");
+    u_int64_t max_pid = 0;
+
+//    col_set_str(pinfo->cinfo, COL_PROTOCOL, "RMC Packet");
+
 
  
     ti = proto_tree_add_item(tree, proto_rmc, tvb, 0, -1, ENC_NA);
@@ -197,7 +199,7 @@ static int dissect_packet_offset(tvbuff_t *tvb, packet_info *pinfo, proto_tree *
     if (!pid) {
         col_add_fstr(pinfo->cinfo,
                      COL_INFO,
-                     "Pub ctx_id[0x%.8X] ctl_addr[%s:%d] len[%d] - announce",
+                     "Pub node_id[0x%.8X] ctl_addr[%s:%d] len[%d] - announce",
                      node_id, ip, port, payload_len);
 
         // Add the rmc control sub dissector to this port, it is not already there.
@@ -217,7 +219,7 @@ static int dissect_packet_offset(tvbuff_t *tvb, packet_info *pinfo, proto_tree *
     else
         col_add_fstr(pinfo->cinfo,
                      COL_INFO,
-                     "Pub ctx_id[0x%.8X] ctl_addr[%s:%d] len[%d] pid[%lu]",
+                     "Pub node_id[0x%.8X] ctl_addr[%s:%d] len[%d] pid[%lu]",
                      node_id, ip, port, payload_len, pid);
 
     return offset;
@@ -225,6 +227,7 @@ static int dissect_packet_offset(tvbuff_t *tvb, packet_info *pinfo, proto_tree *
 
 static int dissect_packet_multicast(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
+    col_set_str(pinfo->cinfo, COL_PROTOCOL, "RMC Packet");
     return dissect_packet_offset(tvb, pinfo, tree, data, 0);
 }
 
@@ -250,9 +253,10 @@ static int dissect_rmc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
     u_int64_t last_pid = 0;
     gint res = 0;
     int rem = 0;
-    col_set_str(pinfo->cinfo, COL_PROTOCOL, "RMC Control Channel");
     int resend_count = 0;
     const gchar* cval = 0;
+
+    col_set_str(pinfo->cinfo, COL_PROTOCOL, "RMC Control");
 
     ti = proto_tree_add_item(tree, proto_rmc_control, tvb, 0, -1, ENC_NA);
     rmc_tree = proto_item_add_subtree(ti, ett_rmc_control);
