@@ -56,29 +56,25 @@ typedef uint16_t rmc_poll_action_t;
 
 // Called when a new connection is created by rmc.
 //
-// poll->action & RMC_POLLREAD
-// specifies that we want rmc_write() to
-// be called (with poll->connection_index as an
-// argument) when the connection can be
-// written to (asynchronously).
+// poll->action & RMC_POLLREAD specifies that we want rmc_write() to
+// be called (with poll->connection_index as an argument) when the
+// connection can be written to (asynchronously).
 //
-// poll->action & RMC_POLLWRITE
-// specifies that we want rmc_write() to
-// be called (with poll->connection_index as an
-// argument) when the connection can be
-// written to (asynchronously).
+// poll->action & RMC_POLLWRITE specifies that we want rmc_write() to
+// be called (with poll->connection_index as an argument) when the
+// connection can be written to (asynchronously).
 //
 typedef void (*rmc_poll_add_cb_t)(user_data_t user_data,
                                   int descriptor,
                                   rmc_index_t index,
                                   rmc_poll_action_t initial_action);
 
-// The poll action either needs to be re-armed 
-// in cases where polling is oneshot (epoll(2) with EPOLLONESHOT),
-// or the poll action has changed.
+// The poll action either needs to be re-armed in cases where polling
+// is oneshot (epoll(2) with EPOLLONESHOT), or the poll action has
+// changed.
 //
-// Rearming can be detected by checking if
-// old_action == rmc_connection_action(sock);
+// Rearming can be detected by checking if old_action ==
+// rmc_connection_action(sock);
 //
 typedef void (*rmc_poll_modify_cb_t)(user_data_t user_data,
                                      int descriptor,
@@ -144,12 +140,6 @@ typedef struct rmc_connection {
     in_port_t remote_port;    // In host format
     uint32_t remote_address;  // In host format
 } rmc_connection_t;
-
-// Returned by rmc_conn_get_connections
-typedef struct rmc_action {
-    int descriptor; // Socket descritor
-    rmc_poll_action_t action; // RMC_POLLWRITE | RMC_POLLREAD
-} rmc_action_t;
 
 
 // A an array of connections with its own resource management.
@@ -591,10 +581,6 @@ extern int rmc_pub_queue_packet(rmc_pub_context_t* ctx,
 extern uint32_t rmc_pub_queue_length(rmc_pub_context_t* ctx);
 extern rmc_index_t rmc_pub_get_max_subscriber_count(rmc_pub_context_t* ctx);
 extern uint32_t rmc_pub_get_subscriber_count(rmc_pub_context_t* ctx);
-extern int rmc_pub_get_subscriber_actions(rmc_pub_context_t* ctx,
-                                          rmc_action_t* action_vec,
-                                          uint32_t action_vec_size,
-                                          uint32_t* action_vec_result);
 
 extern int rmc_pub_packet_ack(rmc_pub_context_t* ctx, rmc_connection_t* conn, packet_id_t pid);
 
@@ -710,10 +696,6 @@ extern int rmc_sub_packet_interval_acknowledged(rmc_sub_context_t* context,
 extern rmc_index_t rmc_sub_packet_connection(sub_packet_t* packet);
 extern rmc_index_t rmc_sub_get_max_publisher_count(rmc_sub_context_t* ctx);
 extern rmc_index_t rmc_sub_get_publisher_count(rmc_sub_context_t* ctx);
-extern int rmc_sub_get_publisher_actions(rmc_sub_context_t* ctx,
-                                         rmc_action_t* action_vec,
-                                         uint32_t action_vec_size,
-                                         uint32_t* action_vec_result);
 
 
 // If a valid pointer, res will be set to:
@@ -788,10 +770,6 @@ extern int rmc_conn_get_pending_send_length(rmc_connection_t* conn, payload_len_
 extern int rmc_conn_get_max_index_in_use(rmc_connection_vector_t* conn_vec, rmc_index_t *result);
 extern int rmc_conn_get_vector_size(rmc_connection_vector_t* conn_vec, rmc_index_t *result);
 extern int rmc_conn_get_active_connection_count(rmc_connection_vector_t* conn_vec, rmc_index_t *result);
-extern int rmc_conn_get_active_connections(rmc_connection_vector_t* conn_vec,
-                                           rmc_action_t* action_vec,
-                                           uint32_t action_vec_size,
-                                           uint32_t* action_vec_result);
 
 
 extern int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,

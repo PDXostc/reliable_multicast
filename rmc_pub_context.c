@@ -413,13 +413,3 @@ uint32_t rmc_pub_get_subscriber_count(rmc_pub_context_t* ctx)
     return res;
 }
 
-int rmc_pub_get_subscriber_actions(rmc_pub_context_t* ctx,
-                                   rmc_action_t* action_vec,
-                                   uint32_t action_vec_size,
-                                   uint32_t* action_vec_result)
-{
-    return rmc_conn_get_active_connections(&ctx->conn_vec,
-                                           action_vec,
-                                           action_vec_size,
-                                           action_vec_result);
-}

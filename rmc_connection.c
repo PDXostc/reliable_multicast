@@ -495,37 +495,3 @@ int rmc_conn_get_vector_size(rmc_connection_vector_t* conn_vec, rmc_index_t *res
 
     return 0;
 }
-
-// Get all active connections.
-//
-int rmc_conn_get_active_connections(rmc_connection_vector_t* conn_vec,
-                                    rmc_action_t* action_vec,
-                                    uint32_t action_vec_size,
-                                    uint32_t* action_vec_result)
-{
-    rmc_index_t ind = 0;
-    rmc_index_t max_ind = 0;
-    uint32_t count = 0;
-
-    if (!conn_vec || !action_vec || !action_vec_result)
-        return EINVAL;
-
-    rmc_conn_get_max_index_in_use(conn_vec, &max_ind);
-
-    // Walk through conn_vec and fill up action_vec with info on all
-    // connections that are either established or are in progress of being established.
-    while(ind <= max_ind && count < action_vec_size) {
-
-        if (conn_vec->connections[ind].mode != RMC_CONNECTION_MODE_CLOSED) {
-            action_vec[count++] = (rmc_action_t) {
-                .descriptor = conn_vec->connections[ind].descriptor,
-                .action = conn_vec->connections[ind].action
-            };
-        }
-        ++ind;
-    }
-
-    *action_vec_result = count;
-    return 0;
-}
-

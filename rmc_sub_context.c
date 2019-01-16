@@ -326,16 +326,6 @@ rmc_index_t rmc_sub_get_publisher_count(rmc_sub_context_t* ctx)
     return res;
 }
 
-int rmc_sub_get_publisher_actions(rmc_sub_context_t* ctx,
-                                  rmc_action_t* action_vec,
-                                  uint32_t action_vec_size,
-                                  uint32_t* action_vec_result)
-{
-    return rmc_conn_get_active_connections(&ctx->conn_vec,
-                                           action_vec,
-                                           action_vec_size,
-                                           action_vec_result);
-}
 
 int rmc_sub_set_packet_ready_callback(rmc_sub_context_t* ctx,
                                       void (*packet_ready_cb)(struct rmc_sub_context* ctx))
