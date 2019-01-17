@@ -13,6 +13,7 @@
 #include "rmc_log.h"
 #include "string.h"
 #include <unistd.h>
+#include <stdlib.h>
 
 static usec_timestamp_t start_time = 0;
 
@@ -22,6 +23,16 @@ int _rmc_log_use_color_calculated = 0;
 FILE *_rmc_log_file = 0;
 
 
+// Run when the library is loaded
+static void __attribute__((constructor)) set_log_level_on_env(void)
+{
+    char* log_level = getenv("RMC_LOG_LEVEL");
+
+    if (!log_level)
+        return;
+
+    rmc_set_log_level(atoi(log_level));
+}
 
 void rmc_log_set_start_time(void)
 {
