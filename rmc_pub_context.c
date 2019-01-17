@@ -413,3 +413,15 @@ uint32_t rmc_pub_get_subscriber_count(rmc_pub_context_t* ctx)
     return res;
 }
 
+uint32_t rmc_pub_get_socket_count(rmc_pub_context_t* ctx)
+{
+    rmc_index_t res = 0;
+
+    if (!ctx)
+        return 0;
+    
+    return rmc_pub_get_subscriber_count(ctx) +
+        (ctx->mcast_send_descriptor != -1)?1:0 +
+        (ctx->listen_descriptor != -1 )?1:0;
+}
+

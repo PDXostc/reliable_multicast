@@ -581,6 +581,7 @@ extern int rmc_pub_queue_packet(rmc_pub_context_t* ctx,
 extern uint32_t rmc_pub_queue_length(rmc_pub_context_t* ctx);
 extern rmc_index_t rmc_pub_get_max_subscriber_count(rmc_pub_context_t* ctx);
 extern uint32_t rmc_pub_get_subscriber_count(rmc_pub_context_t* ctx);
+extern uint32_t rmc_pub_get_socket_count(rmc_pub_context_t* ctx);
 
 extern int rmc_pub_packet_ack(rmc_pub_context_t* ctx, rmc_connection_t* conn, packet_id_t pid);
 
@@ -696,6 +697,7 @@ extern int rmc_sub_packet_interval_acknowledged(rmc_sub_context_t* context,
 extern rmc_index_t rmc_sub_packet_connection(sub_packet_t* packet);
 extern rmc_index_t rmc_sub_get_max_publisher_count(rmc_sub_context_t* ctx);
 extern rmc_index_t rmc_sub_get_publisher_count(rmc_sub_context_t* ctx);
+extern uint32_t rmc_sub_get_socket_count(rmc_sub_context_t* ctx);
 
 
 // If a valid pointer, res will be set to:

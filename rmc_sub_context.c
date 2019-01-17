@@ -337,3 +337,14 @@ int rmc_sub_set_packet_ready_callback(rmc_sub_context_t* ctx,
     return 0;
 }
 
+uint32_t rmc_sub_get_socket_count(rmc_sub_context_t* ctx)
+{
+    rmc_index_t res = 0;
+
+    if (!ctx)
+        return 0;
+    
+    return rmc_sub_get_publisher_count(ctx) +
+        (ctx->mcast_recv_descriptor != -1)?1:0;
+}
+
