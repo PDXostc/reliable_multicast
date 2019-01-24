@@ -67,7 +67,7 @@ $(LIB_TARGET): $(OBJ)
 	ar q $(LIB_TARGET) $(OBJ)
 
 $(LIB_SO_TARGET): $(OBJ)
-	gcc -shared -o $(LIB_SO_TARGET) $(OBJ)
+	$(CC) -shared -o $(LIB_SO_TARGET) $(OBJ)
 
 etags: 
 	@rm -f TAGS
@@ -81,5 +81,5 @@ $(OBJ): $(HDR) Makefile
 $(TEST_OBJ): $(HDR) Makefile
 
 $(WIRESHARK_TARGET): rmc_wireshark_plugin.c
-	gcc `pkg-config --cflags wireshark` `pkg-config --libs wireshark` -fpic -shared $^ -o $@
+	$(CC) `pkg-config --cflags wireshark` `pkg-config --libs wireshark` -fpic -shared $^ -o $@
 
