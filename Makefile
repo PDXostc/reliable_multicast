@@ -53,7 +53,7 @@ CFLAGS = -ggdb -fpic
 .PHONY: all clean etags print_obj
 
 
-all: $(LIB_TARGET) $(LIB_SO_TARGET) $(TEST_TARGET)  etags
+all: $(LIB_TARGET) $(LIB_SO_TARGET) $(TEST_TARGET)
 
 print_obj:
 	@echo $(patsubst %,${CURDIR}/%, $(OBJ))
