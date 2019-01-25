@@ -780,13 +780,6 @@ extern int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
                                            rmc_node_id_t node_id,
                                            rmc_index_t* result_index);
 
-extern int rmc_conn_connect_tcp_by_host(rmc_connection_vector_t* conn_vec,
-                                        char* server_addr,
-                                        in_port_t port,
-                                        rmc_node_id_t node_id,
-                                        rmc_index_t* result_index);
-
-
 
 extern int rmc_conn_close_connection(rmc_connection_vector_t* conn_vec,
                                      rmc_index_t s_ind);

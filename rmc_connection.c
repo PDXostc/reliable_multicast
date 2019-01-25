@@ -329,26 +329,6 @@ int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
 }
 
 
-int rmc_conn_connect_tcp_by_host(rmc_connection_vector_t* conn_vec,
-                                 char* server_addr,
-                                 in_port_t port,
-                                 rmc_node_id_t node_id, 
-                                 rmc_index_t* result_index)
-{
-    struct hostent* host = 0;
-
-    host = gethostbyname(server_addr);
-    if (!host)
-        return ENOENT;
-
-    return rmc_conn_connect_tcp_by_address(conn_vec,
-                                           ntohl(*(uint32_t*) host->h_addr_list[0]),
-                                           port,
-                                           node_id,
-                                           result_index);
-}
-
-
 
 
 int rmc_conn_process_accept(int listen_descriptor,
