@@ -217,7 +217,6 @@ int rmc_pub_resend_packet(rmc_pub_context_t* ctx,
                   "Queued %d bytes",
                  1 + sizeof(packet_header_t) + pack->payload_len);
 
-
 rearm:
     // Setup the poll write action
     if (!(conn->action & RMC_POLLWRITE)) {

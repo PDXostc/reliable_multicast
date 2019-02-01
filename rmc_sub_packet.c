@@ -25,8 +25,9 @@ int rmc_sub_packet_received(rmc_sub_context_t* ctx,
     sub_publisher_t* pub = &ctx->publishers[index];
 
     
-    // If this packet is the first one that needs to be acked, then insert
-    // the index of the publisher (and connection) into the ctx->pub_ack_list.
+    // If this packet is the first one that needs to be acked for the
+    // given publisher, then add the index of the publisher (and
+    // connection) into the ctx->pub_ack_list.
     // The list is sorted on oldest unacknowledged packet.
     // 
     if (!sub_oldest_unacknowledged_packet(pub))
@@ -48,6 +49,7 @@ int rmc_sub_packet_received(rmc_sub_context_t* ctx,
                         pid,
                         payload,
                         payload_len,
+                        1, // We want to add this packet to receive interval so that we can ack it.
                         rmc_usec_monotonic_timestamp(),
                         user_data_u32(index));
 

@@ -53,7 +53,7 @@ static int _descriptor(rmc_pub_context_t* ctx,
     }
 }
 
-static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t timeout, int major)
+static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t timeout)
 {
     struct epoll_event events[rmc_pub_get_max_subscriber_count(ctx)];
     char buf[16];
@@ -252,11 +252,11 @@ void test_rmc_proto_pub(char* mcast_group_addr,
         usec_timestamp_t event_tout = 0;
 
         rmc_pub_timeout_get_next(ctx, &event_tout);
-        if (process_events(ctx, epollfd, event_tout, 2) == ETIME) 
+        if (process_events(ctx, epollfd, event_tout) == ETIME)
             rmc_pub_timeout_process(ctx);
     }
 
-    // Send an announcement every 0.3 second.
+    // Turn off announcement sending.
     rmc_pub_set_announce_interval(ctx, 0);
 
     // Seed with a predefined value, allowing us to generate the exact same random sequence
@@ -322,13 +322,13 @@ void test_rmc_proto_pub(char* mcast_group_addr,
             if (event_tout == -1 || event_tout > tout)
                 event_tout = tout;
             
-            if ((res = process_events(ctx, epollfd, event_tout, 2)) == ETIME) 
+            if ((res = process_events(ctx, epollfd, event_tout)) == ETIME)
                 rmc_pub_timeout_process(ctx);
  
             current_ts = rmc_usec_monotonic_timestamp();
         } 
         
-        process_events(ctx, epollfd, 0, 2);
+        process_events(ctx, epollfd, 0);
         rmc_pub_timeout_process(ctx);
 
         RMC_LOG_COMMENT("queued packets[%d] inflight[%d]",
@@ -353,7 +353,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
         while(tout != -1 && tout < current_ts) {
             rmc_pub_timeout_process(ctx);
             rmc_pub_timeout_get_next(ctx, &tout);
-            process_events(ctx, epollfd, tout, 2);
+            process_events(ctx, epollfd, tout);
         }
 
 
@@ -361,7 +361,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
                         pub_packet_list_size(&ctx->pub_ctx.queued),
                         pub_packet_list_size(&ctx->pub_ctx.inflight));
 
-        process_events(ctx, epollfd, tout, 2);
+        process_events(ctx, epollfd, tout);
     }
 
     rmc_pub_deactivate_context(ctx);

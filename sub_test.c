@@ -84,6 +84,7 @@ static void add_received_packets(sub_publisher_t* pub,
             sprintf(buf, "%lu", pid);
             sub_packet_received(pub, pid,
                                 buf, strlen(buf)+1,
+                                1,
                                 ts_current, user_data_nil());
         }
 

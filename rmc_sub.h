@@ -127,6 +127,7 @@ extern int sub_packet_received(sub_publisher_t* pub,
                                packet_id_t pid,
                                void* payload,
                                payload_len_t payload_len,
+                               char store_receive_interval_data,
                                usec_timestamp_t current_ts,
                                user_data_t pkg_user_data);
 
@@ -140,7 +141,7 @@ extern void sub_reset_publisher(sub_publisher_t*,
 
 extern usec_timestamp_t sub_oldest_unacknowledged_packet(sub_publisher_t* pub);
 extern  user_data_t sub_packet_user_data(sub_packet_t* pack);
-extern int _sub_packet_add_to_received_interval(sub_publisher_t* pub, packet_id_t pid);
+extern int sub_packet_add_to_received_interval(sub_publisher_t* pub, packet_id_t pid);
 
 #endif // __REL_MCAST_SUB__
 

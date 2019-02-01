@@ -170,6 +170,7 @@ int rmc_pub_timeout_process(rmc_pub_context_t* ctx)
 
         if (res) {
             // Clean up the list.
+            RMC_LOG_COMMENT("subscriber timeout failed: %s", strerror(res));
             pub_sub_list_empty(&subs);
             return res;
         }

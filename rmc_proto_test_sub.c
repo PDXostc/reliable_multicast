@@ -310,6 +310,7 @@ static int process_events(rmc_sub_context_t* ctx,
 
         if (events[nfds].events & EPOLLOUT) {
             if (rmc_sub_write(ctx, c_ind, &op_res) != 0) {
+                RMC_LOG_INDEX_INFO(c_ind, "write result: %s - %s", _op_res_string(op_res),   strerror(res));
                 rmc_sub_close_connection(ctx, c_ind);
             }
         }
@@ -420,9 +421,13 @@ void test_rmc_proto_sub(char* mcast_group_addr,
                       ctx->publishers[0].max_pid_ready,  ctx->publishers[0].max_pid_ready);
 
         if (do_exit)
-
             break;
     }
+
+    // process events until we get a timeout.
+    // This ensures that we flush all outbound buffers.
+    while(process_events(ctx, epollfd, 100) != ETIME);
+
     rmc_sub_deactivate_context(ctx);
     
     RMC_LOG_INFO("Done.");

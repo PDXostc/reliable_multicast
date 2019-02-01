@@ -127,7 +127,8 @@ static int decode_subscribed_multicast(rmc_sub_context_t* ctx,
     RMC_LOG_INDEX_COMMENT(conn->connection_index,
                         "Multicast receive - len[%d] pid[%lu]", pack_hdr->payload_len, pack_hdr->pid);
 
-    // Check if we have a packet ready callback and new pacekts are available for dispatching.
+    // Check if we have a packet ready callback and packets are available.
+    // If that is the case, loop over the packet ready callback until they have
     if (ctx->packet_ready_cb && sub_packet_list_size(&ctx->dispatch_ready) != packet_ready_sz)
         (*ctx->packet_ready_cb)(ctx);
 
@@ -330,9 +331,14 @@ static int process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
     // setup the packet for acknowledgement before calling
     // sub_packet_received().
     //
+    // We provide 0 as the store_receive_interval_data since we don't
+    // want to populate pub->received_interval with pids that should
+    // not be acked.
+    //
     sub_packet_received(&ctx->publishers[conn->connection_index],
                         pack_hdr.pid,
                         payload, pack_hdr.payload_len,
+                        0,
                         rmc_usec_monotonic_timestamp(),
                         user_data_u32(conn->connection_index));
 
@@ -414,8 +420,11 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
     }
 
     // Process packets (which may be none in case of error)
+    // All packets that are sequentially redceived, with no missing packets
+    // between them, are moved over to the dispatch_ready queue.
     sub_process_received_packets(&ctx->publishers[s_ind], &ctx->dispatch_ready);
-
+    RMC_LOG_INDEX_DEBUG(s_ind, "max_pid[%lu]\n", ctx->publishers[s_ind].max_pid_ready);
+    
     // Did rmc_conn_tcp_read error out?
     if (res == EPROTO) {
         *op_res = RMC_ERROR;

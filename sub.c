@@ -6,11 +6,11 @@
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
 #include "rmc_sub.h"
-#include "rmc_log.h"
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <memory.h>
+#include "rmc_log.h"
 
 #include "rmc_list_template.h"
 
@@ -85,6 +85,7 @@ int sub_packet_interval_acknowledged(sub_publisher_t* pub, sub_packet_t* pack, p
 int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
                         void* payload,
                         payload_len_t payload_len,
+                        char store_receive_interval_data,
                         usec_timestamp_t current_ts,
                         user_data_t pkg_user_data)
 {
@@ -112,7 +113,8 @@ int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
                                                    0);
                                           }));
 
-    _sub_packet_add_to_received_interval(pub, pid);
+    if (store_receive_interval_data) 
+        sub_packet_add_to_received_interval(pub, pid);
     return 1;
 }
 
@@ -203,7 +205,7 @@ usec_timestamp_t sub_oldest_unacknowledged_packet(sub_publisher_t* pub)
 // 1 - Interval added to list
 // 0 - Existing interval modified
 // -1 - Interval collapsed
-int _sub_packet_add_to_received_interval(sub_publisher_t* pub, packet_id_t pid)
+int sub_packet_add_to_received_interval(sub_publisher_t* pub, packet_id_t pid)
 {
     sub_pid_interval_node_t* inode = 0;
     // Do we have an empty list?

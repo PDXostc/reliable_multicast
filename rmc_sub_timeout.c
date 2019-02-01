@@ -51,7 +51,8 @@ int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
     inode = rmc_index_list_head(&ctx->pub_ack_list);
 
     //
-    // Retreive the publisher with the  
+    // Retreive the publisher with the oldest unacked packet.
+    //
     while(inode) {
         sub_publisher_t* pub = &ctx->publishers[inode->data];
         sub_pid_interval_t pid_intv;
@@ -67,7 +68,7 @@ int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
         }
         
         RMC_LOG_INDEX_COMMENT(inode->data,
-                              "past timeout by [%ld] msec - processing",
+                              "past timeout by [%ld] usec - processing",
                               current_ts - sub_oldest_unacknowledged_packet(pub) + ctx->ack_timeout);
 
         // For each publisher that we have a timed out ack  for, we will ack
@@ -80,6 +81,7 @@ int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
                 return res;
             }
         }
+
         rmc_index_list_delete(inode);
         inode = rmc_index_list_head(&ctx->pub_ack_list);
     }

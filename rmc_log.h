@@ -36,6 +36,10 @@ extern const char* rmc_index_color(int index);
 
 extern int _rmc_log_level;
 
+#ifndef RMC_NIL_INDEX
+#define RMC_NIL_INDEX 0x7FFF
+#endif
+
 #define RMC_LOG_DEBUG(fmt, ...) { if (_rmc_log_level >= RMC_LOG_LEVEL_DEBUG) rmc_log(RMC_LOG_LEVEL_DEBUG, __FUNCTION__, __FILE__, __LINE__, RMC_NIL_INDEX, fmt, ##__VA_ARGS__ ); }
 #define RMC_LOG_COMMENT(fmt, ...) { if (_rmc_log_level >= RMC_LOG_LEVEL_COMMENT) rmc_log(RMC_LOG_LEVEL_COMMENT, __FUNCTION__, __FILE__, __LINE__, RMC_NIL_INDEX, fmt, ##__VA_ARGS__ ); }
 #define RMC_LOG_INFO(fmt, ...) { if (_rmc_log_level >= RMC_LOG_LEVEL_INFO) rmc_log(RMC_LOG_LEVEL_INFO, __FUNCTION__, __FILE__, __LINE__, RMC_NIL_INDEX, fmt, ##__VA_ARGS__); }
