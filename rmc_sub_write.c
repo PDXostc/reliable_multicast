@@ -231,7 +231,7 @@ int rmc_sub_write_control_message(rmc_sub_context_t* ctx,
                                          old_action,
                                          conn->action);
 
-        RMC_LOG_INDEX_DEBUG(conn->connection_index, "Sent %d bytes as control message to publisher.");
+        RMC_LOG_INDEX_DEBUG(conn->connection_index, "Sent %d bytes as control message to publisher.", payload_len);
         return 0;
 }
 
