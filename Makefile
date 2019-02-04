@@ -60,9 +60,8 @@ print_obj:
 
 wireshark: $(WIRESHARK_TARGET)
 
-
-$(TEST_TARGET): $(LIB_TARGET) $(OBJ) $(TEST_OBJ)
-	$(CC) --static $(CFLAGS) -L. -lrmc $^ -o $@
+$(TEST_TARGET): $(LIB_SO_TARGET) $(OBJ) $(TEST_OBJ)
+	$(CC) $(CFLAGS) -L. -lrmc $^ -o $@
 
 $(LIB_TARGET): $(OBJ)
 	ar q $(LIB_TARGET) $(OBJ)
