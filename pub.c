@@ -109,6 +109,7 @@ static packet_id_t pub_queue_packet_with_pid(pub_context_t* ctx,
     ppack->ref_count = 0;
     ppack->send_ts = 0; // Will be set by pub_packet_sent()
     ppack->pkg_user_data = pkg_user_data; // Handed to (*payload_free)()
+    ppack->parent_node = 0;
 
     // Insert into ctx->queued, sorted in descending order.
     // We will pop off this list at the tail to get the next
