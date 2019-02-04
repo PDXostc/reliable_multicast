@@ -60,7 +60,7 @@ print_obj:
 
 wireshark: $(WIRESHARK_TARGET)
 
-$(TEST_TARGET): $(LIB_TARGET) $(OBJ) $(TEST_OBJ)
+$(TEST_TARGET): $(LIB_SO_TARGET) $(OBJ) $(TEST_OBJ)
 	$(CC) $(CFLAGS) -L. -lrmc $^ -o $@
 
 $(LIB_TARGET): $(OBJ)
@@ -69,14 +69,14 @@ $(LIB_TARGET): $(OBJ)
 $(LIB_SO_TARGET): $(OBJ)
 	$(CC) -shared -o $(LIB_SO_TARGET) $(OBJ)
 
-etags: 
+etags:
 	@rm -f TAGS
 	find . -name '*.h' -o -name '*.c' -print | etags -
 
 clean:
 	rm -f $(OBJ) *~ $(TEST_TARGET) $(TEST_OBJ) $(WIRESHARK_TARGET) $(LIB_TARGET) $(LIB_SO_TARGET)
 
-$(OBJ): $(HDR) Makefile 
+$(OBJ): $(HDR) Makefile
 
 $(TEST_OBJ): $(HDR) Makefile
 
