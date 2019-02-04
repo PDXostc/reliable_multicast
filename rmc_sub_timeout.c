@@ -56,7 +56,7 @@ int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
     while(inode) {
         sub_publisher_t* pub = &ctx->publishers[inode->data];
         sub_pid_interval_t pid_intv;
-        
+
 
         // If it is not yet time to send acks for this publisher, then
         // break out of loop and return.
@@ -66,7 +66,7 @@ int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
                                   sub_oldest_unacknowledged_packet(pub) + ctx->ack_timeout - current_ts);
             break;
         }
-        
+
         RMC_LOG_INDEX_COMMENT(inode->data,
                               "past timeout by [%ld] usec - processing",
                               current_ts - sub_oldest_unacknowledged_packet(pub) + ctx->ack_timeout);
@@ -98,7 +98,7 @@ int rmc_sub_timeout_get_next(rmc_sub_context_t* ctx, usec_timestamp_t* result)
 
     if (!ctx || !result)
         return EINVAL;
-    
+
     // We may not have anything to ack at all.
     if (!rmc_index_list_size(&ctx->pub_ack_list)) {
         RMC_LOG_DEBUG("No publishers found with pending timeouts");
@@ -107,7 +107,7 @@ int rmc_sub_timeout_get_next(rmc_sub_context_t* ctx, usec_timestamp_t* result)
     }
 
     pub = &ctx->publishers[rmc_index_list_head(&ctx->pub_ack_list)->data];
-           
+
     *result = sub_oldest_unacknowledged_packet(pub) + ctx->ack_timeout;
     return 0;
 }

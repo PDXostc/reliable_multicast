@@ -24,12 +24,12 @@ int rmc_sub_packet_received(rmc_sub_context_t* ctx,
 {
     sub_publisher_t* pub = &ctx->publishers[index];
 
-    
+
     // If this packet is the first one that needs to be acked for the
     // given publisher, then add the index of the publisher (and
     // connection) into the ctx->pub_ack_list.
     // The list is sorted on oldest unacknowledged packet.
-    // 
+    //
     if (!sub_oldest_unacknowledged_packet(pub))
         rmc_index_list_insert_sorted_rev(&ctx->pub_ack_list,
                                          index,
@@ -42,7 +42,7 @@ int rmc_sub_packet_received(rmc_sub_context_t* ctx,
 
                                                  return (n_oldest < o_oldest)?-1:
                                                      ((n_oldest > o_oldest)?1:0);
-                                                 
+
                                                   }));
 
     sub_packet_received(&ctx->publishers[index],
@@ -97,7 +97,7 @@ int rmc_sub_packet_dispatched(rmc_sub_context_t* ctx, sub_packet_t* pack)
         (*ctx->payload_free)(pack->payload, pack->payload_len, ctx->user_data);
     else
         free(pack->payload);
-    
+
     return 0;
 }
 
@@ -108,7 +108,7 @@ int rmc_sub_packet_interval_acknowledged(rmc_sub_context_t* ctx, rmc_index_t ind
 
     if (!ctx || ! interval)
         return EINVAL;
-    
+
     conn = &ctx->conn_vec.connections[index];
 
     if (!conn || conn->mode != RMC_CONNECTION_MODE_CONNECTED)

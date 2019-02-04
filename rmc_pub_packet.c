@@ -24,14 +24,14 @@ int rmc_pub_queue_packet(rmc_pub_context_t* ctx,
 
     if (!ctx || !payload)
         return EINVAL;
-     
+
     if (payload_len > RMC_MAX_PAYLOAD) {
         RMC_LOG_ERROR("Oversized packet [%d] bytes. Max size[%d]\n", payload_len, RMC_MAX_PAYLOAD);
         return EMSGSIZE;
 
     }
-    pack = pub_next_queued_packet(&ctx->pub_ctx);    
- 
+    pack = pub_next_queued_packet(&ctx->pub_ctx);
+
 
     // If this is an announcement, force PID to 0.
     // If this is a regular packet, let pub.c figure out the next PID to use.
@@ -68,7 +68,7 @@ uint32_t rmc_pub_queue_length(rmc_pub_context_t* ctx)
 int rmc_pub_packet_ack(rmc_pub_context_t* ctx, rmc_connection_t* conn, packet_id_t pid)
 {
     pub_packet_ack(&ctx->subscribers[conn->connection_index],
-                   pid, 
+                   pid,
                    lambda(void, (void* payload, payload_len_t payload_len, user_data_t user_data) {
                            if (ctx->payload_free)
                                (*ctx->payload_free)(payload, payload_len, user_data);
@@ -77,5 +77,3 @@ int rmc_pub_packet_ack(rmc_pub_context_t* ctx, rmc_connection_t* conn, packet_id
                        }));
     return 0;
 }
-
- 

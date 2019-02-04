@@ -123,7 +123,7 @@ typedef struct rmc_connection {
 
     // Circular buffer of pending data read.
     circ_buf_t write_buf;
-    uint8_t write_buf_data[RMC_MAX_PACKET]; 
+    uint8_t write_buf_data[RMC_MAX_PACKET];
 
     // RMC_CONNECTION_MODE_CLOSED
     //  The connection is inactive.
@@ -150,7 +150,7 @@ typedef struct rmc_connection_vector {
     rmc_index_t size;
 
     // Max connection index currently in use.
-    rmc_index_t max_connection_ind;  
+    rmc_index_t max_connection_ind;
 
     // Number of connections currently in use
     rmc_index_t active_connection_count;
@@ -167,13 +167,13 @@ typedef struct rmc_connection_vector {
 
     // We have changed the action bitmap.
     rmc_poll_modify_cb_t poll_modify;
-    
+
     // Callback when we don't need connection ready notifications.
     rmc_poll_remove_cb_t poll_remove;
 } rmc_connection_vector_t;
 
 
-    
+
 // A publisher single context.
 typedef struct rmc_pub_context {
     pub_context_t pub_ctx;
@@ -192,28 +192,28 @@ typedef struct rmc_pub_context {
 
     user_data_t user_data;
 
-    in_addr_t control_listen_if_addr; // In host format for control 
+    in_addr_t control_listen_if_addr; // In host format for control
     in_addr_t mcast_group_addr; // In host format
     int mcast_port; // Must be same for all particants.
- 
+
     // Must be different for each process on same machine.
     // Multiple contexts within a single program can share listen port
     // to do load distribution on incoming connections
-    int control_listen_port; 
+    int control_listen_port;
 
     int mcast_send_descriptor;
     int listen_descriptor;
 
-    
+
     // Node ID allowing us to recognize and drop looped back multicast messages.
     // Also allow subscribing parties to uniquely identify this publisher..
     // Set by rmc_pub_init_context(), or generated randonly if set to 0.
-    rmc_node_id_t node_id; 
+    rmc_node_id_t node_id;
 
     // As a publisher, whendo we start re-sending packets via TCP
     // since they weren't acked when we sent them out via multicast
     uint32_t resend_timeout;
-    
+
     // Interval, in usec, in which to send announcement packets that
     // trigger subscribers to connect back to the TCP control socket
     // and setup a subscription.
@@ -271,7 +271,7 @@ typedef struct rmc_pub_context {
 } rmc_pub_context_t;
 
 
-RMC_LIST(rmc_index_list, rmc_index_node, rmc_index_t) 
+RMC_LIST(rmc_index_list, rmc_index_node, rmc_index_t)
 typedef rmc_index_list rmc_index_list_t;
 typedef rmc_index_node rmc_index_node_t;
 
@@ -295,7 +295,7 @@ typedef struct rmc_sub_context {
     // from all publishers through calls to
     // sub_process_received_packets().
     sub_packet_list_t dispatch_ready;
-    
+
 
     // List of indexes of publishers with pending packet acks that are
     // yet to be sent out.  Sorted on ascending pub->oldest_unacked_ts
@@ -308,7 +308,7 @@ typedef struct rmc_sub_context {
     in_addr_t mcast_if_addr; // In host format (little endian)
     in_addr_t mcast_group_addr; // In host format
     int mcast_port; // Must be same for all particants.
- 
+
     // Must be different for each process on same machine.
     // Multiple contexts within a single program can share listen port
     // to do load distribution on incoming connections
@@ -316,12 +316,12 @@ typedef struct rmc_sub_context {
 
     // usec between us receiving a packet and when we have to acknowledge it
     // to the sending publisher via the tcp control channel
-    uint32_t ack_timeout; 
-    
+    uint32_t ack_timeout;
+
     // Node ID allowing us to recognize and drop looped back multicast messages.
     // Also allow publishing parties to uniquely identify this publisher.
     // Set by rmc_pub_init_context(), or generated randonly if set to 0.
-    rmc_node_id_t node_id; 
+    rmc_node_id_t node_id;
 
     // Callback invoked when one or more packets become available for dispatch.
     // Use rmc_sub_get_next_dispatch_ready() to retrieve the packet for processing.
@@ -330,7 +330,7 @@ typedef struct rmc_sub_context {
     void (*packet_ready_cb)(struct rmc_sub_context* ctx);
 
     // Callback invoked every time we receive an announce packet
-    // from an unsubscribed-to publisher. 
+    // from an unsubscribed-to publisher.
     //
     // Payload is the payload provided to the announce packet by a
     // callback to the publishers side's pub_context_t::annouce_cb()
@@ -355,9 +355,9 @@ typedef struct rmc_sub_context {
     // If announce_cb is not setup using rmc_sub_set_announce_callback(),
     // then the subscription will always be setup.
     uint8_t (*announce_cb)(struct rmc_sub_context* ctx,
-                           uint32_t listen_ip, 
+                           uint32_t listen_ip,
                            in_port_t listen_port,
-                           rmc_node_id_t node_id, 
+                           rmc_node_id_t node_id,
                            void* payload,
                            payload_len_t payload_len);
 
@@ -372,7 +372,7 @@ typedef struct rmc_sub_context {
     //
     // Convert the IP address to an aaa.bbb.ccc.ddd IP address using the following
     // statement:
-    // 
+    //
     //    inet_ntoa( (struct in_addr) { .s_addr = htonl( listen_ip) })
     //
     // node_id is the ID setup by the publisher when rmc_pub_init_context() was called
@@ -386,7 +386,7 @@ typedef struct rmc_sub_context {
 
     // FIXME: We need an unsubsribe callback to be invoked when a connection
     //        to a publisher has been shut down.
-   
+
     // Called to alloc memory for incoming data.
     // that needs to be processed.
     void* (*payload_alloc)(payload_len_t payload_len,
@@ -407,17 +407,17 @@ extern int rmc_pub_init_context(rmc_pub_context_t* context,
                                 // Used to avoid loopback dispatch of published packets
                                 rmc_node_id_t node_id,
                                 // Domain name or IP of multicast group to join.
-                                char* multicast_group_addr,  
-                                int multicast_port, 
+                                char* multicast_group_addr,
+                                int multicast_port,
 
                                 // IP address to listen to for incoming subscription
                                 // connection from subscribers receiving multicast packets
                                 // Default if 0 ptr: "0.0.0.0" (IFADDR_ANY)
-                                char* control_listen_iface_addr, 
+                                char* control_listen_iface_addr,
 
-                                int control_listen_port, 
+                                int control_listen_port,
 
-                                // User data that can be extracted with rmc_user_data(.                            
+                                // User data that can be extracted with rmc_user_data(.
                                 // Typical application is for the poll and memory callbacks below
                                 // to tie back to its structure using the provided
                                 // pointer to the invoking rmc_context_t structure.
@@ -438,7 +438,7 @@ extern int rmc_pub_init_context(rmc_pub_context_t* context,
                                 uint8_t* conn_vec,
 
                                 // Number of elements available in conn_vec.
-                                uint32_t conn_vec_size, 
+                                uint32_t conn_vec_size,
 
                                 // Callback to previously allocated memory provided
                                 // by the caller of rmc_queue_packet().
@@ -458,15 +458,15 @@ extern int rmc_sub_init_context(rmc_sub_context_t* context,
                                 rmc_node_id_t node_id,
 
                                 // Domain name or IP of multicast group to join.
-                                char* multicast_group_addr,  
+                                char* multicast_group_addr,
 
                                 // IP address to listen to for incoming subscription
                                 // connection from subscribers receiving multicast packets
                                 // Default if 0 ptr: "0.0.0.0" (IFADDR_ANY)
-                                char* multicast_iface_addr, 
-                                int multicast_port, 
+                                char* multicast_iface_addr,
+                                int multicast_port,
 
-                                // User data that can be extracted with rmc_user_data(.                            
+                                // User data that can be extracted with rmc_user_data(.
                                 // Typical application is for the poll and memory callbacks below
                                 // to tie back to its structure using the provided
                                 // pointer to the invoking rmc_context_t structure.
@@ -487,7 +487,7 @@ extern int rmc_sub_init_context(rmc_sub_context_t* context,
                                 uint8_t* conn_vec,
 
                                 // Number of elements available in conn_vec.
-                                uint32_t conn_vec_size, 
+                                uint32_t conn_vec_size,
 
                                 // Callback to allocate payload memory used to store
                                 // incoming packages. Called via rmc_read() when
@@ -596,7 +596,7 @@ extern int rmc_pub_packet_ack(rmc_pub_context_t* ctx, rmc_connection_t* conn, pa
 // to receive an ack on (and therefore may have to resend).
 //
 extern int rmc_pub_context_get_pending(rmc_pub_context_t* ctx,
-                                       uint32_t* queued_packets, 
+                                       uint32_t* queued_packets,
                                        uint32_t* send_buf_len,
                                        uint32_t* ack_count);
 
@@ -633,7 +633,7 @@ extern user_data_t rmc_sub_user_data(rmc_sub_context_t* ctx);
 extern rmc_node_id_t rmc_sub_node_id(rmc_sub_context_t* ctx);
 
 extern int rmc_sub_packet_received(rmc_sub_context_t* ctx,
-                                   rmc_index_t index, 
+                                   rmc_index_t index,
                                    packet_id_t pid,
                                    void* payload,
                                    payload_len_t payload_len,
@@ -728,7 +728,7 @@ extern uint32_t rmc_sub_get_socket_count(rmc_sub_context_t* ctx);
 
 // TCP was reset
 #define RMC_READ_DISCONNECT 7
- 
+
 // Multicast packlet was written
 #define RMC_WRITE_MULTICAST 8
 

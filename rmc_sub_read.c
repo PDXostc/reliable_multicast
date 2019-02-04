@@ -27,19 +27,19 @@ static int decode_unsubscribed_multicast(rmc_sub_context_t* ctx,
 
         return 0;
     }
-        
+
     if (pack_hdr->node_id == ctx->node_id) {
         RMC_LOG_COMMENT("Ignoring announce from self.");
         return 0;
     }
-        
-            
+
+
     RMC_LOG_COMMENT("Len[%d] Pid[%lu] - Announce!",
                     pack_hdr->payload_len,
                     pack_hdr->pid);
-            
+
     // Add an outbound tcp connection to the publisher.
-        
+
     // If set, invoke callback and determine if we are to setup subscription to
     // publisher.
     if (ctx->announce_cb) {
@@ -52,7 +52,7 @@ static int decode_unsubscribed_multicast(rmc_sub_context_t* ctx,
         rmc_conn_connect_tcp_by_address(&ctx->conn_vec,
                                         pack_hdr->listen_ip, pack_hdr->listen_port,
                                         pack_hdr->node_id, &sock_ind);
-        
+
     return 0;
 }
 
@@ -86,7 +86,7 @@ static int decode_subscribed_multicast(rmc_sub_context_t* ctx,
     }
 
 
-    
+
 
     // Use the provided memory allocator to reserve memory for
     // incoming payload.
@@ -95,12 +95,12 @@ static int decode_subscribed_multicast(rmc_sub_context_t* ctx,
     //
     // FIXME: If we allocate payload in multicast_read()
     //        We can omot the memcpy below.
-    ///    
+    ///
     if (ctx->payload_alloc)
         payload_copy = (*ctx->payload_alloc)(pack_hdr->payload_len, ctx->user_data);
     else
         payload_copy = malloc(pack_hdr->payload_len);
-    
+
     if (!payload_copy) {
         RMC_LOG_INDEX_FATAL(RMC_MULTICAST_INDEX,
                             "malloc(%d): %s", pack_hdr->payload_len, strerror(errno));
@@ -120,7 +120,7 @@ static int decode_subscribed_multicast(rmc_sub_context_t* ctx,
 
     // Process received packages, moving consectutive ones
     // over to the ready queue.
-    
+
     packet_ready_sz = sub_packet_list_size(&ctx->dispatch_ready);
     sub_process_received_packets(pub, &ctx->dispatch_ready);
 
@@ -148,11 +148,11 @@ static int process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res, uin
                       sizeof(packet_header_t), len);
         return EPROTO;
     }
-                
+
     if (len < sizeof(packet_header_t) + pack_hdr->payload_len) {
         RMC_LOG_ERROR("Corrupt packet. Needed [%lu + %d = %lu] header + payload bytes. Got %lu\n",
                       sizeof(packet_header_t),
-                      pack_hdr->payload_len, 
+                      pack_hdr->payload_len,
                       sizeof(packet_header_t) + pack_hdr->payload_len, len);
 
         return EPROTO;
@@ -166,7 +166,7 @@ static int process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res, uin
         pack_hdr->listen_ip = src_addr;
 
     data += sizeof(packet_header_t);
-    
+
     // Find the socket we use to ack received packets back to the publisher.
     conn = rmc_conn_find_by_address(&ctx->conn_vec, pack_hdr->listen_ip, pack_hdr->listen_port);
 
@@ -191,7 +191,7 @@ static int process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res, uin
 
     if (read_res)
         *read_res = RMC_READ_MULTICAST;
-    
+
     // Record if we have any packets ready to ack prior
     // to decoding additional packets.
 
@@ -217,7 +217,7 @@ static int multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
     if (!ctx)
         return EINVAL;
 
-    if (ctx->mcast_recv_descriptor == -1) 
+    if (ctx->mcast_recv_descriptor == -1)
         return ENOTCONN;
 
 
@@ -237,7 +237,7 @@ static int multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
             res = errno;
             goto rearm;
         }
-           
+
         res = process_multicast_read(ctx, read_res, ntohl(src_addr.sin_addr.s_addr), buffer, len);
     }
 
@@ -250,7 +250,7 @@ rearm:
                                      RMC_POLLREAD,
                                      RMC_POLLREAD);
 
-    
+
     return res;
 }
 
@@ -322,7 +322,7 @@ static int process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
 
     RMC_LOG_INDEX_INFO(conn->connection_index,
                        "Received resend pid: %lu", pack_hdr.pid);
-    
+
     // Since we are getting this via TCP command channel,
     // we do not need to ack it.
     //
@@ -382,7 +382,7 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
 
     // Is this a multicast pacekt?
     if (s_ind == RMC_MULTICAST_INDEX) {
-        do { 
+        do {
             res = multicast_read(ctx, op_res);
         } while(!res);
 
@@ -390,7 +390,7 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
     }
 
 
-    // This is incoming data on tcp. 
+    // This is incoming data on tcp.
 
     // Find connection.
     conn = rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
@@ -410,7 +410,7 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
         res = ENOMEM;
         goto rearm;
     }
-        
+
     // Are we disconnected?
     if (res == EPIPE) {
         *op_res = RMC_READ_DISCONNECT;
@@ -424,26 +424,25 @@ int rmc_sub_read(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
     // between them, are moved over to the dispatch_ready queue.
     sub_process_received_packets(&ctx->publishers[s_ind], &ctx->dispatch_ready);
     RMC_LOG_INDEX_DEBUG(s_ind, "max_pid[%lu]\n", ctx->publishers[s_ind].max_pid_ready);
-    
+
     // Did rmc_conn_tcp_read error out?
     if (res == EPROTO) {
         *op_res = RMC_ERROR;
         rmc_sub_close_connection(ctx, s_ind);
         return res;
     }
-        
+
     *op_res = RMC_READ_TCP;
 
 rearm:
 
     // Read poll is always active. Callback to re-arm.
     if (ctx->conn_vec.poll_modify) {
-        (*ctx->conn_vec.poll_modify)(ctx->user_data, 
-                                     conn->descriptor, 
-                                     s_ind, 
-                                     RMC_POLLREAD, 
+        (*ctx->conn_vec.poll_modify)(ctx->user_data,
+                                     conn->descriptor,
+                                     s_ind,
+                                     RMC_POLLREAD,
                                      RMC_POLLREAD);
     }
     return res;
 }
-

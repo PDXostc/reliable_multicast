@@ -28,15 +28,15 @@ rmc_connection_t* rmc_conn_find_by_address(rmc_connection_vector_t* conn_vec,
                                             uint16_t remote_port)
 {
     rmc_index_t ind = 0;
-//    char want_addr_str[80]; 
-//    char have_addr_str[80]; 
+//    char want_addr_str[80];
+//    char have_addr_str[80];
 
     // Do we have any connections in use at all?
     if (!conn_vec || conn_vec->max_connection_ind == RMC_NIL_INDEX)
         return 0;
-    
+
 //    strcpy(want_addr_str, inet_ntoa( (struct in_addr) { .s_addr = htonl(remote_address) }));
-    
+
 //    RMC_LOG_DEBUG("ind[%d] max_ind[%d]", ind, conn_vec->max_connection_ind);
 
     // FIXME: Replace with hash table search to speed up.
@@ -46,7 +46,7 @@ rmc_connection_t* rmc_conn_find_by_address(rmc_connection_vector_t* conn_vec,
 //                      want_addr_str, remote_port,
 //                      have_addr_str, conn_vec->connections[ind].remote_port);
 
-        if (conn_vec->connections[ind].descriptor != -1 &&  
+        if (conn_vec->connections[ind].descriptor != -1 &&
             remote_address == conn_vec->connections[ind].remote_address &&
             remote_port == conn_vec->connections[ind].remote_port)
             return &conn_vec->connections[ind];
@@ -81,11 +81,11 @@ rmc_connection_t* rmc_conn_find_by_node_id(rmc_connection_vector_t* conn_vec,
     // Do we have any connections in use at all?
     if (!conn_vec || conn_vec->max_connection_ind == RMC_NIL_INDEX)
         return 0;
-    
+
 
     // FIXME: Replace with hash table search to speed up.
     while(ind <= conn_vec->max_connection_ind) {
-        if (conn_vec->connections[ind].descriptor != -1 &&  
+        if (conn_vec->connections[ind].descriptor != -1 &&
             conn_vec->connections[ind].node_id == node_id)
             return &conn_vec->connections[ind];
 
@@ -107,7 +107,7 @@ static rmc_index_t _get_free_slot(rmc_connection_vector_t* conn_vec)
 
             RMC_LOG_DEBUG("Allocating slot %d. max is %d", ind, conn_vec->max_connection_ind);
             return ind;
-        }            
+        }
         ++ind;
     }
 
@@ -152,7 +152,7 @@ void rmc_conn_init_connection_vector(rmc_connection_vector_t* conn_vec,
                                       rmc_poll_remove_cb_t poll_remove)
 {
     rmc_index_t ind = 0;
-    
+
     // Translate byte size to element count.
     conn_vec->size = elem_count;
     conn_vec->max_connection_ind = RMC_NIL_INDEX;;
@@ -164,7 +164,7 @@ void rmc_conn_init_connection_vector(rmc_connection_vector_t* conn_vec,
     conn_vec->user_data = user_data;
 
     ind = conn_vec->size;
-    while(ind--) 
+    while(ind--)
         rmc_conn_reset_connection(&conn_vec->connections[ind], ind);
 }
 
@@ -179,7 +179,7 @@ int rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
     int tr = 1;
     if (!conn_vec || !conn)
         return EINVAL;
-    
+
 
     if (getsockopt(conn->descriptor,
                    SOL_SOCKET,
@@ -210,14 +210,14 @@ int rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
                               conn->remote_port,
                               strerror(sock_err));
 
-        if (conn_vec->poll_remove) 
+        if (conn_vec->poll_remove)
             (*conn_vec->poll_remove)(conn_vec->user_data, conn->descriptor, conn->connection_index);
 
         rmc_conn_close_connection(conn_vec, conn->connection_index);
 
         return sock_err;
     }
-    
+
     // Disable Nagle algorithm since latency is of essence when we send
     // out acks.
     if (setsockopt( conn->descriptor, IPPROTO_TCP, TCP_NODELAY, (void *)&tr, sizeof(tr))) {
@@ -229,9 +229,9 @@ int rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
                               conn->remote_port,
                               strerror(sock_err));
 
-        if (conn_vec->poll_remove) 
+        if (conn_vec->poll_remove)
             (*conn_vec->poll_remove)(conn_vec->user_data, conn->descriptor, conn->connection_index);
-        
+
         rmc_conn_close_connection(conn_vec, conn->connection_index);
         return sock_err;
     }
@@ -252,11 +252,11 @@ int rmc_conn_complete_connection(rmc_connection_vector_t* conn_vec,
 
     return 0;
 }
-                               
+
 int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
                                     uint32_t address,
                                     in_port_t port,
-                                    rmc_node_id_t node_id, 
+                                    rmc_node_id_t node_id,
                                     rmc_index_t* result_index)
 {
     rmc_index_t c_ind = RMC_NIL_INDEX;
@@ -277,14 +277,14 @@ int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
     if (c_ind == RMC_NIL_INDEX)
         return ENOMEM;
 
-    
+
     conn_vec->connections[c_ind].descriptor = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
 
     if (conn_vec->connections[c_ind].descriptor == -1)
         return errno;
- 
+
     RMC_LOG_INDEX_COMMENT(c_ind, "Connecting to control tcp addr[%s:%d]", inet_ntoa(sock_addr.sin_addr), ntohs(sock_addr.sin_port));
-    
+
     res = connect(conn_vec->connections[c_ind].descriptor,
                   (struct sockaddr*) &sock_addr,
                   sizeof(sock_addr));
@@ -299,7 +299,7 @@ int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
         _reset_max_connection_ind(conn_vec);
         return 0; // This is not an error, just a failed subscriber setup.
     }
-    
+
     // Nil out the in progress error.
     res = (errno == EINPROGRESS)?0:errno;
 
@@ -353,7 +353,7 @@ int rmc_conn_process_accept(int listen_descriptor,
 
     if (conn_vec->connections[c_ind].descriptor == -1)
         return errno;
- 
+
     RMC_LOG_INDEX_COMMENT(c_ind, "%s:%d assigned to index %d",
                           inet_ntoa(src_addr.sin_addr), ntohs(src_addr.sin_port), c_ind);
 
@@ -375,13 +375,13 @@ int rmc_conn_process_accept(int listen_descriptor,
                               c_ind,
                               conn_vec->connections[c_ind].action);
 
-    if (conn_vec->poll_modify)  
+    if (conn_vec->poll_modify)
         (*conn_vec->poll_modify)(conn_vec->user_data,
                                  listen_descriptor,
                                  RMC_LISTEN_INDEX,
                                  RMC_POLLREAD,
                                  RMC_POLLREAD);
-    
+
     if (result_index)
         *result_index = c_ind;
 
@@ -394,7 +394,7 @@ int rmc_conn_process_accept(int listen_descriptor,
 int rmc_conn_close_connection(rmc_connection_vector_t* conn_vec, rmc_index_t s_ind)
 {
     rmc_connection_t* conn = 0;
-    
+
     // Is s_ind within our connection vector?
 
     if (s_ind >= conn_vec->size)
@@ -405,11 +405,11 @@ int rmc_conn_close_connection(rmc_connection_vector_t* conn_vec, rmc_index_t s_i
     // Are we connected
     if (conn->mode == RMC_CONNECTION_MODE_CLOSED)
         return ENOTCONN;
-    
+
     conn->mode = RMC_CONNECTION_MODE_CLOSED;
     // If we are still connecting then just terminate the conneciton.
 
-    
+
     RMC_LOG_INDEX_INFO(s_ind,
                        "Closing connection. [%d] bytes will be discarded.",
                        circ_buf_in_use(&conn->write_buf));

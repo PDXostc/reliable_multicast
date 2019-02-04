@@ -1,6 +1,6 @@
 // Copyright (C) 2018, Jaguar Land Rover
 // This program is licensed under the terms and conditions of the
-// Mozilla Public License, version 2.0.  The full text of the 
+// Mozilla Public License, version 2.0.  The full text of the
 // Mozilla Public License is at https://www.mozilla.org/MPL/2.0/
 //
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
@@ -28,7 +28,7 @@
 //
 // publisher->dispatch_ready.
 //    Packet is ready to be procesed by the caller through sub_get_next_dispatch_ready()
-//    calls. 
+//    calls.
 //
 // publisher->ack_ready
 //    The packet has been dispatched and is ready to be acknowledged back to the
@@ -60,9 +60,9 @@ typedef struct sub_packet {
     // rmc_packet_received() call.
     // Caller needs to free payload once sub_packet_acknowledged() has
     // been called.
-    void *payload; 
+    void *payload;
     // Payload length provided by pub_queue_packet()
-    payload_len_t payload_len;  
+    payload_len_t payload_len;
 
     // Set to 1 if this packet does not need to be acked.
     // Used when we receive packet via tcp.
@@ -70,11 +70,11 @@ typedef struct sub_packet {
 
     // Provided by sub_packet_received()
     // Retrieved by sub_packet_user_data()
-    user_data_t pkg_user_data;   
+    user_data_t pkg_user_data;
 } sub_packet_t;
 
 
-RMC_LIST(sub_packet_list, sub_packet_node, sub_packet_t*) 
+RMC_LIST(sub_packet_list, sub_packet_node, sub_packet_t*)
 typedef sub_packet_list sub_packet_list_t;
 typedef sub_packet_node sub_packet_node_t;
 
@@ -83,40 +83,40 @@ typedef sub_packet_node sub_packet_node_t;
 typedef struct sub_pid_interval {
 
     // First packet ID in interval
-    packet_id_t first_pid; 
+    packet_id_t first_pid;
 
     // Last packet ID in interval
-    packet_id_t last_pid; 
+    packet_id_t last_pid;
 
     // Timestamp when we received the first pid covered by the
     // interval.
-    usec_timestamp_t receive_ts; 
+    usec_timestamp_t receive_ts;
 
 } sub_pid_interval_t;
 
 
-RMC_LIST(sub_pid_interval_list, sub_pid_interval_node, sub_pid_interval_t) 
+RMC_LIST(sub_pid_interval_list, sub_pid_interval_node, sub_pid_interval_t)
 typedef sub_pid_interval_list sub_pid_interval_list_t;
 typedef sub_pid_interval_node sub_pid_interval_node_t;
 
 // A publisher is a feed from a single packet publisher that
 // is being processed. It contains the state necessary to drive
 // packets toward the cycle described in sub_packet_t aboce.
-//  
+//
 typedef struct sub_publisher {
     packet_id_t max_pid_ready;         // Highest pid that is ready to be dispatched.
     packet_id_t max_pid_received;      // Maximum PID received.
 
     // Packets received but need additional packets.
     // Sorted on ascending pid
-    sub_packet_list_t received_pid;    
+    sub_packet_list_t received_pid;
 
     // Received packet intervals.
     // Filled by sub_packet_received().
     // Depletd by rmc_sub_timeout()
     //
     sub_pid_interval_list received_interval;
-} sub_publisher_t; 
+} sub_publisher_t;
 
 extern void sub_init_publisher(sub_publisher_t* pub);
 
@@ -144,4 +144,3 @@ extern  user_data_t sub_packet_user_data(sub_packet_t* pack);
 extern int sub_packet_add_to_received_interval(sub_publisher_t* pub, packet_id_t pid);
 
 #endif // __REL_MCAST_SUB__
-

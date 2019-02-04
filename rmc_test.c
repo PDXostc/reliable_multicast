@@ -1,6 +1,6 @@
 // Copyright (C) 2018, Jaguar Land Rover
 // This program is licensed under the terms and conditions of the
-// Mozilla Public License, version 2.0.  The full text of the 
+// Mozilla Public License, version 2.0.  The full text of the
 // Mozilla Public License is at https://www.mozilla.org/MPL/2.0/
 //
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
@@ -112,7 +112,7 @@ int main(int argc, char* argv[])
         case 'S':
             publisher = 0;
             break;
-            
+
         case 'M':
             strcpy(mcast_group_addr, optarg);
             break;
@@ -175,22 +175,22 @@ int main(int argc, char* argv[])
             exit(1);
         }
     }
-    
-           
-    
-    // Default 
+
+
+
+    // Default
     if (!e_arg_set)
         expected_node_id[1] = 1;
-    
+
     if (rmc_set_log_level(log_level)) {
         usage(argv[0]);
         exit(1);
     }
-        
+
     run_list_tests();
     test_packet_interval();
     test_circular_buffer();
-    test_pub(); 
+    test_pub();
     test_sub();
     setlinebuf(stdout);
     setlinebuf(stderr);
@@ -224,4 +224,4 @@ int main(int argc, char* argv[])
                        drop_rate);
 
     exit(0);
-} 
+}

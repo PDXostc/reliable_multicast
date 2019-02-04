@@ -93,7 +93,7 @@ typedef struct pub_context {
 
     // List of pub_packet_t sent and awaiting acks. Packets in this list
     // are referredd to by subscriber_t::inflight.
-    pub_packet_list_t inflight; 
+    pub_packet_list_t inflight;
     packet_id_t next_pid;
 } pub_context_t;
 

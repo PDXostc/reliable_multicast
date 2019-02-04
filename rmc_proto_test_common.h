@@ -25,7 +25,7 @@ signal {
     uint32_t node_id;         // 4
     uint32_t signal_id;       // 4
     uint32_t max_signal_id;   // 4
-    uint64_t filler;          // 8 
+    uint64_t filler;          // 8
 } signal_t;                   // 20 bytes.
 
 extern void* _test_proto_alloc(payload_len_t plen);

@@ -33,7 +33,7 @@ int rmc_pub_init_context(rmc_pub_context_t* ctx,
                          // IP address to listen to for incoming subscription
                          // connection from subscribers receiving multicast packets
                          // Default: "0.0.0.0" (IFADDR_ANY)
-                         char* control_listen_if_addr, 
+                         char* control_listen_if_addr,
                          int control_listen_port,
 
                          user_data_t user_data,
@@ -68,8 +68,8 @@ int rmc_pub_init_context(rmc_pub_context_t* ctx,
                                     poll_add,
                                     poll_modify,
                                     poll_remove);
-    
-    
+
+
 
     if (!control_listen_if_addr)
         control_listen_if_addr = "0.0.0.0";
@@ -112,7 +112,7 @@ int rmc_pub_init_context(rmc_pub_context_t* ctx,
     ctx->announce_cb = 0;
     ctx->announce_send_interval = 0;
     ctx->announce_next_send_ts = 0;
-    
+
     // outgoing_payload_free() will be called when
     // pub_acket_ack() is called, which happens when a
     // subscriber sends an ack back for the given pid.
@@ -212,7 +212,7 @@ int rmc_pub_activate_context(rmc_pub_context_t* ctx)
     return 0;
 
 error:
-    
+
     if (ctx->mcast_send_descriptor != -1) {
         close(ctx->mcast_send_descriptor);
         ctx->mcast_send_descriptor = -1;
@@ -253,7 +253,7 @@ int rmc_pub_deactivate_context(rmc_pub_context_t* ctx)
             rmc_connection_t* conn = rmc_conn_find_by_index(&ctx->conn_vec,
                                                             ind);
             // Don't opereate on closed connections.
-            if (!conn) 
+            if (!conn)
                 continue;
 
             rmc_pub_close_connection(ctx, ind);
@@ -397,7 +397,7 @@ rmc_index_t rmc_pub_get_max_subscriber_count(rmc_pub_context_t* ctx)
 
     if (!ctx)
         return 0;
-    
+
     rmc_conn_get_vector_size(&ctx->conn_vec, &res);
     return res;
 }
@@ -408,7 +408,7 @@ uint32_t rmc_pub_get_subscriber_count(rmc_pub_context_t* ctx)
 
     if (!ctx)
         return 0;
-    
+
     rmc_conn_get_active_connection_count(&ctx->conn_vec, &res);
     return res;
 }
@@ -419,9 +419,8 @@ uint32_t rmc_pub_get_socket_count(rmc_pub_context_t* ctx)
 
     if (!ctx)
         return 0;
-    
+
     return rmc_pub_get_subscriber_count(ctx) +
         (ctx->mcast_send_descriptor != -1)?1:0 +
         (ctx->listen_descriptor != -1 )?1:0;
 }
-

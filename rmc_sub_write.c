@@ -46,7 +46,7 @@ int rmc_sub_write_interval_acknowledgement(rmc_sub_context_t* ctx,
 
         if (!ctx || !conn || !interval)
             return EINVAL;
-        
+
         if (conn->mode != RMC_CONNECTION_MODE_CONNECTED)
             return ENOTCONN;
 
@@ -117,7 +117,7 @@ int rmc_sub_write_interval_acknowledgement(rmc_sub_context_t* ctx,
 
         // Copy in packet header
         memcpy(seg1, (uint8_t*) &ack, seg1_len);
-        if (seg2_len) 
+        if (seg2_len)
             memcpy(seg2, ((uint8_t*) &ack) + seg1_len, seg2_len);
 
 
@@ -154,7 +154,7 @@ int rmc_sub_write_control_message(rmc_sub_context_t* ctx,
 
         if (!ctx || !conn  || !payload || !payload_len)
             return EINVAL;
-        
+
         if (conn->mode != RMC_CONNECTION_MODE_CONNECTED) {
             RMC_LOG_INDEX_WARNING(conn->connection_index, "Socket not connected. [%d] Cannot write control message.",
                 conn->mode);
@@ -200,7 +200,7 @@ int rmc_sub_write_control_message(rmc_sub_context_t* ctx,
 
         // Copy in packet header
         memcpy(seg1, (uint8_t*) &msg, seg1_len);
-        if (seg2_len) 
+        if (seg2_len)
             memcpy(seg2, ((uint8_t*) &msg) + seg1_len, seg2_len);
 
         // Allocate memory for payload
@@ -216,8 +216,8 @@ int rmc_sub_write_control_message(rmc_sub_context_t* ctx,
 
         // Copy in packet header
         memcpy(seg1, (uint8_t*) payload, seg1_len);
- 
-       if (seg2_len) 
+
+       if (seg2_len)
             memcpy(seg2, ((uint8_t*) &payload) + seg1_len, seg2_len);
 
 
@@ -247,10 +247,10 @@ int rmc_sub_write_control_message_by_address(rmc_sub_context_t* ctx,
 
     if (!ctx  || !payload || !payload_len)
         return EINVAL;
-        
+
     conn = rmc_conn_find_by_address(&ctx->conn_vec, remote_address, remote_port);
 
-        
+
     if (!conn || conn->mode != RMC_CONNECTION_MODE_CONNECTED)
         return ENOTCONN;
 
@@ -265,10 +265,10 @@ int rmc_sub_write_control_message_by_node_id(rmc_sub_context_t* ctx,
                                              payload_len_t payload_len)
 {
     rmc_connection_t* conn = 0;
-    
+
     if (!ctx  || !payload || !payload_len)
         return EINVAL;
-        
+
     conn = rmc_conn_find_by_node_id(&ctx->conn_vec, node_id);
 
     if (!conn || conn->mode != RMC_CONNECTION_MODE_CONNECTED)
@@ -307,7 +307,7 @@ int rmc_sub_write(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
         res = rmc_conn_complete_connection(&ctx->conn_vec, conn);
         if (res) {
             RMC_LOG_INDEX_INFO(s_ind, "Failed to complete connection: %s", strerror(errno));
-            rmc_conn_close_connection(&ctx->conn_vec, conn->connection_index); 
+            rmc_conn_close_connection(&ctx->conn_vec, conn->connection_index);
             return res;
         }
         if (ctx->subscription_complete_cb) {
@@ -329,10 +329,10 @@ int rmc_sub_write(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
 
     if (op_res)
         *op_res = RMC_WRITE_TCP;
-    
+
     res = rmc_conn_process_tcp_write(conn, &bytes_left_after);
-    
-    if (bytes_left_after == 0) 
+
+    if (bytes_left_after == 0)
         conn->action &= ~RMC_POLLWRITE;
     else
         conn->action |= RMC_POLLWRITE;
@@ -347,6 +347,6 @@ int rmc_sub_write(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
     // Did we encounter an error.
     if (res && op_res)
         *op_res = RMC_ERROR;
-        
+
     return res;
 }

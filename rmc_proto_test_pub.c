@@ -12,7 +12,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-  
+
 
 // Maximum number of subscribers an rmc_pub_context_t can have.
 #define RMC_MAX_CONNECTIONS 16
@@ -64,7 +64,7 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
         if (timeout < 0)
             timeout = 0;
     }
-            
+
 
     nfds = epoll_wait(epollfd, events,
                       rmc_pub_get_max_subscriber_count(ctx),
@@ -75,7 +75,7 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
     }
 
     // Timeout
-    if (nfds == 0) 
+    if (nfds == 0)
         return ETIME;
 
     while(nfds--) {
@@ -102,7 +102,7 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
 
         if (events[nfds].events & EPOLLOUT) {
             res = rmc_pub_write(ctx, c_ind, &op_res);
-            if (res != 0 && res != EAGAIN && res != ENODATA)  
+            if (res != 0 && res != EAGAIN && res != ENODATA)
                 rmc_pub_close_connection(ctx, c_ind);
         }
     }
@@ -132,7 +132,7 @@ void queue_test_data(rmc_pub_context_t* ctx, uint8_t* payload, int payload_len, 
                                          !memcmp(pack->payload, td->payload, pack->payload_len)) {
                                          pack->pid = td->pid;
                                          // If we are to drop this packet, mark it as falsely sent.
-                                         if (drop_flag) { 
+                                         if (drop_flag) {
                                          RMC_LOG_DEBUG("Dropping packet [%lu] as specified", pack->pid);
                                              pub_packet_sent(&ctx->pub_ctx, pack, rmc_usec_monotonic_timestamp());
                                          }
@@ -212,10 +212,10 @@ void test_rmc_proto_pub(char* mcast_group_addr,
                                                        char* addr_str = inet_ntoa( (struct in_addr) { .s_addr = htonl( remote_addr) });
                                                        RMC_LOG_INFO("Subscriber [%s:%d] connected",
                                                                     addr_str,
-                                                                    remote_port); 
+                                                                    remote_port);
                                                        if (!subscriber_count)
                                                            rmc_log_set_start_time();
-                                                           
+
                                                        subscriber_count++;
                                                        return 1;
                                                    }));
@@ -228,7 +228,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
                                                           char* addr_str = inet_ntoa( (struct in_addr) { .s_addr = htonl( remote_addr) });
                                                           RMC_LOG_INFO("Subscriber [%s:%d] disconnected",
                                                                        addr_str,
-                                                                       remote_port); 
+                                                                       remote_port);
                                                           subscriber_count--;
                                                           return;
                                                       }));
@@ -290,18 +290,18 @@ void test_rmc_proto_pub(char* mcast_group_addr,
 
         current_ts = rmc_usec_monotonic_timestamp();        // Check if we are to drop the packet.
 
-        if (rnd / 1000000.0 < drop_rate)  
+        if (rnd / 1000000.0 < drop_rate)
             drop_flag = 1;
 
         // Check what the wait should be after we sent the packet until we send the next.
 
         tout = current_ts + send_interval;
-        if (jitter > 0) 
+        if (jitter > 0)
              tout += (rand() % jitter) * 2 - jitter;
 
         queue_test_data(ctx, payload, payload_len, drop_flag);
         packet_ind++;
-        if (drop_flag) 
+        if (drop_flag)
             RMC_LOG_INFO("dropped packet [%lu]", packet_ind);
 
         RMC_LOG_DEBUG("packet[%d] signal[%d-%d] drop[%c] wait[%ld]",
@@ -321,13 +321,13 @@ void test_rmc_proto_pub(char* mcast_group_addr,
 
             if (event_tout == -1 || event_tout > tout)
                 event_tout = tout;
-            
+
             if ((res = process_events(ctx, epollfd, event_tout)) == ETIME)
                 rmc_pub_timeout_process(ctx);
- 
+
             current_ts = rmc_usec_monotonic_timestamp();
-        } 
-        
+        }
+
         process_events(ctx, epollfd, 0);
         rmc_pub_timeout_process(ctx);
 
@@ -336,14 +336,14 @@ void test_rmc_proto_pub(char* mcast_group_addr,
                         pub_packet_list_size(&ctx->pub_ctx.inflight));
     }
 
-    
+
     // Continue to process events until subscriber count reaches zero.
 
     // Disable announce.
     rmc_pub_set_announce_interval(ctx, 0);
 
     RMC_LOG_INFO("All packets queued");
-   
+
     while(subscriber_count > 0) {
         usec_timestamp_t tout = 0;
         usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
@@ -372,4 +372,3 @@ void test_rmc_proto_pub(char* mcast_group_addr,
     RMC_LOG_INFO("TO TEST: Subscribers that repeatedly connects and disconnects");
     exit(0);
 }
-

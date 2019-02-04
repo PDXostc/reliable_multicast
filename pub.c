@@ -81,7 +81,7 @@ void pub_reset_subscriber(pub_subscriber_t* sub,
     while((node = pub_packet_list_tail(&sub->inflight)))
         pub_packet_ack(sub, node->data->pid, pub_payload_free);
 
-    
+
     snode = pub_sub_list_find_node(&sub->context->subscribers, sub,
                                    lambda(int, (pub_subscriber_t* a, pub_subscriber_t* b) {
                                            return a == b;
@@ -142,7 +142,7 @@ packet_id_t pub_queue_packet(pub_context_t* ctx,
                                      payload,
                                      payload_len,
                                      pkg_user_data);
-        
+
 }
 
 packet_id_t pub_queue_no_acknowledge_packet(pub_context_t* ctx,
@@ -155,7 +155,7 @@ packet_id_t pub_queue_no_acknowledge_packet(pub_context_t* ctx,
                                      payload,
                                      payload_len,
                                      pkg_user_data);
-        
+
 }
 
 extern uint32_t pub_queue_size(pub_context_t* ctx)
@@ -189,7 +189,7 @@ void pub_packet_sent(pub_context_t* ctx,
 
     // Record the usec timestamp when it was sent.
     pack->send_ts = send_ts;
-    
+
     // Unlink the node from queued packets in our context.
     // pack->parent will still be allocated and can be reused
     // when we insert the pack into the inflight packets
@@ -272,7 +272,7 @@ void pub_packet_ack(pub_subscriber_t* sub,
     // No inflight packet found for the ack.
     // This can happen if we have already re-sent a timeoud out packet via TCP an
     // deleted it from the inflight queue.
-    if (!node) 
+    if (!node)
         return;
 
 

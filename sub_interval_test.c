@@ -1,6 +1,6 @@
 // Copyright (C) 2018, Jaguar Land Rover
 // This program is licensed under the terms and conditions of the
-// Mozilla Public License, version 2.0.  The full text of the 
+// Mozilla Public License, version 2.0.  The full text of the
 // Mozilla Public License is at https://www.mozilla.org/MPL/2.0/
 //
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
@@ -50,7 +50,7 @@ void test_packet_interval()
     sub_pid_interval_node_t* pnode;
     sub_pid_interval_t intv = { .first_pid = 0, .last_pid = 0 };
     packet_id_t pid = 0;
-    
+
     sub_init_publisher(&pub);
 
     sub_pid_interval_list_init(&ilst, 0, 0, 0);
@@ -62,14 +62,14 @@ void test_packet_interval()
 
     add_packet(&pub, 100);
     sub_process_received_packets(&pub, &plst);
-    
+
     if (sub_pid_interval_list_size(&pub.received_interval) != 1) {
         printf("Failed interval test 1.1. Wanted size 1. Got %d\n",
-               sub_pid_interval_list_size(&pub.received_interval)); 
+               sub_pid_interval_list_size(&pub.received_interval));
         _test_print_interval_list(&pub);
         exit(255);
     }
-        
+
     sub_pid_interval_list_pop_head(&pub.received_interval, &intv);
 
     if (intv.first_pid != 100 || intv.last_pid != 100) {
@@ -108,15 +108,15 @@ void test_packet_interval()
     //  226-226
 
     sub_process_received_packets(&pub, &plst);
-    
+
     if (sub_pid_interval_list_size(&pub.received_interval) != 4) {
         printf("Failed interval test 1.3. Wanted size 4. Got %d\n",
                sub_pid_interval_list_size(&pub.received_interval));
         _test_print_interval_list(&pub);
         exit(255);
     }
-        
-    
+
+
     // Check that intervals are correct.
     pnode = sub_pid_interval_list_head(&pub.received_interval);
     if (pnode->data.first_pid != 4 || pnode->data.last_pid != 5) {
@@ -167,9 +167,9 @@ void test_packet_interval()
     //  226-226
 
 
-    add_packet(&pub, 3);  
+    add_packet(&pub, 3);
     sub_process_received_packets(&pub, &plst);
-    
+
     if (sub_pid_interval_list_size(&pub.received_interval) != 4) {
         printf("Failed interval test 1.8. Wanted size 4. Got %d\n",
                sub_pid_interval_list_size(&pub.received_interval));
@@ -203,7 +203,7 @@ void test_packet_interval()
     //  8-10
     //  223-224
     //  226-226
-    add_packet(&pub, 1);  
+    add_packet(&pub, 1);
     sub_process_received_packets(&pub, &plst);
 
     pnode = sub_pid_interval_list_head(&pub.received_interval);
@@ -232,7 +232,7 @@ void test_packet_interval()
     //  223-224
     //  226-226
 
-    add_packet(&pub, 2);  
+    add_packet(&pub, 2);
     sub_process_received_packets(&pub, &plst);
 
     if (sub_pid_interval_list_size(&pub.received_interval) != 4) {
@@ -267,7 +267,7 @@ void test_packet_interval()
     //  8-11
     //  223-224
     //  226-226
-    add_packet(&pub, 11);  
+    add_packet(&pub, 11);
     sub_process_received_packets(&pub, &plst);
 
     if (sub_pid_interval_list_size(&pub.received_interval) != 4) {
@@ -279,7 +279,7 @@ void test_packet_interval()
 
     pnode = sub_pid_interval_list_head(&pub.received_interval);
     pnode = sub_pid_interval_list_next(pnode);
-    
+
     if (pnode->data.first_pid != 8 || pnode->data.last_pid != 11) {
         printf("Failed interval test 1.14. Wanted 6:11  Got %lu:%lu\n",
                pnode->data.first_pid, pnode->data.last_pid);
@@ -299,9 +299,9 @@ void test_packet_interval()
     // After
     //  1-11
     //  223-226
-    add_packet(&pub, 6);  
-    add_packet(&pub, 7);  
-    add_packet(&pub, 225);  
+    add_packet(&pub, 6);
+    add_packet(&pub, 7);
+    add_packet(&pub, 225);
     sub_process_received_packets(&pub, &plst);
 
     if (sub_pid_interval_list_size(&pub.received_interval) != 2) {
