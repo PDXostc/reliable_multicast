@@ -260,6 +260,7 @@ static int process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
     packet_header_t pack_hdr;
     rmc_sub_context_t* ctx = (rmc_sub_context_t*) user_data.ptr;
     usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
+    uint32_t packet_ready_sz = 0;
 
     // Make sure that we have enough data for the header.
     // Please note that the command byte is still lingering as the
@@ -341,6 +342,14 @@ static int process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
                         0,
                         rmc_usec_monotonic_timestamp(),
                         user_data_u32(conn->connection_index));
+
+    packet_ready_sz = sub_packet_list_size(&ctx->dispatch_ready);
+    sub_process_received_packets(&ctx->publishers[conn->connection_index], &ctx->dispatch_ready);
+
+    // Check if we have a packet ready callback and packets are available.
+    // If that is the case, loop over the packet ready callback until they have
+    if (ctx->packet_ready_cb && sub_packet_list_size(&ctx->dispatch_ready) != packet_ready_sz)
+        (*ctx->packet_ready_cb)(ctx);
 
     return 0;
 }
