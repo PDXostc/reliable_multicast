@@ -21,7 +21,7 @@ static int decode_unsubscribed_multicast(rmc_sub_context_t* ctx,
     int res = 1;
 
     if (pack_hdr->pid) {
-        RMC_LOG_COMMENT("Len[%d] Pid[%lu] - Ignoring data packet since we are not yet subscribed",
+        RMC_LOG_DEBUG("Len[%d] Pid[%lu] - Ignoring data packet since we are not yet subscribed",
                         pack_hdr->payload_len,
                         pack_hdr->pid);
 
@@ -29,10 +29,9 @@ static int decode_unsubscribed_multicast(rmc_sub_context_t* ctx,
     }
 
     if (pack_hdr->node_id == ctx->node_id) {
-        RMC_LOG_COMMENT("Ignoring announce from self.");
+        RMC_LOG_DEBUG("Ignoring announce from self.");
         return 0;
     }
-
 
     RMC_LOG_COMMENT("Len[%d] Pid[%lu] - Announce!",
                     pack_hdr->payload_len,
@@ -84,9 +83,6 @@ static int decode_subscribed_multicast(rmc_sub_context_t* ctx,
                             pack_hdr->pid);
         return 0;
     }
-
-
-
 
     // Use the provided memory allocator to reserve memory for
     // incoming payload.
@@ -301,7 +297,7 @@ static int process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
 
         // Free payload
         circ_buf_free(&conn->read_buf, pack_hdr.payload_len, 0);
-        return 0; // Dups are ok.
+        return 0;
     }
 
     // Allocate memory for payload
