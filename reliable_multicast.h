@@ -223,6 +223,20 @@ typedef struct rmc_pub_context {
     // Next timestamp when we need to send out an announcement
     usec_timestamp_t announce_next_send_ts;
 
+
+    // At how manu inflight packets do we suspend rmc_pub_queue_packet() from accepting
+    // more packets.
+    // Once stopped the inflight count needs to go below traffic_resume_threshold
+    // before rmc_pub_queue_packet() starts accepting packets again.
+    // If either are 0, traffic throttling is disabled.
+    uint32_t traffic_suspend_threshold;
+    uint32_t traffic_resume_threshold;
+
+    // Set to 1 if traffic has been suspended by an inflight_count_suspend_traffic
+    // threshold breach. Will be cleared once inflight count goes under
+    // inflight_count_resume_traffic.
+    uint8_t traffic_suspended;
+
     // Callback invoked every time we are about to send out an announcement.
     // payload is to be filled with the data to send with the announcement.
     // The number of bytes copied into payload cannot be more than
@@ -562,6 +576,8 @@ extern int rmc_pub_set_control_message_callback(rmc_pub_context_t* context,
 extern int rmc_pub_deactivate_context(rmc_pub_context_t* context);
 extern int rmc_pub_set_multicast_ttl(rmc_pub_context_t* ctx, int hops);
 extern int rmc_pub_set_user_data(rmc_pub_context_t* ctx, user_data_t user_data);
+extern int rmc_pub_throttling(rmc_pub_context_t* ctx, uint32_t suspend_threshold, uint32_t resume_threhold);
+extern int rmc_pub_traffic_suspended(rmc_pub_context_t* ctx);
 extern user_data_t rmc_pub_user_data(rmc_pub_context_t* ctx);
 extern rmc_node_id_t rmc_pub_node_id(rmc_pub_context_t* ctx);
 extern int rmc_pub_get_next_timeout(rmc_pub_context_t* context, usec_timestamp_t* result);
@@ -599,6 +615,7 @@ extern int rmc_pub_context_get_pending(rmc_pub_context_t* ctx,
                                        uint32_t* queued_packets,
                                        uint32_t* send_buf_len,
                                        uint32_t* ack_count);
+
 
 
 extern int rmc_sub_activate_context(rmc_sub_context_t* context);

@@ -99,7 +99,6 @@ int rmc_pub_init_context(rmc_pub_context_t* ctx,
     ctx->conn_vec.poll_modify = poll_modify;
     ctx->conn_vec.poll_remove = poll_remove;
 
-
     ctx->payload_free = payload_free;
 
     ctx->resend_timeout = RMC_DEFAULT_PACKET_TIMEOUT;
@@ -113,11 +112,15 @@ int rmc_pub_init_context(rmc_pub_context_t* ctx,
     ctx->announce_send_interval = 0;
     ctx->announce_next_send_ts = 0;
 
+    ctx->traffic_suspend_threshold = 0;
+    ctx->traffic_resume_threshold = 0;
+    ctx->traffic_suspended = 0;
+
     // outgoing_payload_free() will be called when
     // pub_acket_ack() is called, which happens when a
     // subscriber sends an ack back for the given pid.
     // When all subscribers have acknowledged,
-    // outgoing_payload_free() is called to free the payload.
+    // payload_free() will be called is called to free the payload.
     pub_init_context(&ctx->pub_ctx);
 
     ctx->subscribers = malloc(sizeof(pub_subscriber_t) * conn_vec_size);
@@ -423,4 +426,22 @@ uint32_t rmc_pub_get_socket_count(rmc_pub_context_t* ctx)
     return rmc_pub_get_subscriber_count(ctx) +
         (ctx->mcast_send_descriptor != -1)?1:0 +
         (ctx->listen_descriptor != -1 )?1:0;
+}
+
+int rmc_pub_throttling(rmc_pub_context_t* ctx,
+                       uint32_t suspend_threshold,
+                       uint32_t resume_threshold)
+{
+    if (!ctx)
+        return EINVAL;
+
+    if (suspend_threshold < resume_threshold) {
+        RMC_LOG_WARNING("Traffic throttling suspend threhold[%d] is less than the restart value[%d]. Ignored.",
+                        suspend_threshold, resume_threshold);
+
+        return EINVAL;
+    }
+    ctx->traffic_suspend_threshold = suspend_threshold;
+    ctx->traffic_resume_threshold = resume_threshold;
+    return 0;
 }
