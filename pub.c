@@ -303,10 +303,11 @@ void pub_packet_ack(pub_subscriber_t* sub,
     }
 }
 
-uint32_t pub_get_unacknowledged_packet_count(pub_subscriber_t* sub)
+uint32_t pub_get_unacknowledged_packet_count(pub_context_t* ctx)
 {
-    return pub_packet_list_size(&sub->inflight);
+    return pub_packet_list_size(&ctx->inflight);
 }
+
 
 void pub_get_timed_out_subscribers(pub_context_t* ctx,
                                    usec_timestamp_t current_ts,

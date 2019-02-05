@@ -156,7 +156,7 @@ extern void pub_get_timed_out_packets(pub_subscriber_t* sub,
                                       usec_timestamp_t timeout_period, // Number of usecs until timeout
                                       pub_packet_list_t* result);
 
-extern uint32_t pub_get_unacknowledged_packet_count(pub_subscriber_t* sub);
+extern uint32_t pub_get_unacknowledged_packet_count(pub_context_t* ctx);
 
 // Get the time when the oldest packet was sent that we still are waiting
 // for an acknowledgement on from the subscriber.
