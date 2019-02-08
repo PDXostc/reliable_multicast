@@ -21,15 +21,15 @@ static void setup_packet_header(rmc_pub_context_t* ctx,
                                 pub_packet_t* pack,
                                 packet_header_t* pack_hdr)
 {
-    // Setup node id. 
+    // Setup node id.
     pack_hdr->node_id = ctx->node_id;
-    pack_hdr->payload_len = pack->payload_len; 
-    pack_hdr->pid = pack->pid; 
+    pack_hdr->payload_len = pack->payload_len;
+    pack_hdr->pid = pack->pid;
 
     // If listen_ip == 0 then receiver will use source address of packet as tcp
     // address to connect to.
-    pack_hdr->listen_ip = ctx->control_listen_if_addr; 
-    pack_hdr->listen_port = ctx->control_listen_port; 
+    pack_hdr->listen_ip = ctx->control_listen_if_addr;
+    pack_hdr->listen_port = ctx->control_listen_port;
 }
 
 // FIXME: If we see timed out (== lost) packets from subscribers, we should
@@ -57,7 +57,7 @@ static int send_single_multicast_packet(rmc_pub_context_t* ctx, pub_packet_t* pa
         return ENOTCONN;
 
     // Will the packet fit inside a UDP packet?
-    if (sizeof(packet_header_t) + pack->payload_len > RMC_MAX_PACKET) 
+    if (sizeof(packet_header_t) + pack->payload_len > RMC_MAX_PACKET)
         return EMSGSIZE;
 
     setup_packet_header(ctx, pack, &pack_hdr);
@@ -76,12 +76,12 @@ static int send_single_multicast_packet(rmc_pub_context_t* ctx, pub_packet_t* pa
         .iov_base = (void*) &pack_hdr,
         .iov_len = sizeof(pack_hdr)
     };
-    
+
     io_vec[1] = (struct iovec) {
         .iov_base = (void*) pack->payload,
         .iov_len = pack->payload_len
     };
-            
+
     // Setup message header.
     msg_hdr = (struct msghdr) {
         .msg_name = (void*) &sock_addr,
@@ -154,7 +154,7 @@ int rmc_pub_resend_packet(rmc_pub_context_t* ctx,
     uint32_t seg2_len = 0;
     int res = 0;
     packet_header_t pack_hdr;
-    
+
     // Do we have enough circular buffer meomory available?
     if (circ_buf_available(&conn->write_buf) < 1 + sizeof(packet_header_t) + pack->payload_len) {
         RMC_LOG_INDEX_DEBUG(conn->connection_index,
@@ -165,7 +165,7 @@ int rmc_pub_resend_packet(rmc_pub_context_t* ctx,
         res = EAGAIN;
         goto rearm;
     }
-    
+
     // Allocate memory for command
     res = circ_buf_alloc(&conn->write_buf, 1,
                          &seg1, &seg1_len,
@@ -194,7 +194,7 @@ int rmc_pub_resend_packet(rmc_pub_context_t* ctx,
 
     // Copy in packet header
     memcpy(seg1, (uint8_t*) &pack_hdr, seg1_len);
-    if (seg2_len) 
+    if (seg2_len)
         memcpy(seg2, ((uint8_t*) &pack_hdr) + seg1_len, seg2_len);
 
     // Allocate packet payload
@@ -210,13 +210,12 @@ int rmc_pub_resend_packet(rmc_pub_context_t* ctx,
 
     // Copy in packet payload
     memcpy(seg1, pack->payload, seg1_len);
-    if (seg2_len) 
+    if (seg2_len)
         memcpy(seg2, ((uint8_t*) pack->payload) + seg1_len, seg2_len);
 
     RMC_LOG_INDEX_DEBUG(conn->connection_index,
                   "Queued %d bytes",
                  1 + sizeof(packet_header_t) + pack->payload_len);
-
 
 rearm:
     // Setup the poll write action
@@ -230,10 +229,10 @@ rearm:
                                          conn->connection_index,
                                          old_action,
                                          conn->action);
-    }    
-    
+    }
+
     return res;
-}    
+}
 
 
 int rmc_pub_write(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
@@ -250,7 +249,7 @@ int rmc_pub_write(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
         if (op_res)
             *op_res = RMC_WRITE_MULTICAST;
         // Write as many multicast packets as we can.
-        RMC_LOG_INDEX_DEBUG(RMC_MULTICAST_INDEX, 
+        RMC_LOG_INDEX_DEBUG(RMC_MULTICAST_INDEX,
                             "Processing multicast write");
         return process_multicast_write(ctx);
     }
@@ -285,10 +284,10 @@ int rmc_pub_write(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
 
     if (op_res)
         *op_res = RMC_WRITE_TCP;
-    
+
     res = rmc_conn_process_tcp_write(conn, &bytes_left_after);
-    
-    if (bytes_left_after == 0) 
+
+    if (bytes_left_after == 0)
         conn->action &= ~RMC_POLLWRITE;
     else
         conn->action |= RMC_POLLWRITE;
@@ -303,7 +302,7 @@ int rmc_pub_write(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
     // Did we encounter an error.
     if (res && op_res)
         *op_res = RMC_ERROR;
-        
+
     return res;
 }
 
@@ -331,7 +330,7 @@ int rmc_pub_context_get_pending(rmc_pub_context_t* ctx,
 
     if (send_buf_len)
         *send_buf_len = 0;
-        
+
     queue_size = pub_queue_size(&ctx->pub_ctx);
     if (queue_size > 0)
         busy = 1;
@@ -345,24 +344,24 @@ int rmc_pub_context_get_pending(rmc_pub_context_t* ctx,
     if (max_ind == -1)
         // Return EBUSY if we have pending data to transmit
         return busy?EBUSY:0;
-        
+
     for(ind = 0; ind <= max_ind; ++ind) {
         rmc_connection_t* conn = 0;
         pub_subscriber_t *sub = 0;
         payload_len_t len = 0;
 
         conn = rmc_conn_find_by_index(&ctx->conn_vec, ind);
-        
+
         if (!conn)
             continue;
-    
+
         sub = &ctx->subscribers[conn->connection_index];
 
         count = pub_packet_list_size(&sub->inflight);
         if (count != 0) {
             busy = 1;
 
-            if (ack_count) 
+            if (ack_count)
                 *ack_count += count;
         }
 
@@ -372,7 +371,7 @@ int rmc_pub_context_get_pending(rmc_pub_context_t* ctx,
         if (len != 0) {
             busy = 1;
 
-            if (send_buf_len) 
+            if (send_buf_len)
                 *send_buf_len += len;
         }
     }
@@ -380,5 +379,3 @@ int rmc_pub_context_get_pending(rmc_pub_context_t* ctx,
     // Return EBUSY if we have pending data to transmit
     return busy?EBUSY:0;
 }
-
-

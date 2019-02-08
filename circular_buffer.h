@@ -1,6 +1,6 @@
 // Copyright (C) 2018, Jaguar Land Rover
 // This program is licensed under the terms and conditions of the
-// Mozilla Public License, version 2.0.  The full text of the 
+// Mozilla Public License, version 2.0.  The full text of the
 // Mozilla Public License is at https://www.mozilla.org/MPL/2.0/
 //
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com);
@@ -48,7 +48,7 @@ extern int circ_buf_read(circ_buf_t* circ_buf,
 
 // Start reading with a given offset into circ_buf data.
 extern int circ_buf_read_offset(circ_buf_t* circ_buf,
-                                uint32_t offset, 
+                                uint32_t offset,
                                 uint8_t* target,
                                 uint32_t size,
                                 uint32_t* bytes_read);

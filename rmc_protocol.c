@@ -37,7 +37,7 @@ int rmc_conn_process_tcp_write(rmc_connection_t* conn, uint32_t* bytes_left)
         return ENODATA;
     }
 
-    
+
     // Setup a zero-copy scattered socket write
     iov[0].iov_base = seg1;
     iov[0].iov_len = seg1_len;
@@ -48,13 +48,13 @@ int rmc_conn_process_tcp_write(rmc_connection_t* conn, uint32_t* bytes_left)
     res = writev(conn->descriptor, iov, seg2_len?2:1);
 
     // How did that write go?
-    if (res == -1) { 
+    if (res == -1) {
         *bytes_left = circ_buf_in_use(&conn->write_buf);
         RMC_LOG_INDEX_INFO(conn->connection_index, "writev");
         return errno;
     }
 
-    if (res == 0) { 
+    if (res == 0) {
         *bytes_left = circ_buf_in_use(&conn->write_buf);
         RMC_LOG_INDEX_INFO(conn->connection_index, "Failed to send data");
         return 0;
@@ -100,7 +100,7 @@ int rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
         RMC_LOG_INDEX_ERROR(s_ind, "Circular buffer read failed: %s", strerror(errno));
         return res;
     }
-    
+
     *op_res = RMC_READ_TCP;
     while(1) {
         rmc_conn_command_dispatch_t* current = dispatch_table;
@@ -111,7 +111,7 @@ int rmc_conn_process_tcp_read(rmc_connection_vector_t* conn_vec,
                 ++current;
                 continue;
             }
-                
+
             // The called function will free any additional circular buffer
             // space beyond the command byte.
 
@@ -198,7 +198,7 @@ int rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
                          &seg1, &seg1_len,
                          &seg2, &seg2_len);
 
-    
+
     // Did we fail?
     if (res) {
         *op_res = RMC_ERROR;
@@ -210,12 +210,12 @@ int rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
     iov[0].iov_len = seg1_len;
     iov[1].iov_base = seg2;
     iov[1].iov_len = seg2_len;
-    
+
     errno = 0;
-    
+
     res = readv(conn->descriptor, iov, 2);
     RMC_LOG_INDEX_DEBUG(s_ind,
-                        "readv(): Wanted %d + %d -> %d bytes. Got %ld %s", 
+                        "readv(): Wanted %d + %d -> %d bytes. Got %ld %s",
                         seg1_len,
                         seg2_len,
                         seg1_len + seg2_len,
@@ -229,7 +229,7 @@ int rmc_conn_tcp_read(rmc_connection_vector_t* conn_vec,
         circ_buf_trim(&conn->read_buf, available);
         return EPIPE;
     }
-    
+
     // Trim the tail end of the allocated data to match the number of
     // bytes read.
 

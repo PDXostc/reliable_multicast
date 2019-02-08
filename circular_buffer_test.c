@@ -1,6 +1,6 @@
 // Copyright (C) 2018, Jaguar Land Rover
 // This program is licensed under the terms and conditions of the
-// Mozilla Public License, version 2.0.  The full text of the 
+// Mozilla Public License, version 2.0.  The full text of the
 // Mozilla Public License is at https://www.mozilla.org/MPL/2.0/
 //
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
@@ -31,8 +31,8 @@ void circ_buf_hex_dump(circ_buf_t* circ_buf)
     {
         printf("  Byte[%.5d] Ind[%d], Val[%.2X] [%.3d] ",
                count,
-               ind, 
-               circ_buf->buffer[ind] & 0xFF, 
+               ind,
+               circ_buf->buffer[ind] & 0xFF,
                circ_buf->buffer[ind] & 0xFF);
 
         if (circ_buf->buffer[ind] > 31 && circ_buf->buffer[ind] < 127)
@@ -108,7 +108,7 @@ void read_data(circ_buf_t* cb,
 
         exit(255);
     }
-    
+
     available = circ_buf_available(cb);
     in_use = circ_buf_in_use(cb);
 
@@ -133,7 +133,7 @@ void read_data(circ_buf_t* cb,
                major_test);
 
         printf("byte | expect | got\n");
-               
+
         for(ind = 0; ind < bytes_to_read; ++ind) {
             if (expected_result[ind] == data[ind])
                 printf(" %.3d      %c      %c\n",
@@ -142,7 +142,7 @@ void read_data(circ_buf_t* cb,
                        (int) data[ind]);
             else
                 printf("*%.3d      %c      %c\n",
-                       
+
                        ind,
                        (int) expected_result[ind],
                        (int) data[ind]);
@@ -153,17 +153,17 @@ void read_data(circ_buf_t* cb,
     // Do an offset read from 0 to in_use to ensure that we have total
     // integrity across all offset cases for the given data.
     //
-    
+
     while(offset != in_use) {
         uint8_t offset_data[in_use];
         memset(offset_data, 'X', in_use);
-        
-        
+
+
         res = circ_buf_read_offset(cb, offset, offset_data, bytes_to_read - offset, &len);
         if (res != 0) {
             printf("circular buffer test %d.7: Wanted return value 0 (OK). Got %s\n",
                    major_test, strerror(res));
-            
+
             exit(255);
         }
 
@@ -173,15 +173,15 @@ void read_data(circ_buf_t* cb,
 
             exit(255);
         }
-        
+
         if (memcmp(offset_data, expected_result + offset, bytes_to_read - offset)) {
             uint32_t ind = 0;
-            
-            printf("circular buffer test %d.6: Offset integrity failure. Offset[%d]\n", 
+
+            printf("circular buffer test %d.6: Offset integrity failure. Offset[%d]\n",
                    major_test, offset);
 
             printf("byte | expect | got\n");
-               
+
             for(ind = 0; ind < bytes_to_read-offset; ++ind) {
                 if (expected_result[ind+offset] == offset_data[ind])
                     printf(" %.3d      %c      %c\n",
@@ -190,7 +190,7 @@ void read_data(circ_buf_t* cb,
                            (int) offset_data[ind]);
                 else
                     printf("*%.3d      %c      %c\n",
-                       
+
                            ind,
                            (int) expected_result[ind+offset],
                            (int) offset_data[ind]);
@@ -214,7 +214,7 @@ void read_data(circ_buf_t* cb,
 
         exit(255);
     }
-    
+
 }
 
 void write_data(circ_buf_t* cb,
@@ -223,7 +223,7 @@ void write_data(circ_buf_t* cb,
                 uint32_t exp_seg1_len,
                 uint32_t exp_seg2_len)
 {
-    int res; 
+    int res;
     uint8_t* seg1 = 0;
     uint32_t seg1_len = 0;
     uint8_t* seg2 = 0;
@@ -231,15 +231,15 @@ void write_data(circ_buf_t* cb,
     uint32_t available = 0;
     uint32_t in_use = 0;
     uint32_t data_len = strlen(data);
-    
+
     if (circ_buf_available(cb) < data_len) {
         printf("circular buffer test %d.1: Wanted %d bytes of data available. Got %d\n",
                major_test, data_len, circ_buf_available(cb));
 
         exit(255);
     }
-    
-    
+
+
     available = circ_buf_available(cb);
     in_use = circ_buf_in_use(cb);
     res = circ_buf_alloc(cb, data_len, &seg1, &seg1_len, &seg2, &seg2_len);
@@ -279,7 +279,7 @@ void write_data(circ_buf_t* cb,
     }
     memcpy(seg1, data, seg1_len);
 
-    if (seg2_len) 
+    if (seg2_len)
         memcpy(seg2, data+seg1_len, seg2_len);
 
     return;
@@ -388,7 +388,7 @@ void test_circular_buffer(void)
     // Please note that the buffer is full since we have
     // one byte reserved to distinguish between empty
     // and full vuffer, in which both cases start and stop
-    // would point to the same byte if we did not have 
+    // would point to the same byte if we did not have
     // the reserved byte.]
     write_data(&cb, 24, "ABCD", 4, 0);
     check_integrity(&cb, 26, 0, 4);
@@ -411,7 +411,7 @@ void test_circular_buffer(void)
     // After write:
     // Index:     [0][1][2][3][4]
     // Data:       B  C  -  D  A
-    // Start/stop        s  S  
+    // Start/stop        s  S
     write_data(&cb, 27, "ABC", 1, 2);
     check_integrity(&cb, 28, 0, 4);
 
@@ -422,10 +422,10 @@ void test_circular_buffer(void)
     // After read:
     // Index:     [0][1][2][3][4]
     // Data:       -  -  -  -  -
-    // Start/stop        X  
+    // Start/stop        X
     read_data(&cb, 29, "DABC");
     check_integrity(&cb, 30, 4, 0);
-    
+
     //
     // Check alloc beyond our capacity.
     //
@@ -449,7 +449,7 @@ void test_circular_buffer(void)
     }
 
     write_data(&cb, 24, "ABC", 3, 0);
-    
+
     res = circ_buf_read(&cb, data, 100, &len);
     if (res != 0) {
         printf("circular buffer test 31.4 Expected OK. Got %s\n",
@@ -478,7 +478,7 @@ void test_circular_buffer(void)
 
     // Bug found during higher-level testing
     circ_buf_init(&cb, buf2, sizeof(buf2));
-    
+
     res = circ_buf_alloc(&cb, circ_buf_available(&cb), &seg1, &seg1_len, &seg2, &seg2_len);
     if (res) {
         printf("circular buffer test 32.1: Expected OK. Got %s\n", strerror(res));

@@ -62,7 +62,7 @@ static int process_control_message(rmc_connection_t* conn, user_data_t user_data
     RMC_LOG_INDEX_COMMENT(conn->connection_index,
                           "process_control_message(): payload_len[%d] callback[%s]",
                           msg.payload_len, ctx->subscriber_control_message_cb?"yes":"no");
- 
+
    // Make a callback if defined
     if (ctx->subscriber_control_message_cb) {
         char payload[msg.payload_len];
@@ -86,7 +86,7 @@ static int process_control_message(rmc_connection_t* conn, user_data_t user_data
 int rmc_pub_close_connection(rmc_pub_context_t* ctx, rmc_index_t s_ind)
 {
     rmc_connection_t* conn = 0;
-    
+
     if (!ctx)
         return EINVAL;
 
@@ -135,7 +135,7 @@ int rmc_pub_read(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
 
     if (!op_res)
         op_res = &dummy_res;
-    
+
     if (s_ind == RMC_LISTEN_INDEX)  {
         rmc_connection_t* conn = 0;
         res = rmc_conn_process_accept(ctx->listen_descriptor, &ctx->conn_vec, &s_ind);
@@ -162,7 +162,7 @@ int rmc_pub_read(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
 
         return 0;
     }
-            
+
     if (s_ind == RMC_MULTICAST_INDEX)  {
         uint8_t throw_away; // Read only one byte of packet, rest will be discarded by kernel
         struct sockaddr_in src_addr;
@@ -203,11 +203,11 @@ int rmc_pub_read(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
 
     res = rmc_conn_tcp_read(&ctx->conn_vec, s_ind, op_res,
                              dispatch_table, user_data_ptr(ctx));
-    
+
     // rmc_conn_tcp_read will return EPIPE if we get
     // zero bytes in a read (happens after we issued a close).
     // or read return -1. In both cases we close the conneciton.
-    if (res == EPIPE) { 
+    if (res == EPIPE) {
         RMC_LOG_INDEX_COMMENT(s_ind, "tcp read returned EPIPE");
         rmc_pub_close_connection(ctx, s_ind);
         return 0; // This is not an error, just regular maintenance.
@@ -219,10 +219,10 @@ int rmc_pub_read(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
 
     conn->action = RMC_POLLREAD | ((write_buf_sz > 0)?RMC_POLLWRITE:0);
 
-    if (ctx->conn_vec.poll_modify) 
-        (*ctx->conn_vec.poll_modify)(ctx->user_data, 
-                                     conn->descriptor, 
-                                     s_ind, 
+    if (ctx->conn_vec.poll_modify)
+        (*ctx->conn_vec.poll_modify)(ctx->user_data,
+                                     conn->descriptor,
+                                     s_ind,
                                      old_action,
                                      conn->action);
 
@@ -233,14 +233,14 @@ int rmc_pub_context_has_pending_send(rmc_pub_context_t* ctx, rmc_index_t s_ind)
 {
     rmc_connection_t* conn = 0;
     payload_len_t len = 0;
-    
+
     if (!ctx)
         EINVAL;
 
     conn = rmc_conn_find_by_index(&ctx->conn_vec, s_ind);
     if (!conn)
         return ENOTCONN;
-    
+
     // Check send buffer.
     rmc_conn_get_pending_send_length(conn, &len);
 

@@ -1,6 +1,6 @@
 // Copyright (C) 2018, Jaguar Land Rover
 // This program is licensed under the terms and conditions of the
-// Mozilla Public License, version 2.0.  The full text of the 
+// Mozilla Public License, version 2.0.  The full text of the
 // Mozilla Public License is at https://www.mozilla.org/MPL/2.0/
 //
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
@@ -107,8 +107,6 @@
                                                                         \
     inline NODETYPE* LISTTYPE##_push_tail_node(LISTTYPE* owner, NODETYPE* node) \
     {                                                                   \
-        NODETYPE* tail = 0;                                             \
-                                                                        \
         assert(owner);                                                  \
         if (!node)                                                      \
             assert(node);                                               \
@@ -400,7 +398,6 @@
                                        int (*compare_func)(DATATYPE new_elem, \
                                                            DATATYPE existing_elem)) \
     {                                                                   \
-        NODETYPE* node = 0;                                             \
         NODETYPE* new_node = 0;                                         \
                                                                         \
         assert(list);                                                   \
@@ -417,7 +414,6 @@
                                            int (*compare_func)(DATATYPE new_elem, \
                                                                DATATYPE existing_elem)) \
     {                                                                   \
-        NODETYPE* node = 0;                                             \
         NODETYPE* new_node = 0;                                         \
         assert(list);                                                   \
                                                                         \
@@ -435,4 +431,3 @@
         while(LISTTYPE##_size(list))                                    \
             LISTTYPE##_delete(list->head);                              \
     }
-

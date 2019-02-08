@@ -19,7 +19,7 @@
 #include <signal.h>
 
 #include "rmc_list_template.h"
-RMC_LIST_IMPL(rmc_index_list, rmc_index_node, rmc_index_t) 
+RMC_LIST_IMPL(rmc_index_list, rmc_index_node, rmc_index_t)
 
 // =============
 // CONTEXT MANAGEMENT
@@ -29,7 +29,7 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
                          rmc_node_id_t node_id,
                          char* mcast_group_addr,
                          // Interface IP to bind mcast to. Default: "0.0.0.0" (IFADDR_ANY)
-                         char* mcast_if_addr, 
+                         char* mcast_if_addr,
                          int multicast_port,
 
                          user_data_t user_data,
@@ -37,7 +37,7 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
                          rmc_poll_add_cb_t poll_add,
                          rmc_poll_modify_cb_t poll_modify,
                          rmc_poll_remove_cb_t poll_remove,
-                         
+
                          uint8_t* conn_vec,
                          uint32_t conn_vec_size, // In bytes.
 
@@ -50,7 +50,7 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
     int ind = 0;
     struct in_addr addr;
     int seed = rmc_usec_monotonic_timestamp() & 0xFFFFFFFF;
-                                     
+
     if (!ctx || !mcast_group_addr)
         return EINVAL;
 
@@ -71,7 +71,7 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
                                     poll_add,
                                     poll_modify,
                                     poll_remove);
-    
+
     if (!mcast_if_addr)
         mcast_if_addr = "0.0.0.0";
 
@@ -89,7 +89,7 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
         return EINVAL;
     }
     ctx->mcast_if_addr = ntohl(addr.s_addr);
-    
+
 
 
     ctx->mcast_port = multicast_port;
@@ -192,7 +192,7 @@ int rmc_sub_activate_context(rmc_sub_context_t* ctx)
         goto error;
     }
 
-    if (ctx->conn_vec.poll_add) 
+    if (ctx->conn_vec.poll_add)
         (*ctx->conn_vec.poll_add)(ctx->user_data,
                                   ctx->mcast_recv_descriptor,
                                   RMC_MULTICAST_INDEX,
@@ -205,7 +205,7 @@ error:
         close(ctx->mcast_recv_descriptor);
         ctx->mcast_recv_descriptor = -1;
     }
-    
+
 
     return errno;
 }
@@ -222,26 +222,26 @@ int rmc_sub_deactivate_context(rmc_sub_context_t* ctx)
         return EINVAL;
 
     // Empty all packets that are dispatch ready.
-    while(sub_packet_list_pop_head(&ctx->dispatch_ready, &pack)) 
+    while(sub_packet_list_pop_head(&ctx->dispatch_ready, &pack))
         rmc_sub_packet_dispatched(ctx, pack);
 
     // Empty ack list
     rmc_index_list_empty(&ctx->pub_ack_list);
 
     close(ctx->mcast_recv_descriptor);
-    if (ctx->conn_vec.poll_remove) 
+    if (ctx->conn_vec.poll_remove)
         (*ctx->conn_vec.poll_remove)(ctx->user_data,
                                      ctx->mcast_recv_descriptor,
                                      RMC_MULTICAST_INDEX);
 
     ctx->mcast_recv_descriptor = -1;
-    
+
     rmc_conn_get_max_index_in_use(&ctx->conn_vec, &max);
     for(ind = 0; ind <= max; ++ind) {
         rmc_connection_t* conn = rmc_conn_find_by_index(&ctx->conn_vec,
                                                         ind);
         // Don't opereate on closed connections.
-        if (!conn) 
+        if (!conn)
             continue;
 
         rmc_sub_close_connection(ctx, ind);
@@ -321,7 +321,7 @@ rmc_index_t rmc_sub_get_publisher_count(rmc_sub_context_t* ctx)
 
     if (!ctx)
         return 0;
-    
+
     rmc_conn_get_active_connection_count(&ctx->conn_vec, &res);
     return res;
 }
@@ -343,8 +343,7 @@ uint32_t rmc_sub_get_socket_count(rmc_sub_context_t* ctx)
 
     if (!ctx)
         return 0;
-    
+
     return rmc_sub_get_publisher_count(ctx) +
         (ctx->mcast_recv_descriptor != -1)?1:0;
 }
-

@@ -1,24 +1,24 @@
 // Copyright (C) 2018, Jaguar Land Rover
 // This program is licensed under the terms and conditions of the
-// Mozilla Public License, version 2.0.  The full text of the 
+// Mozilla Public License, version 2.0.  The full text of the
 // Mozilla Public License is at https://www.mozilla.org/MPL/2.0/
 //
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
 #include "rmc_sub.h"
-#include "rmc_log.h"
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <memory.h>
+#include "rmc_log.h"
 
 #include "rmc_list_template.h"
 
-RMC_LIST_IMPL(sub_packet_list, sub_packet_node, sub_packet_t*) 
-RMC_LIST_IMPL(sub_pid_interval_list, sub_pid_interval_node, sub_pid_interval_t) 
+RMC_LIST_IMPL(sub_packet_list, sub_packet_node, sub_packet_t*)
+RMC_LIST_IMPL(sub_pid_interval_list, sub_pid_interval_node, sub_pid_interval_t)
 
 // FIXME: Ditch malloc and use a stack-based alloc/free setup that operates
-//       on static-sized heap memory allocated at startup. 
+//       on static-sized heap memory allocated at startup.
 static sub_packet_t* _alloc_pending_packet()
 {
     sub_packet_t* res = (sub_packet_t*) malloc(sizeof(sub_packet_t));
@@ -69,7 +69,7 @@ int sub_packet_is_duplicate(sub_publisher_t* pub, packet_id_t pid)
                                              }
                                              return 0;
                                          }));
-        
+
     if (is_duplicate == 1) {
         return 1;
     }
@@ -85,6 +85,7 @@ int sub_packet_interval_acknowledged(sub_publisher_t* pub, sub_packet_t* pack, p
 int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
                         void* payload,
                         payload_len_t payload_len,
+                        char store_receive_interval_data,
                         usec_timestamp_t current_ts,
                         user_data_t pkg_user_data)
 {
@@ -100,7 +101,7 @@ int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
 
     if (pub->max_pid_received < pid)
         pub->max_pid_received = pid;
-    
+
     // Insert on ascending pid sort order, running from tail toward head
     // since our received packet probably belongs closer to the tail of
     // the received list than the beginning
@@ -112,7 +113,8 @@ int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
                                                    0);
                                           }));
 
-    _sub_packet_add_to_received_interval(pub, pid);
+    if (store_receive_interval_data)
+        sub_packet_add_to_received_interval(pub, pid);
     return 1;
 }
 
@@ -125,19 +127,19 @@ void sub_process_received_packets(sub_publisher_t* pub, sub_packet_list_t* dispa
 {
     sub_packet_node_t* node = 0;
     assert(pub);
-    
+
     // Move over all packets that are sequential to the
     // last successfully received packet from the received
     // queue top
     node = sub_packet_list_head(&pub->received_pid);
 
     // Initialize pub->max_pid_ready if not setup already
-    if (node && !pub->max_pid_ready) 
+    if (node && !pub->max_pid_ready)
         pub->max_pid_ready = node->data->pid - 1;
 
     while(node) {
         if (pub->max_pid_ready &&
-            node->data->pid != pub->max_pid_ready + 1) 
+            node->data->pid != pub->max_pid_ready + 1)
             break;
 
         // Drop the packet in at the tail of provide dispatch_ready list.
@@ -150,7 +152,7 @@ void sub_process_received_packets(sub_publisher_t* pub, sub_packet_list_t* dispa
         pub->max_pid_ready++;
     }
 }
-    
+
 
 
 void sub_init_publisher(sub_publisher_t* pub)
@@ -203,11 +205,11 @@ usec_timestamp_t sub_oldest_unacknowledged_packet(sub_publisher_t* pub)
 // 1 - Interval added to list
 // 0 - Existing interval modified
 // -1 - Interval collapsed
-int _sub_packet_add_to_received_interval(sub_publisher_t* pub, packet_id_t pid)
+int sub_packet_add_to_received_interval(sub_publisher_t* pub, packet_id_t pid)
 {
     sub_pid_interval_node_t* inode = 0;
     // Do we have an empty list?
-    
+
     // Traverse the list from the back, to increase chance of hit, to see if we can fit it anywhere
     inode = sub_pid_interval_list_tail(&pub->received_interval);
 
@@ -219,7 +221,7 @@ int _sub_packet_add_to_received_interval(sub_publisher_t* pub, packet_id_t pid)
         //   intv  intv   intv
         //   1-3   6-10   15-17
         //              ^
-        //              13 
+        //              13
         //              pid
         if (pid > inode->data.last_pid + 1) {
             sub_pid_interval_list_insert_after(inode,
@@ -238,11 +240,11 @@ int _sub_packet_add_to_received_interval(sub_publisher_t* pub, packet_id_t pid)
         //   intv  intv   intv
         //   1-3   6-10   12-17
         //             ^
-        //             11 
+        //             11
         //             pid
         if (inode->data.last_pid + 1 == pid) {
             sub_pid_interval_node_t* inext = 0;
-            
+
             inode->data.last_pid = pid;
 
             // Can we collapse this interval with the next one?
@@ -250,18 +252,18 @@ int _sub_packet_add_to_received_interval(sub_publisher_t* pub, packet_id_t pid)
             // Before
             //   intv  intv   intv
             //   1-3   6-11   12-17
-            //  
+            //
             // After
             //   intv  intv
             //   1-3   6-17
-            //  
+            //
             inext = sub_pid_interval_list_next(inode);
             if (inext && inext->data.first_pid - 1 == pid) {
                 inode->data.last_pid = inext->data.last_pid;
 
                 // Copy the oldest timestamp of the two merged
                 // intervals.
-                inode->data.receive_ts = 
+                inode->data.receive_ts =
                     (inode->data.receive_ts < inext->data.receive_ts)?
                     inode->data.receive_ts:
                     inext->data.receive_ts;
@@ -279,7 +281,7 @@ int _sub_packet_add_to_received_interval(sub_publisher_t* pub, packet_id_t pid)
         //   intv  intv   intv
         //   1-4   6-10   15-17
         //        ^
-        //        5 
+        //        5
         //       pid
         if (inode->data.first_pid - 1 == pid) {
             sub_pid_interval_node_t* iprev = 0;
@@ -302,7 +304,7 @@ int _sub_packet_add_to_received_interval(sub_publisher_t* pub, packet_id_t pid)
 
                 // Copy the oldest timestamp of the two merged
                 // intervals.
-                inode->data.receive_ts = 
+                inode->data.receive_ts =
                     (inode->data.receive_ts < iprev->data.receive_ts)?
                     inode->data.receive_ts:
                     iprev->data.receive_ts;
@@ -323,8 +325,8 @@ int _sub_packet_add_to_received_interval(sub_publisher_t* pub, packet_id_t pid)
     // Example
     //    intv  intv  intv
     //    3-3   6-10  13-13
-    //  ^         
-    //  1          
+    //  ^
+    //  1
     // pid
     //
     sub_pid_interval_list_push_head(&pub->received_interval,
@@ -335,4 +337,3 @@ int _sub_packet_add_to_received_interval(sub_publisher_t* pub, packet_id_t pid)
                                     });
     return 1;
 }
-

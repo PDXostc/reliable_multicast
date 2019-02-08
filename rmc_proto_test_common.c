@@ -67,7 +67,7 @@ void poll_modify(user_data_t user_data,
 
     if (old_action == new_action)
         return ;
-    
+
     if (new_action & RMC_POLLREAD)
         ev.events |= EPOLLIN;
 
@@ -109,25 +109,25 @@ char* _op_res_string(uint8_t res)
     switch(res) {
     case RMC_ERROR:
         return "error";
-        
+
     case RMC_READ_MULTICAST:
         return "read multicast";
- 
+
     case RMC_READ_MULTICAST_LOOPBACK:
         return "multicast loopback";
- 
+
     case RMC_READ_MULTICAST_NEW:
         return "new multicast";
 
      case RMC_READ_MULTICAST_NOT_READY:
         return "multicast not ready";
-        
+
     case RMC_READ_TCP:
         return "read tcp";
-        
+
     case RMC_READ_ACCEPT:
         return "accept";
-        
+
     case RMC_READ_DISCONNECT:
         return "disconnect";
 
@@ -142,7 +142,6 @@ char* _op_res_string(uint8_t res)
 
     default:
         return "[unknown]";
-        
+
     }
 }
-

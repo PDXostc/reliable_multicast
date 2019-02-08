@@ -81,7 +81,7 @@ void pub_reset_subscriber(pub_subscriber_t* sub,
     while((node = pub_packet_list_tail(&sub->inflight)))
         pub_packet_ack(sub, node->data->pid, pub_payload_free);
 
-    
+
     snode = pub_sub_list_find_node(&sub->context->subscribers, sub,
                                    lambda(int, (pub_subscriber_t* a, pub_subscriber_t* b) {
                                            return a == b;
@@ -109,6 +109,7 @@ static packet_id_t pub_queue_packet_with_pid(pub_context_t* ctx,
     ppack->ref_count = 0;
     ppack->send_ts = 0; // Will be set by pub_packet_sent()
     ppack->pkg_user_data = pkg_user_data; // Handed to (*payload_free)()
+    ppack->parent_node = 0;
 
     // Insert into ctx->queued, sorted in descending order.
     // We will pop off this list at the tail to get the next
@@ -141,7 +142,7 @@ packet_id_t pub_queue_packet(pub_context_t* ctx,
                                      payload,
                                      payload_len,
                                      pkg_user_data);
-        
+
 }
 
 packet_id_t pub_queue_no_acknowledge_packet(pub_context_t* ctx,
@@ -154,7 +155,7 @@ packet_id_t pub_queue_no_acknowledge_packet(pub_context_t* ctx,
                                      payload,
                                      payload_len,
                                      pkg_user_data);
-        
+
 }
 
 extern uint32_t pub_queue_size(pub_context_t* ctx)
@@ -188,7 +189,7 @@ void pub_packet_sent(pub_context_t* ctx,
 
     // Record the usec timestamp when it was sent.
     pack->send_ts = send_ts;
-    
+
     // Unlink the node from queued packets in our context.
     // pack->parent will still be allocated and can be reused
     // when we insert the pack into the inflight packets
@@ -271,7 +272,7 @@ void pub_packet_ack(pub_subscriber_t* sub,
     // No inflight packet found for the ack.
     // This can happen if we have already re-sent a timeoud out packet via TCP an
     // deleted it from the inflight queue.
-    if (!node) 
+    if (!node)
         return;
 
 
@@ -302,10 +303,11 @@ void pub_packet_ack(pub_subscriber_t* sub,
     }
 }
 
-uint32_t pub_get_unacknowledged_packet_count(pub_subscriber_t* sub)
+uint32_t pub_get_unacknowledged_packet_count(pub_context_t* ctx)
 {
-    return pub_packet_list_size(&sub->inflight);
+    return pub_packet_list_size(&ctx->inflight);
 }
+
 
 void pub_get_timed_out_subscribers(pub_context_t* ctx,
                                    usec_timestamp_t current_ts,

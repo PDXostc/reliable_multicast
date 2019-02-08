@@ -63,7 +63,7 @@ static void hex_dump(tvbuff_t* tvb, int start, int stop)
         u_int8_t byte = tvb_get_guint8(tvb, offset);
 
         printf("  Offset[%d], Val[%.2X] [%.3d] ",
-               offset, 
+               offset,
                byte & 0xFF,
                byte & 0xFF);
 
@@ -153,7 +153,7 @@ static int dissect_packet_offset(tvbuff_t *tvb, packet_info *pinfo, proto_tree *
 //    col_set_str(pinfo->cinfo, COL_PROTOCOL, "RMC Packet");
 
 
- 
+
     ti = proto_tree_add_item(tree, proto_rmc, tvb, 0, -1, ENC_NA);
     rmc_tree =  proto_item_add_subtree(ti, ett_rmc);
 
@@ -173,7 +173,7 @@ static int dissect_packet_offset(tvbuff_t *tvb, packet_info *pinfo, proto_tree *
     proto_tree_add_item(rmc_tree, hf_rmc_payload_len, tvb, offset, 2, ENC_LITTLE_ENDIAN);
     offset += 2;
 
-    
+
     // Listen IP (little endian)
     ip_numeric = tvb_get_guint32(tvb, offset, ENC_LITTLE_ENDIAN);
 
@@ -184,7 +184,7 @@ static int dissect_packet_offset(tvbuff_t *tvb, packet_info *pinfo, proto_tree *
         ip = src_addr;
     } else
         ip = tvb_ip_to_str(tvb, offset);
-    
+
     proto_tree_add_item(rmc_tree, hf_rmc_control_ip, tvb, offset, 4, ENC_LITTLE_ENDIAN);
     offset += 4;
 
@@ -265,7 +265,7 @@ static int dissect_rmc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
     col_clear(pinfo->cinfo, COL_INFO);
 
     while(1) {
-        if (tvb_captured_length_remaining(tvb, offset) < 1) 
+        if (tvb_captured_length_remaining(tvb, offset) < 1)
             return offset;
 
         command = tvb_get_guint8(tvb, offset);
@@ -284,7 +284,7 @@ static int dissect_rmc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
                                 COL_INFO,
                                 "[%lu-%lu] ",
                                 first_pid, last_pid);
-                
+
             break;
 
         case RMC_CMD_PACKET:
@@ -305,7 +305,7 @@ static int dissect_rmc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
                                 COL_INFO,
                                 "Ctl Nsg %d bytes. ",
                                 payload_len);
-                
+
             break;
 
         default:
@@ -322,7 +322,7 @@ static int dissect_rmc_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, 
         offset += 1 + res;
     }
 
-    if (resend_count) 
+    if (resend_count)
         col_add_fstr(pinfo->cinfo, COL_INFO, "Pub->Sub resend %d packets", resend_count);
 
 
@@ -339,7 +339,7 @@ void plugin_register_rmc(void)
         { 2, "Ack" },
         { 0, NULL}
     };
-    
+
     static hf_register_info hf[] = {
         { &hf_rmc_node_id,
           { "node id", "rmc.node_id",
@@ -426,7 +426,7 @@ void plugin_register_rmc(void)
             "Packet payload", HFILL }
         },
     };
-    
+
 
    /* Setup protocol subtree array */
     static gint *ett[] = {
@@ -437,7 +437,7 @@ void plugin_register_rmc(void)
         &ett_rmc_control
     };
 
-    
+
     proto_rmc = proto_register_protocol("Reliable Multicast - Data", "RMC", "rmc_data");
     proto_register_field_array(proto_rmc, hf, array_length(hf));
     handle_rmc_multicast = create_dissector_handle(dissect_packet_multicast, proto_rmc);
@@ -462,11 +462,11 @@ void plugin_register_rmc(void)
 static void proto_reg_handoff_rmc(void)
 {
 }
- 
+
 void plugin_register(void)
 {
     static proto_plugin plug;
- 
+
     plug.register_protoinfo = plugin_register_rmc;
     plug.register_handoff = proto_reg_handoff_rmc; /* or NULL */
     proto_register_plugin(&plug);

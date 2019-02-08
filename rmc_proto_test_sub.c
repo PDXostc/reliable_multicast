@@ -13,23 +13,23 @@
 
 
 // Indexed by publisher node_id, as received in the
-// payload 
+// payload
 typedef struct {
     enum {
         // We will not process traffic for this node_id.
         // Any traffic received will trigger error.
-        RMC_TEST_SUB_INACTIVE = 0,  
+        RMC_TEST_SUB_INACTIVE = 0,
 
         // We expect traffic on this ctx-id (as provided by -e <ctx-id>,
         // But haven't seen any yet.
-        RMC_TEST_SUB_NOT_STARTED = 1, 
+        RMC_TEST_SUB_NOT_STARTED = 1,
 
-        // We are in the process of receiving traffic 
+        // We are in the process of receiving traffic
         RMC_TEST_SUB_IN_PROGRESS = 2,
 
         // We have received all expected traffic for the given ctx-id.
         RMC_TEST_SUB_COMPLETED = 3
-    } status;    
+    } status;
 
     uint64_t max_expected;
     uint64_t max_received;
@@ -97,7 +97,7 @@ static uint8_t announce_cb(struct rmc_sub_context* ctx,
         rmc_log_set_start_time();
     } else
         RMC_LOG_INFO("Announce detected. Clock already running.");
-        
+
     return 1;
 }
 
@@ -109,15 +109,15 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
                                    char* data,
                                    sub_expect_t* expect,
                                    int expect_sz)
-                                   
-                                 
+
+
 {
     signal_t *signal = (signal_t*) data;
     rmc_node_id_t node_id = signal->node_id;
     uint64_t max_expected = signal->max_signal_id;
     uint64_t current = signal->signal_id;
 
-    
+
     // Is node ID within our expetcted range
     if (node_id >= expect_sz) {
         RMC_LOG_INDEX_FATAL(index,
@@ -148,9 +148,9 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
         int ind = 0;
         expect[node_id].status = RMC_TEST_SUB_IN_PROGRESS;
         expect[node_id].max_expected = max_expected;
-        expect[node_id].max_received = 0; 
-        expect[node_id].expect_sum = 0; 
-        expect[node_id].calc_sum = 0; 
+        expect[node_id].max_received = 0;
+        expect[node_id].expect_sum = 0;
+        expect[node_id].calc_sum = 0;
         expect[node_id].start_ts = rmc_usec_monotonic_timestamp();
         expect[node_id].stop_ts = 0;
 
@@ -177,7 +177,7 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
                                 node_id, expect[node_id].max_expected, max_expected);
             exit(255);
         }
-        
+
         // Check that packet is consecutive.
         if (current != expect[node_id].max_received + 1) {
             RMC_LOG_INDEX_FATAL(index,
@@ -188,14 +188,14 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
 
         expect[node_id].max_received = current;
         expect[node_id].calc_sum += current;
-        
+
         // Check if we are complete
         if (current == max_expected) {
             int signal_sec = 0;
             printf("%s[%.3d]%s ContextID [%u] %s**COMPLETE*%s* at[%lu]\n",
-                   rmc_index_color(index), index, rmc_log_color_none(), 
+                   rmc_index_color(index), index, rmc_log_color_none(),
                    node_id, rmc_log_color_green(), rmc_log_color_none(), current);
-            
+
             // Did we see data corruption?
             if (expect[node_id].expect_sum !=  expect[node_id].calc_sum) {
                 RMC_LOG_INDEX_FATAL(index, "DATA CORRUPTION! Expected total sum: %lu. Got %lu\n",
@@ -212,7 +212,7 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
                 ((double) (expect[node_id].stop_ts - expect[node_id].start_ts) / 1000000.0);
 
             printf("%s[%.3d]%s %lu signals (%ld bytes each) in %lu msec -> %s%d signals / sec%s -> %s%ld kbyte / sec%s\n",
-                   rmc_index_color(index), index, rmc_log_color_none(), 
+                   rmc_index_color(index), index, rmc_log_color_none(),
                    expect[node_id].max_received,
                    sizeof(signal_t),
                    (expect[node_id].stop_ts - expect[node_id].start_ts) / 1000,
@@ -230,7 +230,7 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
 
         return 1;
     }
-    
+
     RMC_LOG_INDEX_FATAL(index,
                         "Eh? expect[%u:%lu:%lu] status[%d]  data[%u:%lu:%lu]\n",
                         node_id, expect[node_id].max_received, expect[node_id].max_expected,
@@ -268,13 +268,13 @@ static int process_events(rmc_sub_context_t* ctx,
     char buf[16];
     int nfds = 0;
     usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
-    
+
     if (timeout_ts != -1) {
         timeout_ts -= rmc_usec_monotonic_timestamp();
         if (timeout_ts < 0)
             timeout_ts = 0;
     }
-            
+
     nfds = epoll_wait(epollfd, events,
                       rmc_sub_get_max_publisher_count(ctx),
                       (timeout_ts == -1)?-1:(timeout_ts / 1000) + 1);
@@ -285,7 +285,7 @@ static int process_events(rmc_sub_context_t* ctx,
     }
 
     // Timeout
-    if (nfds == 0) 
+    if (nfds == 0)
         return ETIME;
 
     // printf("poll_wait(): %d results\n", nfds);
@@ -310,6 +310,7 @@ static int process_events(rmc_sub_context_t* ctx,
 
         if (events[nfds].events & EPOLLOUT) {
             if (rmc_sub_write(ctx, c_ind, &op_res) != 0) {
+                RMC_LOG_INDEX_INFO(c_ind, "write result: %s - %s", _op_res_string(op_res),   strerror(res));
                 rmc_sub_close_connection(ctx, c_ind);
             }
         }
@@ -353,17 +354,17 @@ void test_rmc_proto_sub(char* mcast_group_addr,
         expect[ind].max_expected = 0;
 
         // Check if we are expecting traffic on this one
-        if (node_id_map[ind]) 
+        if (node_id_map[ind])
             expect[ind].status = RMC_TEST_SUB_NOT_STARTED;
     }
-    
+
     if (epollfd == -1) {
         perror("epoll_create1");
         exit(255);
     }
 
     ctx = malloc(sizeof(rmc_sub_context_t));
-    
+
     conn_vec_mem = malloc(sizeof(rmc_connection_t)*RMC_MAX_CONNECTIONS);
     memset(conn_vec_mem, 0, sizeof(rmc_connection_t)*RMC_MAX_CONNECTIONS);
     rmc_sub_init_context(ctx,
@@ -391,7 +392,7 @@ void test_rmc_proto_sub(char* mcast_group_addr,
         usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
 
         rmc_sub_timeout_get_next(ctx, &timeout_ts);
-        
+
         while(timeout_ts != -1 && timeout_ts < current_ts) {
             rmc_sub_timeout_process(ctx);
             rmc_sub_timeout_get_next(ctx, &timeout_ts);
@@ -402,11 +403,11 @@ void test_rmc_proto_sub(char* mcast_group_addr,
             RMC_LOG_COMMENT("Got timeout");
             continue;
         }
-        else 
+        else
             RMC_LOG_DEBUG("No timeout");
 
         // Process as many packets as possible.
-        
+
         while((pack = rmc_sub_get_next_dispatch_ready(ctx))) {
             if (!first_pid)
                 first_pid = pack->pid;
@@ -420,11 +421,15 @@ void test_rmc_proto_sub(char* mcast_group_addr,
                       ctx->publishers[0].max_pid_ready,  ctx->publishers[0].max_pid_ready);
 
         if (do_exit)
-
             break;
     }
+
+    // process events until we get a timeout.
+    // This ensures that we flush all outbound buffers.
+    while(process_events(ctx, epollfd, 100) != ETIME);
+
     rmc_sub_deactivate_context(ctx);
-    
+
     RMC_LOG_INFO("Done.");
     exit(0);
 }

@@ -27,7 +27,7 @@ static int process_sent_packet_timeout(rmc_pub_context_t* ctx,
     int res = 0;
     char group_addr[80];
     char remote_addr[80];
-    
+
     if (!ctx || !sub || !pack)
         return EINVAL;
 
@@ -58,10 +58,10 @@ static int process_sent_packet_timeout(rmc_pub_context_t* ctx,
                           ctx->mcast_port,
                           remote_addr,
                           ctx->control_listen_port);
-    
+
     if (!conn || conn->mode != RMC_CONNECTION_MODE_CONNECTED)
         return EINVAL;
-        
+
     res = rmc_pub_resend_packet(ctx, conn, pack);
     RMC_LOG_INDEX_DEBUG(conn->connection_index,
                         "rmc_pub_resend_packet: %d/%s", res, strerror(res));
@@ -69,7 +69,7 @@ static int process_sent_packet_timeout(rmc_pub_context_t* ctx,
     // Internal ack of the packet since we now can do nothing more to
     // get it over to the subscriber.
     // We only ack the packet if the resend attempt was successful in getting
-    // the packet data into the circular buffer that is consumed by 
+    // the packet data into the circular buffer that is consumed by
     // rmc_conn_process_tcp_write()
     if (!res)
         rmc_pub_packet_ack(ctx, conn, pack->pid) ;
@@ -124,7 +124,7 @@ int rmc_pub_timeout_process(rmc_pub_context_t* ctx)
     pub_sub_list_t subs;
     pub_subscriber_t* sub = 0;
     int res = 0;
-    
+
     if (!ctx)
         return EINVAL;
 
@@ -135,23 +135,23 @@ int rmc_pub_timeout_process(rmc_pub_context_t* ctx)
         char buffer[RMC_MAX_PAYLOAD];
         payload_len_t len = 0;
         uint8_t send_announce = 1;
-            
+
         // Invoke the callback, if specified, to retrieve a payload to send with the
         // announcement packet.
         // If callback returns 0, do not send announce
-        if (ctx->announce_cb) 
+        if (ctx->announce_cb)
             send_announce = (*ctx->announce_cb)(ctx, buffer, sizeof(buffer), &len);
-                
+
         if (len > sizeof(buffer))
             len = sizeof(buffer);
-            
+
         if (send_announce) {
             RMC_LOG_COMMENT("Sending announce");
             rmc_pub_queue_packet(ctx, buffer, len, 1);
         }
 
         // Setup next announce.
-        if (ctx->announce_send_interval) 
+        if (ctx->announce_send_interval)
             ctx->announce_next_send_ts = current_ts + ctx->announce_send_interval;
         else
             ctx->announce_next_send_ts = 0; // Disable announce sends.
@@ -170,6 +170,7 @@ int rmc_pub_timeout_process(rmc_pub_context_t* ctx)
 
         if (res) {
             // Clean up the list.
+            RMC_LOG_COMMENT("subscriber timeout failed: %s", strerror(res));
             pub_sub_list_empty(&subs);
             return res;
         }
@@ -189,21 +190,21 @@ int rmc_pub_timeout_get_next(rmc_pub_context_t* ctx, usec_timestamp_t* result_ts
 
     if (!ctx || !result_ts)
         return EINVAL;
-    
+
     // Default. Not really needed since we will catch
     // all four timeout combos below.
-    *result_ts = -1; 
+    *result_ts = -1;
 
     // Get the send timestamp of the oldest packet we have yet to
     // receive an acknowledgement for from the subscriber.
     pub_get_oldest_unackowledged_packet(&ctx->pub_ctx, &ack_timeout_ts);
-    
+
     // Calculate time stamp of when we need to see an ack by.
     if (ack_timeout_ts != -1)
-        ack_timeout_ts += ctx->resend_timeout; 
+        ack_timeout_ts += ctx->resend_timeout;
 
     // Check if we are to send out announce packets.
-    if (ctx->announce_next_send_ts != 0) 
+    if (ctx->announce_next_send_ts != 0)
         announce_timeout_ts = ctx->announce_next_send_ts;
 
 

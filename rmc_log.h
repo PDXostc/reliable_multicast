@@ -1,6 +1,6 @@
 // Copyright (C) 2018, Jaguar Land Rover
 // This program is licensed under the terms and conditions of the
-// Mozilla Public License, version 2.0.  The full text of the 
+// Mozilla Public License, version 2.0.  The full text of the
 // Mozilla Public License is at https://www.mozilla.org/MPL/2.0/
 //
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
@@ -35,6 +35,10 @@ extern const char* rmc_log_color_flashing_red();
 extern const char* rmc_index_color(int index);
 
 extern int _rmc_log_level;
+
+#ifndef RMC_NIL_INDEX
+#define RMC_NIL_INDEX 0x7FFF
+#endif
 
 #define RMC_LOG_DEBUG(fmt, ...) { if (_rmc_log_level >= RMC_LOG_LEVEL_DEBUG) rmc_log(RMC_LOG_LEVEL_DEBUG, __FUNCTION__, __FILE__, __LINE__, RMC_NIL_INDEX, fmt, ##__VA_ARGS__ ); }
 #define RMC_LOG_COMMENT(fmt, ...) { if (_rmc_log_level >= RMC_LOG_LEVEL_COMMENT) rmc_log(RMC_LOG_LEVEL_COMMENT, __FUNCTION__, __FILE__, __LINE__, RMC_NIL_INDEX, fmt, ##__VA_ARGS__ ); }

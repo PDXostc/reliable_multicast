@@ -222,8 +222,8 @@ void run_list_tests()
         puts("Failed list test 4.0.\n");
         exit(255);
     }
-        
-   
+
+
     test_list_insert_sorted(&p1, 2, _compare_pid);
     if (_test_sequence(&p1, 2, 2)) {
         puts("Failed list test 4.1.\n");
@@ -286,7 +286,7 @@ void run_list_tests()
         puts("Failed list test 5.4.\n");
         exit(255);
     }
-    
+
     node = test_list_find_node(&p1, 7, _find_pid);
     if (node->data != 7) {
         puts("Failed list test 5.5.\n");

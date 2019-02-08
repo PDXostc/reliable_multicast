@@ -1,6 +1,6 @@
 // Copyright (C) 2018, Jaguar Land Rover
 // This program is licensed under the terms and conditions of the
-// Mozilla Public License, version 2.0.  The full text of the 
+// Mozilla Public License, version 2.0.  The full text of the
 // Mozilla Public License is at https://www.mozilla.org/MPL/2.0/
 //
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
@@ -38,7 +38,7 @@ static uint8_t _test_print_subscriber(pub_sub_node_t* node, void* dt)
         printf("%*cInflight packets: [None]\n", indent*2, ' ');
 
     putchar('\n');
-        
+
     return 1;
 }
 
@@ -100,7 +100,7 @@ void test_pub(void)
                pid);
         exit(255);
     }
-    
+
     if (pub_packet_list_size(&ctx.queued) != 7) {
         printf("Failed pub test 1.2. Wanted size 7, got %d\n",
                pub_packet_list_size(&ctx.queued));
@@ -244,7 +244,7 @@ void test_pub(void)
         printf("Failed pub test 7.1. Wanted size 2, got %d\n",
                pub_packet_list_size(&ctx.inflight));
         exit(255);
-    }        
+    }
 
     // Check that the first in
     pack = (pub_packet_t*) pub_packet_list_tail(&ctx.inflight)->data;
@@ -264,7 +264,7 @@ void test_pub(void)
         printf("Failed pub test 8.1. Wanted size 1, got %d\n",
                pub_packet_list_size(&sub2.inflight));
         exit(255);
-    }        
+    }
 
     // Inspect sub2 to see that its only remaining inflight packet is pid 2
     pack = (pub_packet_t*) pub_packet_list_head(&sub2.inflight)->data;
@@ -281,7 +281,7 @@ void test_pub(void)
         printf("Failed pub test 8.3. Wanted size 1, got %d\n",
                pub_packet_list_size(&ctx.inflight));
         exit(255);
-    }        
+    }
 
     // Inspect ctx inflighjt to see that its only remaining inflight
     // packet is pid 2
@@ -292,7 +292,7 @@ void test_pub(void)
         exit(255);
     }
 
-    // 
+    //
     // Ack packet 2, which is the last one
     //
     pub_packet_ack(&sub1, 2, 0);
@@ -304,7 +304,7 @@ void test_pub(void)
         printf("Failed pub test 9.1. Wanted size 0, got %d\n",
                pub_packet_list_size(&sub3.inflight));
         exit(255);
-    }        
+    }
 
     // Inspect context's inflight packets and ensure that only pid 3 is left.
 
@@ -313,7 +313,7 @@ void test_pub(void)
         printf("Failed pub test 9.2. Wanted size 0, got %d\n",
                pub_packet_list_size(&ctx.inflight));
         exit(255);
-    }        
+    }
 
     // Send the rest of the packags.
     pack = pub_next_queued_packet(&ctx);
@@ -331,7 +331,7 @@ void test_pub(void)
         exit(255);
     }
     pub_packet_sent(&ctx, pack, rmc_usec_monotonic_timestamp());
-    
+
     pack = pub_next_queued_packet(&ctx);
     if (pack->pid != 6) {
         printf("Failed pub test 10.3. Wanted packet id 6, got %lu\n",
@@ -339,7 +339,7 @@ void test_pub(void)
         exit(255);
     }
     pub_packet_sent(&ctx, pack, rmc_usec_monotonic_timestamp());
-    
+
     pack = pub_next_queued_packet(&ctx);
     if (pack->pid != 7) {
         printf("Failed pub test 10.4. Wanted packet id 7, got %lu\n",
@@ -370,34 +370,34 @@ void test_pub(void)
         printf("Failed pub test 11.1. Wanted size 0, got %d\n",
                pub_packet_list_size(&ctx.inflight));
         exit(255);
-    }        
-    
+    }
+
     if (pub_packet_list_size(&ctx.queued) != 0) {
         printf("Failed pub test 11.2. Wanted size 0, got %d\n",
                pub_packet_list_size(&ctx.queued));
         exit(255);
-    }        
-    
-    
+    }
+
+
     if (pub_packet_list_size(&sub1.inflight) != 0) {
         printf("Failed pub test 11.3. Wanted size 0, got %d\n",
                pub_packet_list_size(&sub1.inflight));
         exit(255);
-    }        
-    
+    }
+
     if (pub_packet_list_size(&sub2.inflight) != 0) {
         printf("Failed pub test 11.4. Wanted size 0, got %d\n",
                pub_packet_list_size(&sub2.inflight));
         exit(255);
-    }        
-    
+    }
+
     if (pub_packet_list_size(&sub3.inflight) != 0) {
         printf("Failed pub test 11.5. Wanted size 0, got %d\n",
                pub_packet_list_size(&sub3.inflight));
         exit(255);
-    }     
+    }
 
-    
+
 
     // Reset next_pid to make testing easier.
     ctx.next_pid = 1;
@@ -408,7 +408,7 @@ void test_pub(void)
         printf("Failed pub test 12.1. Wanted pid 1, got %lu\n",
                pid);
         exit(255);
-    }            
+    }
     // Queue integrity has already been tested. Trust rest of pids to
     // be 2-6.
     pub_queue_packet(&ctx, "2", 2, user_data_nil());
@@ -436,7 +436,7 @@ void test_pub(void)
 
     pack = pub_next_queued_packet(&ctx);
     pub_packet_sent(&ctx, pack, 6);
-    
+
     // All subs will have p1 acked
     //
     // Inflight pids after ack:
@@ -486,7 +486,7 @@ void test_pub(void)
 
     //
     // Check Sub1
-    // 
+    //
     sptr1 = pub_sub_list_head(&sub_lst)->data;
     if (sptr1 == &sub2) {
         printf("Failed pub test 12.3. Wanted sub1, got sub2\n");
@@ -507,7 +507,7 @@ void test_pub(void)
 
     //
     // Check Sub2
-    // 
+    //
     sptr2 = pub_sub_list_tail(&sub_lst)->data;
     if (sptr2 == &sub3) {
         printf("Failed pub test 13.1. Wanted sub2, got sub3\n");
@@ -542,7 +542,7 @@ void test_pub(void)
 
     //
     // Check Sub1
-    // 
+    //
     sptr1 = pub_sub_list_head(&sub_lst)->data;
     if (sptr1 == &sub2) {
         printf("Failed pub test 14.2. Wanted sub1, got sub2\n");
@@ -563,7 +563,7 @@ void test_pub(void)
 
     //
     // Test oldest inflight packets
-    // 
+    //
     pub_get_oldest_unackowledged_packet(&ctx, &ts);
 
     if (ts == -1) {
@@ -580,7 +580,7 @@ void test_pub(void)
         printf("Failed pub test 15.5. Wanted ts 2, got %lu\n",
                ts);
         exit(255);
-        
+
     }
     pub_packet_ack(&sub1, 2, 0);
     pub_packet_ack(&sub1, 3, 0);
@@ -592,4 +592,3 @@ void test_pub(void)
     pub_packet_ack(&sub2, 5, 0);
     pub_packet_ack(&sub2, 6, 0);
 }
-

@@ -17,7 +17,7 @@
 
 typedef struct  __attribute__((packed))
 packet_header {
-    packet_id_t pid;               // 8 bytes  Packet ID 
+    packet_id_t pid;               // 8 bytes  Packet ID
     rmc_node_id_t node_id;         // 4 bytes  Publisher Node ID
     payload_len_t payload_len;     // 2 bytes  Payload len
     uint32_t listen_ip;            // 4 bytes  Publisher control ip address
@@ -38,4 +38,3 @@ cmd_control_message {
 } cmd_control_message_t;
 
 #endif
-
