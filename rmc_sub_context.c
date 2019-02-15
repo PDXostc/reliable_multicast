@@ -29,8 +29,8 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
                          rmc_node_id_t node_id,
                          char* mcast_group_addr,
                          // Interface IP to bind mcast to. Default: "0.0.0.0" (IFADDR_ANY)
-                         char* mcast_if_addr,
                          int multicast_port,
+                         char* mcast_if_addr,
 
                          user_data_t user_data,
 
@@ -110,8 +110,8 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
     // FIXME: Better memory management
     ctx->publishers = malloc(sizeof(sub_publisher_t) * conn_vec_size);
 
-    RMC_LOG_DEBUG("Subscriber Context init. node_id[%u] mcast_group[%s:%d] user_data[%u]",
-                  ctx->node_id, mcast_group_addr, multicast_port, user_data.u32);
+    RMC_LOG_DEBUG("Subscriber Context init. node_id[%u] mcast_group[%s:%d] mcast_if[%s] user_data[%u]",
+                  ctx->node_id, mcast_group_addr, multicast_port, mcast_if_addr, user_data.u32);
     return 0;
 }
 
@@ -156,7 +156,7 @@ int rmc_sub_activate_context(rmc_sub_context_t* ctx)
     memset((void*) &sock_addr, 0, sizeof(sock_addr));
 
     sock_addr.sin_family = AF_INET;
-    sock_addr.sin_addr.s_addr = htonl(ctx->mcast_if_addr);
+    sock_addr.sin_addr.s_addr = INADDR_ANY; // htonl(ctx->mcast_if_addr);
     sock_addr.sin_port = htons(ctx->mcast_port);
 
     if (bind(ctx->mcast_recv_descriptor,
@@ -166,11 +166,9 @@ int rmc_sub_activate_context(rmc_sub_context_t* ctx)
         return errno;
     }
 
-
     // Setup multicast group membership
     mreq.imr_multiaddr.s_addr = htonl(ctx->mcast_group_addr);
     mreq.imr_interface.s_addr = htonl(ctx->mcast_if_addr);
-
     if (setsockopt(ctx->mcast_recv_descriptor,
                    IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
         perror("rmc_activate_context(multicast_recv): setsockopt(IP_ADD_MEMBERSHIP)");

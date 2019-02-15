@@ -193,6 +193,7 @@ typedef struct rmc_pub_context {
     user_data_t user_data;
 
     in_addr_t control_listen_if_addr; // In host format for control
+    in_addr_t mcast_if_addr; // In host format (little endian)
     in_addr_t mcast_group_addr; // In host format
     int mcast_port; // Must be same for all particants.
 
@@ -423,6 +424,10 @@ extern int rmc_pub_init_context(rmc_pub_context_t* context,
                                 // Domain name or IP of multicast group to join.
                                 char* multicast_group_addr,
                                 int multicast_port,
+                                // IP address to listen to for incoming subscription
+                                // connection from subscribers receiving multicast packets
+                                // Default if 0 ptr: "0.0.0.0" (IFADDR_ANY)
+                                char* multicast_iface_addr,
 
                                 // IP address to listen to for incoming subscription
                                 // connection from subscribers receiving multicast packets
@@ -474,11 +479,11 @@ extern int rmc_sub_init_context(rmc_sub_context_t* context,
                                 // Domain name or IP of multicast group to join.
                                 char* multicast_group_addr,
 
+                                int multicast_port,
                                 // IP address to listen to for incoming subscription
                                 // connection from subscribers receiving multicast packets
                                 // Default if 0 ptr: "0.0.0.0" (IFADDR_ANY)
                                 char* multicast_iface_addr,
-                                int multicast_port,
 
                                 // User data that can be extracted with rmc_user_data(.
                                 // Typical application is for the poll and memory callbacks below

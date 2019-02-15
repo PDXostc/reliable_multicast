@@ -197,6 +197,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
     rmc_pub_init_context(ctx,
                          0, // Random node id
                          mcast_group_addr, mcast_port,
+                         mcast_if_addr,
                          listen_if_addr, listen_port,
                          (user_data_t) { .i32 = epollfd },
                          poll_add, poll_modify, poll_remove,
@@ -242,7 +243,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
 
     _test("rmc_proto_test_pub[%d.%d] set_ttl(): %s",
           1, 1,
-          rmc_pub_set_multicast_ttl(ctx, 0));
+          rmc_pub_set_multicast_ttl(ctx, 1));
     RMC_LOG_INFO("context: ctx[%.9X] mcast_addr[%s] mcast_port[%d]",
                  rmc_pub_node_id(ctx), mcast_group_addr, mcast_port);
 

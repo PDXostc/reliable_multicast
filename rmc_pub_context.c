@@ -29,6 +29,8 @@ int rmc_pub_init_context(rmc_pub_context_t* ctx,
                          rmc_node_id_t node_id,
                          char* mcast_group_addr,
                          int multicast_port,
+                         // Interface IP to bind mcast to. Default: "0.0.0.0" (IFADDR_ANY)
+                         char* mcast_if_addr,
 
                          // IP address to listen to for incoming subscription
                          // connection from subscribers receiving multicast packets
@@ -74,6 +76,9 @@ int rmc_pub_init_context(rmc_pub_context_t* ctx,
     if (!control_listen_if_addr)
         control_listen_if_addr = "0.0.0.0";
 
+    if (!mcast_if_addr)
+        mcast_if_addr = "0.0.0.0";
+
     if (!inet_aton(mcast_group_addr, &addr)) {
         RMC_LOG_WARNING("Could not resolve multicast address %s to IP address\n",
                 mcast_group_addr);
@@ -87,6 +92,13 @@ int rmc_pub_init_context(rmc_pub_context_t* ctx,
         return EINVAL;
     }
     ctx->control_listen_if_addr = ntohl(addr.s_addr);
+
+    if (!inet_aton(mcast_if_addr, &addr)) {
+        fprintf(stderr, "rmc_activate_context(multicast_interface_addr): Could not resolve %s to IP address\n",
+                mcast_if_addr);
+        return EINVAL;
+    }
+    ctx->mcast_if_addr = ntohl(addr.s_addr);
 
     ctx->mcast_port = multicast_port;
     ctx->control_listen_port = control_listen_port;
@@ -124,8 +136,8 @@ int rmc_pub_init_context(rmc_pub_context_t* ctx,
     pub_init_context(&ctx->pub_ctx);
 
     ctx->subscribers = malloc(sizeof(pub_subscriber_t) * conn_vec_size);
-    RMC_LOG_DEBUG("Publisher Context init. node_id[%u] mcast_group[%s:%d] user_data[%u]",
-                  ctx->node_id, mcast_group_addr, multicast_port, user_data.u32);
+    RMC_LOG_DEBUG("Publisher Context init. node_id[%u] mcast_group[%s:%d] mcast_if[%s] user_data[%u]",
+                  ctx->node_id, mcast_group_addr, multicast_port,  mcast_if_addr, user_data.u32);
     return 0;
 }
 
@@ -133,6 +145,7 @@ int rmc_pub_init_context(rmc_pub_context_t* ctx,
 int rmc_pub_activate_context(rmc_pub_context_t* ctx)
 {
     struct sockaddr_in sock_addr;
+    struct in_addr in_addr;
     socklen_t sock_len = sizeof(struct sockaddr_in);
     struct ip_mreq mreq;
     int on_flag = 1;
@@ -150,6 +163,18 @@ int rmc_pub_activate_context(rmc_pub_context_t* ctx)
         RMC_LOG_WARNING("socket(multicast): %s", strerror(errno));
         goto error;
     }
+
+    // Setup multicast group membership
+    memset((void*) &in_addr, 0, sizeof(in_addr));
+
+    in_addr.s_addr = htonl(ctx->mcast_if_addr);
+    if (setsockopt(ctx->mcast_send_descriptor,
+                   IPPROTO_IP, IP_MULTICAST_IF, &in_addr, sizeof(in_addr)) < 0) {
+        perror("rmc_activate_context(multicast_recv): setsockopt(IP_MULTICAST_IF)");
+        goto error;
+    }
+
+    RMC_LOG_INFO("Bound sender to %X", ctx->mcast_if_addr);
 
     // Setup TCP listen
     // Did we specify a local interface address to bind to?
