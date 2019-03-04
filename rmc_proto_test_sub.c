@@ -151,12 +151,13 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
         expect[node_id].max_received = 0;
         expect[node_id].expect_sum = 0;
         expect[node_id].calc_sum = 0;
-        expect[node_id].start_ts = rmc_usec_monotonic_timestamp();
         expect[node_id].stop_ts = 0;
 
         // Calculate sum
         for(ind = 1; ind <= max_expected; ++ind)
             expect[node_id].expect_sum += ind;
+
+        expect[node_id].start_ts = rmc_usec_monotonic_timestamp();
 
         RMC_LOG_INDEX_INFO(index,
                            "Activate: node_id[%u] current[%lu] max_expected[%lu] expected sum[%lu]",
@@ -204,10 +205,8 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
                 exit(0);
             }
 
-
             expect[node_id].status = RMC_TEST_SUB_COMPLETED;
             expect[node_id].stop_ts = rmc_usec_monotonic_timestamp();
-
             signal_sec = (int) expect[node_id].max_received /
                 ((double) (expect[node_id].stop_ts - expect[node_id].start_ts) / 1000000.0);
 
