@@ -12,14 +12,14 @@
 static uint8_t _test_print_pending(pub_packet_node_t* node, void* dt)
 {
     pub_packet_t* pack = (pub_packet_t*) node->data;
-    int indent = (int) (uint64_t) dt;
+    int indent = *((int*) dt);
 
     printf("%*cPacket          %p\n", indent*2, ' ', pack);
-    printf("%*c  PID             %lu\n", indent*2, ' ', pack->pid);
-    printf("%*c  Sent timestamp  %ld\n", indent*2, ' ', pack->send_ts);
+    printf("%*c  PID             %llu\n", indent*2, ' ', (long long unsigned) pack->pid);
+    printf("%*c  Sent timestamp  %lld\n", indent*2, ' ', (long long int) pack->send_ts);
     printf("%*c  Reference count %d\n", indent*2, ' ', pack->ref_count);
     printf("%*c  Parent node     %p\n", indent*2, ' ', pack->parent_node);
-    printf("%*c  Payload Length  %d\n", indent*2, ' ', pack->payload_len);
+    printf("%*c  Pa yload Length  %d\n", indent*2, ' ', pack->payload_len);
     putchar('\n');
     return 1;
 }
@@ -28,12 +28,14 @@ static uint8_t _test_print_pending(pub_packet_node_t* node, void* dt)
 static uint8_t _test_print_subscriber(pub_sub_node_t* node, void* dt)
 {
     pub_subscriber_t* sub = node->data;
-    int indent = (int) (uint64_t) dt;
+    int indent = *((int*) dt);
 
     printf("%*cSubscriber %p\n", indent*2, ' ', sub);
     if (pub_packet_list_size(&sub->inflight) > 0) {
         printf("%*cInflight packets:\n", indent*3, ' ');
-        pub_packet_list_for_each(&sub->inflight, _test_print_pending, (void*) ((uint64_t)indent + 2));
+        indent +=2;
+        pub_packet_list_for_each(&sub->inflight, _test_print_pending, (void*) &indent);
+        indent -=2;
     } else
         printf("%*cInflight packets: [None]\n", indent*2, ' ');
 
@@ -44,23 +46,24 @@ static uint8_t _test_print_subscriber(pub_sub_node_t* node, void* dt)
 
 void test_print_pub_context(pub_context_t* ctx)
 {
+    int ind = 1;
     printf("Context           %p\n", ctx);
-    printf("Next PID          %lu\n", ctx->next_pid);
+    printf("Next PID          %llu\n", (long long unsigned) ctx->next_pid);
     if (pub_packet_list_size(&ctx->queued) > 0) {
         printf("Queued Packets:\n");
-        pub_packet_list_for_each(&ctx->queued, _test_print_pending, (void*) (uint64_t) 1);
+        pub_packet_list_for_each(&ctx->queued, _test_print_pending, (void*) &ind);
     } else
         printf("Queued Packets: [None]\n");
 
     if (pub_packet_list_size(&ctx->inflight) > 0) {
         printf("\nInflight Packets:\n");
-        pub_packet_list_for_each(&ctx->inflight, _test_print_pending, (void*) (uint64_t) 1);
+        pub_packet_list_for_each(&ctx->inflight, _test_print_pending, (void*) &ind);
     } else
         printf("Inflight Packets: [None]\n");
 
     if (pub_sub_list_size(&ctx->subscribers) > 0) {
         printf("\nSubscribers:\n");
-        pub_sub_list_for_each(&ctx->subscribers, _test_print_subscriber, (void*) (uint64_t) 1);
+        pub_sub_list_for_each(&ctx->subscribers, _test_print_subscriber, (void*) &ind);
     } else
         printf("Subscribers: [None]\n");
 
@@ -94,8 +97,8 @@ void test_pub(void)
     pid = pub_queue_packet(&ctx, "7", 2, user_data_nil());
 
     if (pid != 7) {
-        printf("Failed pub test 1.1. Wanted packet id 7, got %lu\n",
-               pid);
+        printf("Failed pub test 1.1. Wanted packet id 7, got %llu\n",
+               (long long unsigned) pid);
         exit(255);
     }
 
@@ -114,24 +117,24 @@ void test_pub(void)
     pack = pub_next_queued_packet(&ctx);
 
     if (pack->pid != 1) {
-        printf("Failed pub test 2.1. Wanted packet id 1, got %lu\n",
-               pack->pid);
+        printf("Failed pub test 2.1. Wanted packet id 1, got %llu\n",
+               (long long unsigned)  pack->pid);
         exit(255);
     }
     pub_packet_sent(&ctx, pack, rmc_usec_monotonic_timestamp());
 
     pack = pub_next_queued_packet(&ctx);
     if (pack->pid != 2) {
-        printf("Failed pub test 2.2. Wanted packet id 2, got %lu\n",
-               pack->pid);
+        printf("Failed pub test 2.2. Wanted packet id 2, got %llu\n",
+               (long long unsigned)  pack->pid);
         exit(255);
     }
     pub_packet_sent(&ctx, pack, rmc_usec_monotonic_timestamp());
 
     pack = pub_next_queued_packet(&ctx);
     if (pack->pid != 3) {
-        printf("Failed pub test 2.3. Wanted packet id 3, got %lu\n",
-               pack->pid);
+        printf("Failed pub test 2.3. Wanted packet id 3, got %llu\n",
+               (long long unsigned)  pack->pid);
         exit(255);
     }
     pub_packet_sent(&ctx, pack, rmc_usec_monotonic_timestamp());
@@ -177,16 +180,16 @@ void test_pub(void)
     pack = (pub_packet_t*) pub_packet_list_head(&sub1.inflight)->data;
 
     if (pack->pid != 3) {
-        printf("Failed pub test 5.1. Wanted pid 3, got %lu\n",
-               pack->pid);
+        printf("Failed pub test 5.1. Wanted pid 3, got %llu\n",
+               (long long unsigned) pack->pid);
         exit(255);
     }
 
     pack = (pub_packet_t*) pub_packet_list_tail(&sub1.inflight)->data;
 
     if (pack->pid != 1) {
-        printf("Failed pub test 5.2. Wanted pid 1, got %lu\n",
-               pack->pid);
+        printf("Failed pub test 5.2. Wanted pid 1, got %llu\n",
+               (long long unsigned) pack->pid);
         exit(255);
     }
 
@@ -205,15 +208,15 @@ void test_pub(void)
     // Inspect he two elements left and ensure that they are correct.
     pack = (pub_packet_t*) pub_packet_list_head(&sub1.inflight)->data;
     if (pack->pid != 3) {
-        printf("Failed pub test 6.2. Wanted pid 2, got %lu\n",
-               pack->pid);
+        printf("Failed pub test 6.2. Wanted pid 2, got %llu\n",
+               (long long unsigned) pack->pid);
         exit(255);
     }
 
     pack = (pub_packet_t*) pub_packet_list_tail(&sub1.inflight)->data;
     if (pack->pid != 2) {
-        printf("Failed pub test 6.3. Wanted size 3, got %lu\n",
-               pack->pid);
+        printf("Failed pub test 6.3. Wanted size 3, got %llu\n",
+               (long long unsigned) pack->pid);
         exit(255);
     }
 
@@ -221,8 +224,8 @@ void test_pub(void)
     // It should be tail in the queue since we sort on descending.
     pack = (pub_packet_t*) pub_packet_list_tail(&ctx.inflight)->data;
     if (pack->pid != 1) {
-        printf("Failed pub test 6.4. Wanted pid 1, got %lu\n",
-               pack->pid);
+        printf("Failed pub test 6.4. Wanted pid 1, got %llu\n",
+               (long long unsigned) pack->pid);
         exit(255);
     }
 
@@ -247,8 +250,8 @@ void test_pub(void)
     // Check that the first in
     pack = (pub_packet_t*) pub_packet_list_tail(&ctx.inflight)->data;
     if (pack->pid != 2) {
-        printf("Failed pub test 7.2. Wanted pid 2, got %lu\n",
-               pack->pid);
+        printf("Failed pub test 7.2. Wanted pid 2, got %llu\n",
+               (long long unsigned) pack->pid);
         exit(255);
     }
 
@@ -267,8 +270,8 @@ void test_pub(void)
     // Inspect sub2 to see that its only remaining inflight packet is pid 2
     pack = (pub_packet_t*) pub_packet_list_head(&sub2.inflight)->data;
     if (pack->pid != 2) {
-        printf("Failed pub test 8.2. Wanted size 2, got %lu\n",
-               pack->pid);
+        printf("Failed pub test 8.2. Wanted size 2, got %llu\n",
+               (long long unsigned) pack->pid);
         exit(255);
     }
 
@@ -285,8 +288,8 @@ void test_pub(void)
     // packet is pid 2
     pack = (pub_packet_t*) pub_packet_list_head(&ctx.inflight)->data;
     if (pack->pid != 2) {
-        printf("Failed pub test 8.3. Wanted size 2, got %lu\n",
-               pack->pid);
+        printf("Failed pub test 8.3. Wanted size 2, got %llu\n",
+               (long long unsigned) pack->pid);
         exit(255);
     }
 
@@ -316,32 +319,32 @@ void test_pub(void)
     // Send the rest of the packags.
     pack = pub_next_queued_packet(&ctx);
     if (pack->pid != 4) {
-        printf("Failed pub test 10.1. Wanted packet id 4, got %lu\n",
-               pack->pid);
+        printf("Failed pub test 10.1. Wanted packet id 4, got %llu\n",
+               (long long unsigned) pack->pid);
         exit(255);
     }
     pub_packet_sent(&ctx, pack, rmc_usec_monotonic_timestamp());
 
     pack = pub_next_queued_packet(&ctx);
     if (pack->pid != 5) {
-        printf("Failed pub test 10.2. Wanted packet id 5, got %lu\n",
-               pack->pid);
+        printf("Failed pub test 10.2. Wanted packet id 5, got %llu\n",
+               (long long unsigned) pack->pid);
         exit(255);
     }
     pub_packet_sent(&ctx, pack, rmc_usec_monotonic_timestamp());
 
     pack = pub_next_queued_packet(&ctx);
     if (pack->pid != 6) {
-        printf("Failed pub test 10.3. Wanted packet id 6, got %lu\n",
-               pack->pid);
+        printf("Failed pub test 10.3. Wanted packet id 6, got %llu\n",
+               (long long unsigned) pack->pid);
         exit(255);
     }
     pub_packet_sent(&ctx, pack, rmc_usec_monotonic_timestamp());
 
     pack = pub_next_queued_packet(&ctx);
     if (pack->pid != 7) {
-        printf("Failed pub test 10.4. Wanted packet id 7, got %lu\n",
-               pack->pid);
+        printf("Failed pub test 10.4. Wanted packet id 7, got %llu\n",
+               (long long unsigned) pack->pid);
         exit(255);
     }
     pub_packet_sent(&ctx, pack, rmc_usec_monotonic_timestamp());
@@ -403,8 +406,8 @@ void test_pub(void)
     // Check that collection of timed out packages works.
     //
     if ((pid = pub_queue_packet(&ctx, "1", 2, user_data_nil())) != 1) {
-        printf("Failed pub test 12.1. Wanted pid 1, got %lu\n",
-               pid);
+        printf("Failed pub test 12.1. Wanted pid 1, got %llu\n",
+               (long long unsigned) pid);
         exit(255);
     }
     // Queue integrity has already been tested. Trust rest of pids to
@@ -575,8 +578,8 @@ void test_pub(void)
     // sub2: - - - 4 5 6
     // sub3: - - - - - -
     if (ts != 2) {
-        printf("Failed pub test 15.5. Wanted ts 2, got %lu\n",
-               ts);
+        printf("Failed pub test 15.5. Wanted ts 2, got %llu\n",
+               (long long unsigned) ts);
         exit(255);
 
     }

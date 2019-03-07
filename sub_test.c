@@ -15,10 +15,10 @@
 static uint8_t _test_print_pending(sub_packet_node_t* node, void* dt)
 {
     sub_packet_t* pack = (sub_packet_t*) node->data;
-    int indent = (int) (uint64_t) dt;
+    int indent = *((int*) dt);
 
     printf("%*cPacket          %p\n", indent*2, ' ', pack);
-    printf("%*c  PID             %lu\n", indent*2, ' ', pack->pid);
+    printf("%*c  PID             %llu\n", indent*2, ' ', (unsigned long long) pack->pid);
     printf("%*c  Payload Length  %d\n", indent*2, ' ', pack->payload_len);
     putchar('\n');
     return 1;
@@ -28,12 +28,14 @@ static uint8_t _test_print_pending(sub_packet_node_t* node, void* dt)
 __attribute__ ((unused))
 static uint8_t _test_print_publisher(sub_publisher_t* pub, void* dt)
 {
-    int indent = (int) (uint64_t) dt;
+    int indent = *((int*) dt);
 
     printf("%*cPublisher %p\n", indent*2, ' ', pub);
     if (sub_packet_list_size(&pub->received_pid) > 0) {
         printf("%*cReceived packets:\n", indent*3, ' ');
-        sub_packet_list_for_each(&pub->received_pid, _test_print_pending, (void*) ((uint64_t)indent + 2));
+        indent+=2;
+        sub_packet_list_for_each(&pub->received_pid, _test_print_pending, (void*) &indent);
+        indent-=2;
     } else
         printf("%*cReceived packets: [None]\n", indent*2, ' ');
 
@@ -51,8 +53,9 @@ static void test_sequence(char* test, sub_packet_list_t* list, packet_id_t start
     node = sub_packet_list_head(list);
     while(node) {
         if (node->data->pid != pid) {
-            printf("sub_test: failed  %s. Wanted pid %lu, got %lu\n",
-                   test, pid, node->data->pid);
+            printf("sub_test: failed  %s. Wanted pid %llu, got %llu\n",
+                   test, (unsigned long long) pid,
+                   (unsigned long long) node->data->pid);
             exit(255);
         }
         node = sub_packet_list_next(node);
@@ -82,7 +85,7 @@ static void add_received_packets(sub_publisher_t* pub,
         char buf[16];
 
         for(pid = start; pid != stop + 1; ++pid) {
-            sprintf(buf, "%lu", pid);
+            sprintf(buf, "%llu", (unsigned long long) pid);
             sub_packet_received(pub, pid,
                                 buf, strlen(buf)+1,
                                 1,
@@ -122,10 +125,10 @@ static void test_interval_list(char* test,
         // Does the interval match?
         if (node->data.first_pid != start ||
             node->data.last_pid != stop) {
-            printf("sub_test: failed  %s. Wanted interval 3-5, got %lu-%lu\n",
+            printf("sub_test: failed  %s. Wanted interval 3-5, got %llu-%llu\n",
                    test,
-                   node->data.first_pid,
-                   node->data.last_pid);
+                   (unsigned long long) node->data.first_pid,
+                   (unsigned long long) node->data.last_pid);
             exit(255);
         }
         argc++;
@@ -795,7 +798,7 @@ void test_sub(void)
         exit(255);
     }
     if (pack->pid != 7) {
-        printf("sub_test: failed 9.4 Wanted pid 7. Got %lu.\n", pack->pid);
+        printf("sub_test: failed 9.4 Wanted pid 7. Got %llu.\n", pack->pid);
         exit(255);
     }
 
