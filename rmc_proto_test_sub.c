@@ -6,6 +6,7 @@
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
 #include "rmc_proto_test_common.h"
+#include "rmc_internal.h"
 #include "rmc_log.h"
 
 // Maximum number of publishers an rmc_sub_context_t can have.

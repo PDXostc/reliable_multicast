@@ -5,7 +5,7 @@
 //
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
-#include "rmc_common.h"
+#include "rmc_internal.h"
 #include <getopt.h>
 #include <stdio.h>
 #include <string.h>
@@ -14,7 +14,6 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <fcntl.h>
-#include "reliable_multicast.h"
 #include "rmc_log.h"
 
 extern void test_packet_interval();

@@ -6,13 +6,15 @@
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
 #define _GNU_SOURCE 1
-#include "reliable_multicast.h"
+#include "rmc_internal.h"
 #include "rmc_log.h"
 #include <errno.h>
 #include <string.h>
 #include <stdio.h>
 #include <sys/uio.h>
+#include "rmc_list_template.h"
 
+RMC_LIST_IMPL(packet_id_list, packet_id_node, packet_id_t)
 
 int rmc_conn_process_tcp_write(rmc_connection_t* conn, uint32_t* bytes_left)
 {

@@ -14,7 +14,7 @@
 //
 #ifndef __REL_MCAST_SUB_H__
 #define __REL_MCAST_SUB_H__
-#include "rmc_common.h"
+#include "reliable_multicast.h"
 #include "rmc_list.h"
 
 

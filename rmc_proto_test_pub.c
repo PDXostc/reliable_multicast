@@ -6,6 +6,7 @@
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
 #include "rmc_proto_test_common.h"
+#include "rmc_internal.h"
 #include <stdlib.h>
 #include "rmc_log.h"
 #include <sys/socket.h>

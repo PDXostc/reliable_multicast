@@ -7,7 +7,7 @@
 
 
 
-#include "reliable_multicast.h"
+#include "rmc_internal.h"
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
