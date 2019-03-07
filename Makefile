@@ -49,8 +49,11 @@ LIB_TARGET=librmc.a
 LIB_SO_TARGET=librmc.so
 TEST_TARGET=rmc_test
 WIRESHARK_TARGET=rmc_wireshark_plugin.so
-
 DESTDIR ?= /usr/local
+
+CFLAGS = -ggdb -fpic -Wall -m32
+.PHONY: all clean etags print_obj install uninstall
+
 
 CFLAGS = -ggdb -fpic -Wall
 .PHONY: all clean etags print_obj install uninstall
@@ -64,13 +67,13 @@ wireshark: $(WIRESHARK_TARGET)
 
 
 $(TEST_TARGET): $(LIB_TARGET) $(OBJ) $(TEST_OBJ)
-	$(CC)  $(CFLAGS) -L. -lrmc $^ -o $@
+	$(CC) $(CFLAGS) -L. -lrmc $^ -o $@
 
 $(LIB_TARGET): $(OBJ)
 	ar q $(LIB_TARGET) $(OBJ)
 
 $(LIB_SO_TARGET): $(OBJ)
-	$(CC) -shared -o $(LIB_SO_TARGET) $(OBJ)
+	$(CC)  -shared $(CFLAGS) -o $(LIB_SO_TARGET) $(OBJ)
 
 install: all
 	install -d ${DESTDIR}/lib

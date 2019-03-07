@@ -263,11 +263,11 @@ void rmc_log(int log_level, const char* func, const char* file, int line, uint16
     }
 
 
-    fprintf(_rmc_log_file, "%s%s%s %ld %s %s%s:%d%s ",
+    fprintf(_rmc_log_file, "%s%s%s %lld %s %s%s:%d%s ",
             color,
             tag,
             rmc_log_color_none(),
-            start_time?((rmc_usec_monotonic_timestamp() - start_time)/1000):0 ,
+            (long long int) (start_time?((rmc_usec_monotonic_timestamp() - start_time)/1000):0) ,
             index_str,
             rmc_log_color_faint(),
             file,
