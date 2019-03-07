@@ -104,7 +104,7 @@ static void test_interval_list(char* test,
     packet_id_t start;
     packet_id_t stop;
     sub_pid_interval_node_t* node = sub_pid_interval_list_head(&pub->received_interval);
-    uint32_t argc;
+    uint32_t argc = 0;
 
     va_start(ap, pub);
 
