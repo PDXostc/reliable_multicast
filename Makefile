@@ -79,10 +79,10 @@ install: all
 	install -m 0644 ${INST_HDR} ${DESTDIR}/include
 
 uninstall:
-	rm ${DESTDIR}/lib/${LIB_TARGET}
-	rm ${DESTDIR}/lib/${LIB_SO_TARGET}
-	rm ${DESTDIR}/bin/${TEST_TARGET}
-	(cd ${DESTDIR}/include; rm ${INST_HDR})
+	rm -f ${DESTDIR}/lib/${LIB_TARGET}
+	rm -f ${DESTDIR}/lib/${LIB_SO_TARGET}
+	rm -f ${DESTDIR}/bin/${TEST_TARGET}
+	(cd ${DESTDIR}/include; rm -f ${INST_HDR})
 etags:
 	@rm -f TAGS
 	find . -name '*.h' -o -name '*.c' -print | etags -
