@@ -55,7 +55,8 @@ CFLAGS = -ggdb -fpic -Wall -m32
 .PHONY: all clean etags print_obj install uninstall
 
 
-CFLAGS = -ggdb -fpic -Wall
+CFLAGS = -ggdb -fpic -Wall -m32
+
 .PHONY: all clean etags print_obj install uninstall
 
 all: $(LIB_TARGET) $(LIB_SO_TARGET) $(TEST_TARGET)
