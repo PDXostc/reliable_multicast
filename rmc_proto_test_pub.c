@@ -17,6 +17,7 @@
 // Maximum number of subscribers an rmc_pub_context_t can have.
 #define RMC_MAX_CONNECTIONS 16
 
+__attribute__ ((unused))
 static uint8_t _test_print_pending(pub_packet_node_t* node, void* dt)
 {
     pub_packet_t* pack = (pub_packet_t*) node->data;
@@ -56,7 +57,6 @@ static int _descriptor(rmc_pub_context_t* ctx,
 static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t timeout)
 {
     struct epoll_event events[rmc_pub_get_max_subscriber_count(ctx)];
-    char buf[16];
     int nfds = 0;
 
     if (timeout != -1) {
@@ -113,7 +113,6 @@ static int process_events(rmc_pub_context_t* ctx, int epollfd, usec_timestamp_t 
 
 void queue_test_data(rmc_pub_context_t* ctx, uint8_t* payload, int payload_len, int drop_flag)
 {
-    pub_packet_node *node = 0;
     int res = 0;
     res = rmc_pub_queue_packet(ctx, memcpy(malloc(payload_len), payload, payload_len), payload_len, 0);
 
@@ -161,26 +160,13 @@ void test_rmc_proto_pub(char* mcast_group_addr,
 {
     rmc_pub_context_t* ctx = 0;
     int res = 0;
-    int send_sock = 0;
-    int send_ind = 0;
-    int rec_sock = 0;
-    int rec_ind = 0;
     int epollfd = -1;
-    pid_t sub_pid = 0;
-    user_data_t ud = { .u64 = 0 };
     uint64_t signal_ind = 0;
     uint64_t packet_ind = 0;
-    usec_timestamp_t t_out = 0;
     uint8_t *conn_vec_mem = 0;
-    char buf[128];
     int subscriber_count = 0;
-    usec_timestamp_t exit_ts = 0;
     usec_timestamp_t current_ts = 0;
-    int busy = 0;
 
-    uint32_t queued_packets = 0;
-    uint32_t send_buf_len = 0;
-    uint32_t ack_count = 0;
 
 
     epollfd = epoll_create1(0);
@@ -268,7 +254,7 @@ void test_rmc_proto_pub(char* mcast_group_addr,
     packet_ind = 0;
 
     while(signal_ind <= count) {
-        char payload[RMC_MAX_PAYLOAD];
+        uint8_t payload[RMC_MAX_PAYLOAD];
         int payload_len = 0;
         int start_signal_ind = signal_ind;
         float rnd = (float) (rand() % 1000000);

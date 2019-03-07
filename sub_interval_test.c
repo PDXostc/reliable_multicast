@@ -35,12 +35,6 @@ static void add_packet(sub_publisher_t* pub, packet_id_t pid)
     sub_packet_received(pub, pid, "", 0, 1, 0, user_data_nil());
 }
 
-static void reset_list(sub_packet_list_t* lst)
-{
-    sub_packet_t *pack = 0;
-    while(sub_packet_list_pop_head(lst, &pack))
-        free(pack);
-}
 
 void test_packet_interval()
 {
@@ -49,7 +43,6 @@ void test_packet_interval()
     sub_packet_list_t plst;
     sub_pid_interval_node_t* pnode;
     sub_pid_interval_t intv = { .first_pid = 0, .last_pid = 0 };
-    packet_id_t pid = 0;
 
     sub_init_publisher(&pub);
 

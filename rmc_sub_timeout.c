@@ -22,12 +22,6 @@
 int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
 {
     usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
-    pub_sub_list_t subs;
-    pub_subscriber_t* sub = 0;
-    int res = 0;
-    sub_packet_t* pack = 0;
-    sub_pid_interval_list_t intervals;
-    sub_pid_interval_t intv;
     rmc_index_node_t *inode = 0;
 
     if (!ctx)
@@ -92,9 +86,7 @@ int rmc_sub_timeout_process(rmc_sub_context_t* ctx)
 
 int rmc_sub_timeout_get_next(rmc_sub_context_t* ctx, usec_timestamp_t* result)
 {
-    usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
     sub_publisher_t* pub = 0;
-    rmc_index_t ind = 0;
 
     if (!ctx || !result)
         return EINVAL;

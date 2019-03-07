@@ -53,6 +53,7 @@ int rmc_sub_packet_received(rmc_sub_context_t* ctx,
                         rmc_usec_monotonic_timestamp(),
                         user_data_u32(index));
 
+    return 0;
 }
 
 int rmc_sub_get_dispatch_ready_count(rmc_sub_context_t* ctx)

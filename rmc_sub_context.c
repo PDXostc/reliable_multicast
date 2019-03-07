@@ -47,9 +47,8 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
                                               payload_len_t payload_len,
                                               user_data_t user_data))
 {
-    int ind = 0;
     struct in_addr addr;
-    int seed = rmc_usec_monotonic_timestamp() & 0xFFFFFFFF;
+    unsigned int seed = rmc_usec_monotonic_timestamp() & 0xFFFFFFFF;
 
     if (!ctx || !mcast_group_addr)
         return EINVAL;
@@ -119,10 +118,8 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
 int rmc_sub_activate_context(rmc_sub_context_t* ctx)
 {
     struct sockaddr_in sock_addr;
-    socklen_t sock_len = sizeof(struct sockaddr_in);
     struct ip_mreq mreq;
     int on_flag = 1;
-    int off_flag = 0;
     int sz = 1024*1024;
 
     if (!ctx)
@@ -337,7 +334,6 @@ int rmc_sub_set_packet_ready_callback(rmc_sub_context_t* ctx,
 
 uint32_t rmc_sub_get_socket_count(rmc_sub_context_t* ctx)
 {
-    rmc_index_t res = 0;
 
     if (!ctx)
         return 0;

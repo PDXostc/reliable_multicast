@@ -88,19 +88,15 @@ void check_integrity(circ_buf_t* cb,
 
 void read_data(circ_buf_t* cb,
                int major_test,
-               uint8_t *expected_result)
+               char *expected_result)
 {
     int bytes_to_read = strlen(expected_result);
-    uint8_t* seg1 = 0;
-    uint32_t seg1_len = 0;
-    uint8_t* seg2 = 0;
-    uint32_t seg2_len = 0;
     uint8_t data[bytes_to_read];
-    uint32_t len = 0;
     uint32_t available = 0;
     uint32_t in_use = 0;
     int res = 0;
     uint32_t offset = 0;
+    uint32_t len = 0;
 
     if (circ_buf_in_use(cb) < bytes_to_read) {
         printf("circular buffer test %d.1: Wanted %d bytes of data in use. Got %d\n",
@@ -219,7 +215,7 @@ void read_data(circ_buf_t* cb,
 
 void write_data(circ_buf_t* cb,
                 int major_test,
-                uint8_t* data,
+                char* data,
                 uint32_t exp_seg1_len,
                 uint32_t exp_seg2_len)
 {
@@ -230,7 +226,7 @@ void write_data(circ_buf_t* cb,
     uint32_t seg2_len = 0;
     uint32_t available = 0;
     uint32_t in_use = 0;
-    uint32_t data_len = strlen(data);
+    uint32_t data_len = strlen( data);
 
     if (circ_buf_available(cb) < data_len) {
         printf("circular buffer test %d.1: Wanted %d bytes of data available. Got %d\n",

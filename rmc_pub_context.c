@@ -51,9 +51,8 @@ int rmc_pub_init_context(rmc_pub_context_t* ctx,
                                               payload_len_t payload_len,
                                               user_data_t user_data))
 {
-    int ind = 0;
     struct in_addr addr;
-    int seed = rmc_usec_monotonic_timestamp() & 0xFFFFFFFF;
+    unsigned int seed = rmc_usec_monotonic_timestamp() & 0xFFFFFFFF;
 
     if (!ctx || !mcast_group_addr)
         return EINVAL;
@@ -147,9 +146,7 @@ int rmc_pub_activate_context(rmc_pub_context_t* ctx)
     struct sockaddr_in sock_addr;
     struct in_addr in_addr;
     socklen_t sock_len = sizeof(struct sockaddr_in);
-    struct ip_mreq mreq;
     int on_flag = 1;
-    int off_flag = 0;
 
     if (!ctx)
         return EINVAL;
@@ -314,6 +311,7 @@ int rmc_pub_set_announce_interval(rmc_pub_context_t* ctx, uint32_t send_interval
     // Wipe any pending announce we are waiting for.
     if (!send_interval_usec)
         ctx->announce_next_send_ts = 0;
+    return 0;
 }
 
 // Setup IP_MULTICAST_TTL for publishing multicast.
@@ -443,7 +441,6 @@ uint32_t rmc_pub_get_subscriber_count(rmc_pub_context_t* ctx)
 
 uint32_t rmc_pub_get_socket_count(rmc_pub_context_t* ctx)
 {
-    rmc_index_t res = 0;
 
     if (!ctx)
         return 0;

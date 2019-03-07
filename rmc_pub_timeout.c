@@ -182,8 +182,6 @@ int rmc_pub_timeout_process(rmc_pub_context_t* ctx)
 
 int rmc_pub_timeout_get_next(rmc_pub_context_t* ctx, usec_timestamp_t* result_ts)
 {
-    usec_timestamp_t oldest_sent_ts = 0;
-    usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
     usec_timestamp_t announce_timeout_ts = -1; // Default is infinite.
     usec_timestamp_t ack_timeout_ts = -1;
 

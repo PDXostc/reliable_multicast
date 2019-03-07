@@ -39,7 +39,6 @@ int rmc_sub_write_interval_acknowledgement(rmc_sub_context_t* ctx,
             .last_pid = interval->last_pid
         };
         uint32_t available = 0;
-        uint32_t old_in_use = 0;
         rmc_poll_action_t old_action = 0;
         char group_addr[80];
         char remote_addr[80];
@@ -51,7 +50,6 @@ int rmc_sub_write_interval_acknowledgement(rmc_sub_context_t* ctx,
             return ENOTCONN;
 
         available = circ_buf_available(&conn->write_buf);
-        old_in_use = circ_buf_in_use(&conn->write_buf);
         old_action = conn->action;
 
         strcpy(group_addr, inet_ntoa( (struct in_addr) { .s_addr = htonl(ctx->mcast_group_addr) }));
@@ -149,7 +147,6 @@ int rmc_sub_write_control_message(rmc_sub_context_t* ctx,
             .payload_len = payload_len,
         };
         uint32_t available = 0;
-        uint32_t old_in_use = 0;
         rmc_poll_action_t old_action = 0;
 
         if (!ctx || !conn  || !payload || !payload_len)
@@ -168,7 +165,6 @@ int rmc_sub_write_control_message(rmc_sub_context_t* ctx,
             return ENOMEM;
         }
 
-        old_in_use = circ_buf_in_use(&conn->write_buf);
         old_action = conn->action;
 
         // Allocate memory for command
@@ -281,8 +277,6 @@ int rmc_sub_write_control_message_by_node_id(rmc_sub_context_t* ctx,
 int rmc_sub_write(rmc_sub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
 {
     int res = 0;
-    int rearm_write = 0;
-    uint32_t bytes_left_before = 0;
     uint32_t bytes_left_after = 0;
     rmc_poll_action_t old_action;
     rmc_connection_t* conn = 0;

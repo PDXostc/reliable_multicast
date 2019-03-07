@@ -77,11 +77,6 @@ int sub_packet_is_duplicate(sub_publisher_t* pub, packet_id_t pid)
 }
 
 
-int sub_packet_interval_acknowledged(sub_publisher_t* pub, sub_packet_t* pack, packet_id_t pid)
-{
-
-}
-
 int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
                         void* payload,
                         payload_len_t payload_len,

@@ -74,11 +74,9 @@ void test_pub(void)
     pub_subscriber_t sub3;
     pub_subscriber_t* sptr1 = 0;
     pub_subscriber_t* sptr2 = 0;
-    pub_subscriber_t* sptr3 = 0;
     pub_packet_t* pack;
     packet_id_t pid = 0;
     pub_sub_list_t sub_lst;
-    pub_packet_node_t* pnode = 0;
     usec_timestamp_t ts = 0;
 
     pub_init_context(&ctx);

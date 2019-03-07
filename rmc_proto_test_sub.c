@@ -40,6 +40,7 @@ typedef struct {
 } sub_expect_t;
 
 
+__attribute__ ((unused))
 static uint8_t _test_print_pending(sub_packet_node_t* node, void* dt)
 {
 
@@ -264,9 +265,7 @@ static int process_events(rmc_sub_context_t* ctx,
                           usec_timestamp_t timeout_ts)
 {
     struct epoll_event events[RMC_MAX_CONNECTIONS];
-    char buf[16];
     int nfds = 0;
-    usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
 
     if (timeout_ts != -1) {
         timeout_ts -= rmc_usec_monotonic_timestamp();
@@ -328,17 +327,9 @@ void test_rmc_proto_sub(char* mcast_group_addr,
                         int node_id_map_size)
 {
     rmc_sub_context_t* ctx = 0;
-    int res = 0;
-    int send_sock = 0;
-    int send_ind = 0;
-    int rec_sock = 0;
-    int rec_ind = 0;
     int epollfd = -1;
-    pid_t sub_pid = 0;
-    int mode = 0;
     int ind = 0;
     usec_timestamp_t timeout_ts = 0;
-    usec_timestamp_t exit_ts = 0;
     uint8_t *conn_vec_mem = 0;
     int do_exit = 0;
 

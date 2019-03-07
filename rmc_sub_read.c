@@ -200,8 +200,6 @@ static int process_multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res, uin
 static int multicast_read(rmc_sub_context_t* ctx, uint8_t* read_res)
 {
     uint8_t buffer[RMC_MAX_PACKET];
-    char src_addr_str[80];
-    char listen_addr_str[80];
     struct sockaddr_in src_addr;
     socklen_t addr_len = sizeof(src_addr);
     ssize_t len = 0;
@@ -255,7 +253,6 @@ static int process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
     uint8_t *payload = 0;
     packet_header_t pack_hdr;
     rmc_sub_context_t* ctx = (rmc_sub_context_t*) user_data.ptr;
-    usec_timestamp_t current_ts = rmc_usec_monotonic_timestamp();
     uint32_t packet_ready_sz = 0;
 
     // Make sure that we have enough data for the header.

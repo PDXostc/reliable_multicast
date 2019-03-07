@@ -25,6 +25,7 @@ static uint8_t _test_print_pending(sub_packet_node_t* node, void* dt)
 }
 
 
+__attribute__ ((unused))
 static uint8_t _test_print_publisher(sub_publisher_t* pub, void* dt)
 {
     int indent = (int) (uint64_t) dt;
@@ -152,10 +153,6 @@ void test_sub(void)
     sub_publisher_t pub2;
     sub_publisher_t pub3;
     sub_packet_t* pack = 0;
-    packet_id_t pid = 0;
-    sub_packet_node_t* node = 0;
-    sub_pid_interval_t intv = { .first_pid =0, .last_pid = 0};
-    sub_packet_list_t lst;
     sub_packet_list_t dispatch_ready;
 
     sub_packet_list_init(&dispatch_ready, 0, 0, 0);

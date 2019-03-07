@@ -114,6 +114,7 @@ int rmc_pub_close_connection(rmc_pub_context_t* ctx, rmc_index_t s_ind)
                                  else
                                      free(payload);
                              }));
+    return 0;
 }
 
 int rmc_pub_read(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
