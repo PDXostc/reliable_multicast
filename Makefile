@@ -35,10 +35,10 @@ TEST_OBJ = sub_interval_test.o \
 
 INST_HDR=reliable_multicast.h \
 		rmc_list.h \
+		rmc_list_template.h \
 		rmc_log.h
 
 HDR=    ${INST_HDR} \
-		rmc_list_template.h \
 		rmc_proto_test_common.h \
 		rmc_pub.h \
 		rmc_sub.h \
@@ -49,6 +49,8 @@ LIB_TARGET=librmc.a
 LIB_SO_TARGET=librmc.so
 TEST_TARGET=rmc_test
 WIRESHARK_TARGET=rmc_wireshark_plugin.so
+
+DESTDIR ?= /usr/local
 
 CFLAGS = -ggdb -fpic -Wall
 .PHONY: all clean etags print_obj install uninstall
@@ -73,6 +75,7 @@ $(LIB_SO_TARGET): $(OBJ)
 install: all
 	install -d ${DESTDIR}/lib
 	install -d ${DESTDIR}/bin
+	install -d ${DESTDIR}/include
 	install -m 0644 ${LIB_TARGET} ${DESTDIR}/lib
 	install -m 0644 ${LIB_SO_TARGET} ${DESTDIR}/lib
 	install -m 0755 ${TEST_TARGET} ${DESTDIR}/bin
