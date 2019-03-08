@@ -168,8 +168,8 @@ void test_sub(void)
     // Basic processing of packages
     //--------
     add_received_packets(&pub1, 0,
-                         1, 5,
-                         0, 0);
+                         (packet_id_t) 1, (packet_id_t) 5,
+                         (packet_id_t) 0, (packet_id_t) 0);
 
     // Check sequence
     test_sequence("1.1", &pub1.received_pid, 1, 5);
@@ -213,8 +213,8 @@ void test_sub(void)
     // Packet 1-5 should be in the received list.
     test_interval_list("1.9",
                        &pub1,
-                       1, 5,
-                       0, 0);
+                       (packet_id_t) 1, (packet_id_t) 5,
+                       (packet_id_t) 0, (packet_id_t) 0);
 
 
     // Reset pub1 and dispatch_ready.
@@ -227,11 +227,11 @@ void test_sub(void)
 
     // Middle stream out of order
     add_received_packets(&pub1, 0,
-                         1, 1,
-                         3, 3,
-                         2, 2,
-                         4, 4,
-                         0, 0);
+                         (packet_id_t) 1, (packet_id_t) 1,
+                         (packet_id_t) 3, (packet_id_t) 3,
+                         (packet_id_t) 2, (packet_id_t) 2,
+                         (packet_id_t) 4, (packet_id_t) 4,
+                         (packet_id_t) 0, (packet_id_t) 0);
 
     // Check sequence
     test_sequence("2.1", &pub1.received_pid, 1, 4);
@@ -245,11 +245,11 @@ void test_sub(void)
     sub_packet_list_empty(&dispatch_ready);
 
     add_received_packets(&pub1, 0,
-                         2, 2,
-                         1, 1,
-                         3, 3,
-                         4, 4,
-                         0, 0);
+                         (packet_id_t) 2, (packet_id_t) 2,
+                         (packet_id_t) 1, (packet_id_t) 1,
+                         (packet_id_t) 3, (packet_id_t) 3,
+                         (packet_id_t) 4, (packet_id_t) 4,
+                         (packet_id_t) 0, (packet_id_t) 0);
 
     // Check sequence
     test_sequence("2.3", &pub1.received_pid, 1, 4);
@@ -262,11 +262,11 @@ void test_sub(void)
 
     // End out-of-order packages
     add_received_packets(&pub1, 0,
-                         1, 1,
-                         2, 2,
-                         4, 4,
-                         3, 3,
-                         0, 0);
+                         (packet_id_t) 1, (packet_id_t) 1,
+                         (packet_id_t) 2, (packet_id_t) 2,
+                         (packet_id_t) 4, (packet_id_t) 4,
+                         (packet_id_t) 3, (packet_id_t) 3,
+                         (packet_id_t) 0, (packet_id_t) 0);
 
     // Check sequence
     test_sequence("2.5", &pub1.received_pid, 1, 4);
@@ -283,15 +283,15 @@ void test_sub(void)
     //--------
 
     add_received_packets(&pub1, 0,
-                         1, 2,
+                         (packet_id_t) 1, (packet_id_t) 2,
                          // 3-3
-                         4, 5,
-                         0, 0);
+                         (packet_id_t) 4, (packet_id_t) 5,
+                         (packet_id_t) 0, (packet_id_t) 0);
 
     test_interval_list("3.1", &pub1,
-                       1,2,
-                       4,5,
-                       0,0);
+                       (packet_id_t) 1, (packet_id_t) 2,
+                       (packet_id_t) 4, (packet_id_t) 5,
+                       (packet_id_t) 0, (packet_id_t) 0);
 /*
 
     //
@@ -299,7 +299,7 @@ void test_sub(void)
     //
     reset_context(&ctx);
 
-    add_received_packets(&pub1, 0,
+    (packet_id_t) add_received_packets(&pub1, 0,
                          1, 2,
                          // 3-5
                          6, 7,
