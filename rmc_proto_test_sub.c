@@ -46,10 +46,10 @@ static uint8_t _test_print_pending(sub_packet_node_t* node, void* dt)
 {
 
     sub_packet_t* pack = (sub_packet_t*) node->data;
-    int indent = (int) (uint64_t) dt;
+    int indent = *((int*) dt);
 
     printf("%*cPacket          %p\n", indent*2, ' ', pack);
-    printf("%*c  PID             %lu\n", indent*2, ' ', pack->pid);
+    printf("%*c  PID             %llu\n", indent*2, ' ', (long long unsigned) pack->pid);
     printf("%*c  Payload Length  %d\n", indent*2, ' ', pack->payload_len);
     putchar('\n');
     return 1;
@@ -139,8 +139,11 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
     // Have we already completed all expected packages here?
     if (expect[node_id].status == RMC_TEST_SUB_COMPLETED) {
         RMC_LOG_INDEX_FATAL(index,
-                            "ContextID [%u] have already processed its [%lu] packets. Got Current[%lu] Max[%lu].",
-                            node_id, expect[node_id].max_received, current, max_expected);
+                            "ContextID [%u] have already processed its [%llu] packets. Got Current[%llu] Max[%llu].",
+                            node_id,
+                            (long long unsigned) expect[node_id].max_received,
+                            (long long unsigned) current,
+                            (long long unsigned) max_expected);
         exit(255);
     }
 
@@ -162,7 +165,7 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
         expect[node_id].start_ts = rmc_usec_monotonic_timestamp();
 
         RMC_LOG_INDEX_INFO(index,
-                           "Activate: node_id[%u] current[%lu] max_expected[%lu] expected sum[%lu]",
+                           "Activate: node_id[%u] current[%llu] max_expected[%llu] expected sum[%llu]",
                            node_id, current, max_expected, expect[node_id].calc_sum);
 
         // Fall through to the next if statement
@@ -176,7 +179,7 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
         // Check that max_expected hasn't changed.
         if (max_expected != expect[node_id].max_expected) {
             RMC_LOG_INDEX_FATAL(index,
-                                "ContextID [%u] max_expected changed from [%lu] to [%lu]",
+                                "ContextID [%u] max_expected changed from [%llu] to [%llu]",
                                 node_id, expect[node_id].max_expected, max_expected);
             exit(255);
         }
@@ -184,7 +187,7 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
         // Check that packet is consecutive.
         if (current != expect[node_id].max_received + 1) {
             RMC_LOG_INDEX_FATAL(index,
-                                "ContextID [%u] Wanted packet[%lu] Got[%lu]",
+                                "ContextID [%u] Wanted packet[%llu] Got[%llu]",
                                 node_id, expect[node_id].max_received + 1, current);
             exit(255);
         }
@@ -195,15 +198,16 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
         // Check if we are complete
         if (current == max_expected) {
             int signal_sec = 0;
-            printf("%s[%.3d]%s ContextID [%u] %s**COMPLETE*%s* at[%lu]\n",
+            printf("%s[%.3d]%s ContextID [%u] %s**COMPLETE*%s* at[%llu]\n",
                    rmc_index_color(index), index, rmc_log_color_none(),
-                   node_id, rmc_log_color_green(), rmc_log_color_none(), current);
+                   node_id, rmc_log_color_green(), rmc_log_color_none(),
+                   (long long unsigned) current);
 
             // Did we see data corruption?
             if (expect[node_id].expect_sum !=  expect[node_id].calc_sum) {
-                RMC_LOG_INDEX_FATAL(index, "DATA CORRUPTION! Expected total sum: %lu. Got %lu\n",
-                                    expect[node_id].expect_sum,
-                                    expect[node_id].calc_sum);
+                RMC_LOG_INDEX_FATAL(index, "DATA CORRUPTION! Expected total sum: %llu. Got %llu\n",
+                                    (long long unsigned) expect[node_id].expect_sum,
+                                    (long long unsigned) expect[node_id].calc_sum);
                 exit(0);
             }
 
@@ -212,16 +216,16 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
             signal_sec = (int) expect[node_id].max_received /
                 ((double) (expect[node_id].stop_ts - expect[node_id].start_ts) / 1000000.0);
 
-            printf("%s[%.3d]%s %lu signals (%ld bytes each) in %lu msec -> %s%d signals / sec%s -> %s%ld kbyte / sec%s\n",
+            printf("%s[%.3d]%s %llu signals (%u bytes each) in %llu msec -> %s%d signals / sec%s -> %s%u kbyte / sec%s\n",
                    rmc_index_color(index), index, rmc_log_color_none(),
-                   expect[node_id].max_received,
-                   sizeof(signal_t),
-                   (expect[node_id].stop_ts - expect[node_id].start_ts) / 1000,
+                   (long long unsigned) expect[node_id].max_received,
+                   (unsigned int) sizeof(signal_t),
+                   (long long unsigned) ((expect[node_id].stop_ts - expect[node_id].start_ts) / 1000),
                    rmc_log_color_green(),
                    signal_sec,
                    rmc_log_color_none(),
                    rmc_log_color_green(),
-                   signal_sec * sizeof(signal_t) / 1024,
+                   (unsigned) (signal_sec * sizeof(signal_t) / 1024),
                    rmc_log_color_none());
 
             // Check if this is the last one out.
@@ -233,10 +237,14 @@ static int process_incoming_signal(rmc_sub_context_t* ctx,
     }
 
     RMC_LOG_INDEX_FATAL(index,
-                        "Eh? expect[%u:%lu:%lu] status[%d]  data[%u:%lu:%lu]\n",
-                        node_id, expect[node_id].max_received, expect[node_id].max_expected,
+                        "Eh? expect[%u:%llu:%llu] status[%d]  data[%u:%llu:%llu]\n",
+                        node_id,
+                        (long long unsigned) expect[node_id].max_received,
+                        (long long unsigned) expect[node_id].max_expected,
                         expect[node_id].status,
-                        node_id, current, max_expected);
+                        node_id,
+                        (long long unsigned) current,
+                        (long long unsigned) max_expected);
 
     exit(255);
 }
@@ -406,8 +414,9 @@ void test_rmc_proto_sub(char* mcast_group_addr,
                 break;
             }
         }
-        RMC_LOG_COMMENT("max_pid_ready[%lu]  max_pid_received[%lu]",
-                      ctx->publishers[0].max_pid_ready,  ctx->publishers[0].max_pid_ready);
+        RMC_LOG_COMMENT("max_pid_ready[%llu]  max_pid_received[%llu]",
+                        (long long unsigned) ctx->publishers[0].max_pid_ready,
+                        (long long unsigned) ctx->publishers[0].max_pid_ready);
 
         if (do_exit)
             break;

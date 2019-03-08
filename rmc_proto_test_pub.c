@@ -22,7 +22,7 @@ __attribute__ ((unused))
 static uint8_t _test_print_pending(pub_packet_node_t* node, void* dt)
 {
     pub_packet_t* pack = (pub_packet_t*) node->data;
-    int indent = (int) (uint64_t) dt;
+    int indent = *((int*) dt);
 
     RMC_LOG_COMMENT("%*cPacket          %p", indent*2, ' ', pack);
     RMC_LOG_COMMENT("%*c  PID             %lu", indent*2, ' ', pack->pid);

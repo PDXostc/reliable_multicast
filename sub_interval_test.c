@@ -15,17 +15,19 @@
 static uint8_t _test_print_interval(sub_pid_interval_node_t* node, void* dt)
 {
     sub_pid_interval_t intv =  node->data;
-    int indent = (int) (uint64_t) dt;
+    int indent = *((int*) dt);
 
-    printf("%*cInterval: %lu - %lu\n", indent*2, ' ', intv.first_pid, intv.last_pid);
+    printf("%*cInterval: %llu - %llu\n", indent*2, ' ',
+           (long long unsigned) intv.first_pid,
+           (long long unsigned) intv.last_pid);
     return 1;
 }
 
 static uint8_t _test_print_interval_list(sub_publisher_t* pub)
 {
-
+    int ind = 1;
     puts("Interval:");
-    sub_pid_interval_list_for_each(&pub->received_interval, _test_print_interval, (void*) 1);
+    sub_pid_interval_list_for_each(&pub->received_interval, _test_print_interval, (void*) &ind);
     return 1;
 }
 
@@ -66,8 +68,9 @@ void test_packet_interval()
     sub_pid_interval_list_pop_head(&pub.received_interval, &intv);
 
     if (intv.first_pid != 100 || intv.last_pid != 100) {
-        printf("Failed interval test 1.2. Wanted 100:100. Got %lu:%lu\n",
-               intv.first_pid, intv.last_pid);
+        printf("Failed interval test 1.2. Wanted 100:100. Got %llu:%llu\n",
+               (long long unsigned) intv.first_pid,
+               (long long unsigned) intv.last_pid);
         _test_print_interval_list(&pub);
         exit(255);
     }
@@ -113,32 +116,36 @@ void test_packet_interval()
     // Check that intervals are correct.
     pnode = sub_pid_interval_list_head(&pub.received_interval);
     if (pnode->data.first_pid != 4 || pnode->data.last_pid != 5) {
-        printf("Failed interval test 1.4. Wanted 3:5. Got %lu:%lu\n",
-               pnode->data.first_pid, pnode->data.last_pid);
+        printf("Failed interval test 1.4. Wanted 3:5. Got %llu:%llu\n",
+               (long long unsigned) pnode->data.first_pid,
+               (long long unsigned) pnode->data.last_pid);
         _test_print_interval_list(&pub);
         exit(255);
     }
 
     pnode = sub_pid_interval_list_next(pnode);
     if (pnode->data.first_pid != 8 || pnode->data.last_pid != 10) {
-        printf("Failed interval test 1.5. Wanted 8:10. Got %lu:%lu\n",
-               pnode->data.first_pid, pnode->data.last_pid);
+        printf("Failed interval test 1.5. Wanted 8:10. Got %llu:%llu\n",
+               (long long unsigned) pnode->data.first_pid,
+               (long long unsigned) pnode->data.last_pid);
         _test_print_interval_list(&pub);
         exit(255);
     }
 
     pnode = sub_pid_interval_list_next(pnode);
     if (pnode->data.first_pid != 223 || pnode->data.last_pid != 224) {
-        printf("Failed interval test 1.6. Wanted 223:224. Got %lu:%lu\n",
-               pnode->data.first_pid, pnode->data.last_pid);
+        printf("Failed interval test 1.6. Wanted 223:224. Got %llu:%llu\n",
+               (long long unsigned) pnode->data.first_pid,
+               (long long unsigned) pnode->data.last_pid);
         _test_print_interval_list(&pub);
         exit(255);
     }
 
     pnode = sub_pid_interval_list_next(pnode);
     if (pnode->data.first_pid != 226 || pnode->data.last_pid != 226) {
-        printf("Failed interval test 1.7. Wanted 226:226. Got %lu:%lu\n",
-               pnode->data.first_pid, pnode->data.last_pid);
+        printf("Failed interval test 1.7. Wanted 226:226. Got %llu:%llu\n",
+               (long long unsigned) pnode->data.first_pid,
+               (long long unsigned) pnode->data.last_pid);
         _test_print_interval_list(&pub);
         exit(255);
     }
@@ -173,8 +180,9 @@ void test_packet_interval()
     pnode = sub_pid_interval_list_head(&pub.received_interval);
 
     if (pnode->data.first_pid != 3 || pnode->data.last_pid != 5) {
-        printf("Failed interval test 1.9. Wanted 3:5  Got %lu:%lu\n",
-               pnode->data.first_pid, pnode->data.last_pid);
+        printf("Failed interval test 1.9. Wanted 3:5  Got %llu:%llu\n",
+               (long long unsigned) pnode->data.first_pid,
+               (long long unsigned) pnode->data.last_pid);
         _test_print_interval_list(&pub);
         exit(255);
     }
@@ -202,8 +210,9 @@ void test_packet_interval()
     pnode = sub_pid_interval_list_head(&pub.received_interval);
 
     if (pnode->data.first_pid != 1 || pnode->data.last_pid != 1) {
-        printf("Failed interval test 1.10. Wanted 1:1  Got %lu:%lu\n",
-               pnode->data.first_pid, pnode->data.last_pid);
+        printf("Failed interval test 1.10. Wanted 1:1  Got %llu:%llu\n",
+               (long long unsigned) pnode->data.first_pid,
+               (long long unsigned) pnode->data.last_pid);
         _test_print_interval_list(&pub);
         exit(255);
     }
@@ -238,8 +247,9 @@ void test_packet_interval()
     pnode = sub_pid_interval_list_head(&pub.received_interval);
 
     if (pnode->data.first_pid != 1 || pnode->data.last_pid != 5) {
-        printf("Failed interval test 1.12. Wanted 1:5  Got %lu:%lu\n",
-               pnode->data.first_pid, pnode->data.last_pid);
+        printf("Failed interval test 1.12. Wanted 1:5  Got %llu:%llu\n",
+               (long long unsigned) pnode->data.first_pid,
+               (long long unsigned) pnode->data.last_pid);
         _test_print_interval_list(&pub);
         exit(255);
     }
@@ -274,8 +284,9 @@ void test_packet_interval()
     pnode = sub_pid_interval_list_next(pnode);
 
     if (pnode->data.first_pid != 8 || pnode->data.last_pid != 11) {
-        printf("Failed interval test 1.14. Wanted 6:11  Got %lu:%lu\n",
-               pnode->data.first_pid, pnode->data.last_pid);
+        printf("Failed interval test 1.14. Wanted 6:11  Got %llu:%llu\n",
+               (long long unsigned) pnode->data.first_pid, (long long unsigned)
+               pnode->data.last_pid);
         _test_print_interval_list(&pub);
         exit(255);
     }
@@ -307,16 +318,18 @@ void test_packet_interval()
     // Check that intervals are correct.
     pnode = sub_pid_interval_list_head(&pub.received_interval);
     if (pnode->data.first_pid != 1 || pnode->data.last_pid != 11) {
-        printf("Failed interval test 1.16. Wanted 3:5. Got %lu:%lu\n",
-               pnode->data.first_pid, pnode->data.last_pid);
+        printf("Failed interval test 1.16. Wanted 3:5. Got %llu:%llu\n",
+               (long long unsigned) pnode->data.first_pid,
+               (long long unsigned) pnode->data.last_pid);
         _test_print_interval_list(&pub);
         exit(255);
     }
 
     pnode = sub_pid_interval_list_next(pnode);
     if (pnode->data.first_pid != 223 || pnode->data.last_pid != 226) {
-        printf("Failed interval test 1.17. Wanted 8:10. Got %lu:%lu\n",
-               pnode->data.first_pid, pnode->data.last_pid);
+        printf("Failed interval test 1.17. Wanted 8:10. Got %llu:%llu\n",
+               (long long unsigned) pnode->data.first_pid,
+               (long long unsigned) pnode->data.last_pid);
         _test_print_interval_list(&pub);
         exit(255);
     }
