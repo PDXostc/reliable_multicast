@@ -24,7 +24,7 @@ RMC_LIST_IMPL(rmc_index_list, rmc_index_node, rmc_index_t)
 // =============
 // CONTEXT MANAGEMENT
 // =============
-int rmc_sub_init_context(rmc_sub_context_t* ctx,
+int rmc_sub_init_context(rmc_sub_context_t** context_res,
                          // Used to avoid loopback dispatch of published packets
                          rmc_node_id_t node_id,
                          char* mcast_group_addr,
@@ -38,8 +38,7 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
                          rmc_poll_modify_cb_t poll_modify,
                          rmc_poll_remove_cb_t poll_remove,
 
-                         uint8_t* conn_vec,
-                         uint32_t conn_vec_size, // In bytes.
+                         uint32_t max_publishers, // Maximum number of publishers we will listen to.
 
                          void* (*payload_alloc)(payload_len_t payload_len,
                                                 user_data_t user_data),
@@ -49,10 +48,25 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
 {
     struct in_addr addr;
     unsigned int seed = rmc_usec_monotonic_timestamp() & 0xFFFFFFFF;
+    rmc_sub_context_t* ctx;
+    uint8_t* conn_vec = 0;
 
-    if (!ctx || !mcast_group_addr)
+    if (!context_res || !mcast_group_addr)
         return EINVAL;
 
+    ctx = (rmc_sub_context_t*) malloc(sizeof(rmc_sub_context_t));
+    if (!ctx) {
+        RMC_LOG_FATAL("Could not allocate %d bytes", (int) sizeof(rmc_sub_context_t));
+        exit(255);
+    }
+
+    conn_vec = (uint8_t*) malloc(sizeof(rmc_connection_t) * max_publishers);
+    if (!conn_vec) {
+        RMC_LOG_FATAL("Could not allocate %d bytes for connections", (int) sizeof(rmc_connection_t) * max_publishers);
+        exit(255);
+    }
+
+    *context_res = ctx;
     sub_packet_list_init(&ctx->dispatch_ready, 0, 0, 0);
     rmc_index_list_init(&ctx->pub_ack_list, 0, 0, 0);
 
@@ -63,9 +77,10 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
     ctx->announce_cb = 0;
     ctx->subscription_complete_cb = 0;
     ctx->packet_ready_cb = 0;
+
     rmc_conn_init_connection_vector(&ctx->conn_vec,
                                     conn_vec,
-                                    conn_vec_size,
+                                    max_publishers,
                                     ctx->user_data,
                                     poll_add,
                                     poll_modify,
@@ -107,7 +122,7 @@ int rmc_sub_init_context(rmc_sub_context_t* ctx,
 
 
     // FIXME: Better memory management
-    ctx->publishers = malloc(sizeof(sub_publisher_t) * conn_vec_size);
+    ctx->publishers = malloc(sizeof(sub_publisher_t) * max_publishers);
 
     RMC_LOG_DEBUG("Subscriber Context init. node_id[%u] mcast_group[%s:%d] mcast_if[%s] user_data[%u]",
                   ctx->node_id, mcast_group_addr, multicast_port, mcast_if_addr, user_data.u32);
@@ -242,6 +257,18 @@ int rmc_sub_deactivate_context(rmc_sub_context_t* ctx)
         rmc_sub_close_connection(ctx, ind);
     }
 
+    return 0;
+}
+
+int rmc_sub_delete_context(rmc_sub_context_t* ctx)
+{
+
+    if (!ctx)
+        return EINVAL;
+    rmc_sub_deactivate_context(ctx);
+
+    free(ctx->conn_vec.connections);
+    free(ctx);
     return 0;
 }
 

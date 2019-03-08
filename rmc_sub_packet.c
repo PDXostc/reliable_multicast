@@ -127,3 +127,19 @@ rmc_index_t rmc_sub_packet_index(sub_packet_t* pack)
 
     return sub_packet_user_data(pack).u32;
 }
+
+payload_len_t rmc_sub_packet_payload_len(sub_packet_t* pack)
+{
+    if (!pack)
+        return 0;
+
+    return pack->payload_len;
+}
+
+void* rmc_sub_packet_payload(sub_packet_t* pack)
+{
+    if (!pack)
+        return 0;
+
+    return pack->payload;
+}

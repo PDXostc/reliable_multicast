@@ -24,7 +24,7 @@
 // =============
 // CONTEXT MANAGEMENT
 // =============
-int rmc_pub_init_context(rmc_pub_context_t* ctx,
+int rmc_pub_init_context(rmc_pub_context_t** context_res,
                          // Used to avoid loopback dispatch of published packets
                          rmc_node_id_t node_id,
                          char* mcast_group_addr,
@@ -44,8 +44,7 @@ int rmc_pub_init_context(rmc_pub_context_t* ctx,
                          rmc_poll_modify_cb_t poll_modify,
                          rmc_poll_remove_cb_t poll_remove,
 
-                         uint8_t* conn_vec,
-                         uint32_t conn_vec_size, // In bytes.
+                         uint32_t max_subscribers,
 
                          void (*payload_free)(void* payload,
                                               payload_len_t payload_len,
@@ -53,9 +52,24 @@ int rmc_pub_init_context(rmc_pub_context_t* ctx,
 {
     struct in_addr addr;
     unsigned int seed = rmc_usec_monotonic_timestamp() & 0xFFFFFFFF;
+    rmc_pub_context_t* ctx = 0;
+    uint8_t* conn_vec = 0;
 
-    if (!ctx || !mcast_group_addr)
+    if (!context_res || !mcast_group_addr)
         return EINVAL;
+
+    ctx = (rmc_pub_context_t*) malloc(sizeof(rmc_pub_context_t));
+    if (!ctx) {
+        RMC_LOG_FATAL("Could not allocate %d bytes", (int) sizeof(rmc_pub_context_t));
+        exit(255);
+    }
+    *context_res = ctx;
+
+    conn_vec = (uint8_t*) malloc(sizeof(rmc_connection_t) * max_subscribers);
+    if (!conn_vec) {
+        RMC_LOG_FATAL("Could not allocate %d bytes for connections", (int) sizeof(rmc_connection_t) * max_subscribers);
+        exit(255);
+    }
 
     signal(SIGPIPE, SIG_IGN);
     // We can throw away seed result since we will only call rand here.
@@ -64,13 +78,11 @@ int rmc_pub_init_context(rmc_pub_context_t* ctx,
 
     rmc_conn_init_connection_vector(&ctx->conn_vec,
                                     conn_vec,
-                                    conn_vec_size,
+                                    max_subscribers,
                                     ctx->user_data,
                                     poll_add,
                                     poll_modify,
                                     poll_remove);
-
-
 
     if (!control_listen_if_addr)
         control_listen_if_addr = "0.0.0.0";
@@ -134,7 +146,7 @@ int rmc_pub_init_context(rmc_pub_context_t* ctx,
     // payload_free() will be called is called to free the payload.
     pub_init_context(&ctx->pub_ctx);
 
-    ctx->subscribers = malloc(sizeof(pub_subscriber_t) * conn_vec_size);
+    ctx->subscribers = malloc(sizeof(pub_subscriber_t) * max_subscribers);
     RMC_LOG_DEBUG("Publisher Context init. node_id[%u] mcast_group[%s:%d] mcast_if[%s] user_data[%u]",
                   ctx->node_id, mcast_group_addr, multicast_port,  mcast_if_addr, user_data.u32);
     return 0;
@@ -294,6 +306,17 @@ int rmc_pub_deactivate_context(rmc_pub_context_t* ctx)
     return 0;
 }
 
+int rmc_pub_delete_context(rmc_pub_context_t* ctx)
+{
+
+    if (!ctx)
+        return EINVAL;
+    rmc_pub_deactivate_context(ctx);
+
+    free(ctx->conn_vec.connections);
+    free(ctx);
+    return 0;
+}
 
 int rmc_pub_set_announce_interval(rmc_pub_context_t* ctx, uint32_t send_interval_usec)
 {

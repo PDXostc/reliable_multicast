@@ -177,18 +177,16 @@ void test_rmc_proto_pub(char* mcast_group_addr,
         exit(255);
     }
 
-    ctx = malloc(sizeof(rmc_pub_context_t));
     conn_vec_mem = malloc(sizeof(rmc_connection_t)*RMC_MAX_CONNECTIONS);
     memset(conn_vec_mem, 0, sizeof(rmc_connection_t)*RMC_MAX_CONNECTIONS);
 
-    rmc_pub_init_context(ctx,
+    rmc_pub_init_context(&ctx,
                          0, // Random node id
                          mcast_group_addr, mcast_port,
                          mcast_if_addr,
                          listen_if_addr, listen_port,
                          (user_data_t) { .i32 = epollfd },
                          poll_add, poll_modify, poll_remove,
-                         conn_vec_mem,
                          RMC_MAX_CONNECTIONS,
                          lambda(void, (void* pl, payload_len_t len, user_data_t dt) { free(pl); }));
 

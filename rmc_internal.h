@@ -23,13 +23,6 @@ RMC_LIST(rmc_index_list, rmc_index_node, rmc_index_t)
 typedef rmc_index_list rmc_index_list_t;
 typedef rmc_index_node rmc_index_node_t;
 
-// Max UDP size is 0xFFE3 (65507).
-// Max TCP segment that seems to fit comfortably is 0xFF78.
-// Subtract some headers to get max payload
-#define RMC_MAX_PACKET 0xFF78
-#define RMC_MAX_PAYLOAD (RMC_MAX_PACKET - sizeof(packet_header_t) - 1)
-
-
 // Probably needs to be a lot bigger in high
 // throughput situations.
 #define RMC_MAX_TCP_PENDING_WRITE  // Seems to fit in one tcp segment.
@@ -375,63 +368,34 @@ typedef struct rmc_sub_context {
                          payload_len_t payload_len,
                          user_data_t user_data);
 } rmc_sub_context_t;
-extern int rmc_pub_read(struct rmc_pub_context* context, rmc_index_t connection_index, uint8_t* op_res);
-extern int rmc_pub_write(struct rmc_pub_context* context, rmc_index_t connection_index, uint8_t* op_res);
+
+typedef struct rmc_conn_command_dispatch {
+    uint8_t command;
+    int (*dispatch)(struct rmc_connection* conn, user_data_t user_data);
+} rmc_conn_command_dispatch_t;
+
+
 
 extern int rmc_pub_packet_ack(struct rmc_pub_context* ctx, struct rmc_connection* conn, packet_id_t pid);
 
 
-extern int rmc_sub_read(struct rmc_sub_context* context, rmc_index_t connection_index, uint8_t* op_res);
 
 
 
 extern int _rmc_sub_write_single_acknowledgement(struct rmc_sub_context* ctx,
                                                  struct rmc_connection* conn,
                                                  packet_id_t);
-extern int rmc_sub_write(struct rmc_sub_context* context, rmc_index_t connection_index, uint8_t* op_res);
-
-
-extern int rmc_sub_read(struct rmc_sub_context* context, rmc_index_t connection_index, uint8_t* op_res);
-
 
 
 extern int _rmc_sub_write_single_acknowledgement(struct rmc_sub_context* ctx,
                                                  struct rmc_connection* conn,
                                                  packet_id_t);
-extern int rmc_sub_write(struct rmc_sub_context* context, rmc_index_t connection_index, uint8_t* op_res);
 
 extern int rmc_sub_write_interval_acknowledgement(struct rmc_sub_context* ctx,
                                                   struct rmc_connection* conn,
                                                   sub_pid_interval_t* interval);
 
 
-// Queue a control message, sent via the tcp control channel, to the
-// publisher.
-//
-// Message will be delivered to publisher via the callbac sketup by
-// rmc_pub_set_control_message_callback().
-//
-// If callback has not been set, then control message will be dropped
-// by publisher.
-//
-// publisher_node_id will have been provided through a prior to
-// the callback specified by rmc_sub_set_announce_callback() when
-// the subscription was originally setup.
-//
-extern int rmc_sub_write_control_message_by_node_id(struct rmc_sub_context* ctx,
-                                                    rmc_node_id_t publisher_node_id,
-                                                    void* payload,
-                                                    payload_len_t payload_len);
-
-// publisher_address and publisher_port will have been provided through a prior to
-// the callback specified by rmc_sub_set_announce_callback() when
-// the subscription was originally setup.
-//
-extern int rmc_sub_write_control_message_by_address(struct rmc_sub_context* ctx,
-                                                    uint32_t publisher_address,
-                                                    uint16_t publisher_port,
-                                                    void* payload,
-                                                    payload_len_t payload_len);
 
 extern int rmc_sub_packet_interval_acknowledged(struct rmc_sub_context* context,
                                                 rmc_index_t index,
@@ -494,5 +458,14 @@ extern int rmc_conn_process_tcp_read(struct rmc_connection_vector* conn_vec,
                                      rmc_conn_command_dispatch_t* dispatch_table, // Terminated by a null dispatch entry
                                      user_data_t user_data);
 
+
+
+
+extern int rmc_conn_get_pending_send_length(struct rmc_connection* conn, payload_len_t* result);
+extern int rmc_conn_get_active_connection_count(struct rmc_connection_vector* conn_vec, rmc_index_t *result);
+
+
+extern int rmc_conn_get_max_index_in_use(struct rmc_connection_vector* conn_vec, rmc_index_t *result);
+extern int rmc_conn_get_vector_size(struct rmc_connection_vector* conn_vec, rmc_index_t *result);
 
 #endif // __RMC_INTERNAL_H__

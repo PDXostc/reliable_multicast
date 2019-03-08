@@ -45,6 +45,12 @@ extern usec_timestamp_t rmc_usec_monotonic_timestamp(void);
 typedef uint16_t rmc_index_t;
 typedef uint16_t rmc_poll_action_t;
 
+// Max UDP size is 0xFFE3 (65507).
+// Max TCP segment that seems to fit comfortably is 0xFF78.
+// Subtract some headers to get max payload
+#define RMC_MAX_PACKET 0xFF78
+#define RMC_MAX_PAYLOAD 0xFF20
+
 #define RMC_POLLREAD 0x01
 #define RMC_POLLWRITE 0x02
 
@@ -91,13 +97,17 @@ struct rmc_connection;
 // A an array of connections with its own resource management.
 // Used both by rmc_pub_context_t and rmc_sub_context_t.
 //
-struct rmc_connection_vector;
 struct rmc_pub_context;
-struct rmc_pub_context;
+typedef struct rmc_pub_context rmc_pub_context_t;
+
 struct rmc_sub_context;
+typedef struct rmc_sub_context rmc_sub_context_t;
+
+struct sub_packet;
+typedef struct sub_packet rmc_sub_packet_t;
 
 // All functions return error codes from error
-extern int rmc_pub_init_context(struct rmc_pub_context* context,
+extern int rmc_pub_init_context(struct rmc_pub_context** context,
                                 // Used to avoid loopback dispatch of published packets
                                 rmc_node_id_t node_id,
                                 // Domain name or IP of multicast group to join.
@@ -131,12 +141,11 @@ extern int rmc_pub_init_context(struct rmc_pub_context* context,
                                 rmc_poll_remove_cb_t poll_remove,
 
 
-                                // Byte array of memory to be used for connections and their circular buffers.
-                                // Size should be a multiple of sizeof(struct rmc_connection).
-                                uint8_t* conn_vec,
-
-                                // Number of elements available in conn_vec.
-                                uint32_t conn_vec_size,
+                                // Maximum number of publishers we
+                                // expect.  Please note that each
+                                // publisher, active or not, consumes
+                                // 64K of ram.
+                                uint32_t max_publishers,
 
                                 // Callback to previously allocated memory provided
                                 // by the caller of rmc_queue_packet().
@@ -151,7 +160,7 @@ extern int rmc_pub_init_context(struct rmc_pub_context* context,
 
 
 // All functions return error codes from error
-extern int rmc_sub_init_context(struct rmc_sub_context* context,
+extern int rmc_sub_init_context(struct rmc_sub_context** context,
 
                                 rmc_node_id_t node_id,
 
@@ -180,12 +189,12 @@ extern int rmc_sub_init_context(struct rmc_sub_context* context,
                                 // See typedef
                                 rmc_poll_remove_cb_t poll_remove,
 
-                                // Byte array of memory to be used for connections and their circular buffers.
-                                // Size should be a multiple of sizeof(struct rmc_connection).
-                                uint8_t* conn_vec,
 
-                                // Number of elements available in conn_vec.
-                                uint32_t conn_vec_size,
+                                // Maximum number of publishers we
+                                // expect.  Please note that each
+                                // publisher, active or not, consumes
+                                // 64K of ram.
+                                uint32_t max_publishers,
 
                                 // Callback to allocate payload memory used to store
                                 // incoming packages. Called via rmc_read() when
@@ -258,6 +267,7 @@ extern int rmc_pub_set_control_message_callback(struct rmc_pub_context* context,
                                                                            payload_len_t payload_len));
 
 extern int rmc_pub_deactivate_context(struct rmc_pub_context* context);
+extern int rmc_pub_delete_context(struct rmc_pub_context* context);
 extern int rmc_pub_set_multicast_ttl(struct rmc_pub_context* ctx, int hops);
 extern int rmc_pub_set_user_data(struct rmc_pub_context* ctx, user_data_t user_data);
 extern int rmc_pub_throttling(struct rmc_pub_context* ctx, uint32_t suspend_threshold, uint32_t resume_threhold);
@@ -279,6 +289,10 @@ extern rmc_index_t rmc_pub_get_max_subscriber_count(struct rmc_pub_context* ctx)
 extern uint32_t rmc_pub_get_subscriber_count(struct rmc_pub_context* ctx);
 extern uint32_t rmc_pub_get_socket_count(struct rmc_pub_context* ctx);
 
+extern int rmc_sub_read(struct rmc_sub_context* context, rmc_index_t connection_index, uint8_t* op_res);
+extern int rmc_sub_write(struct rmc_sub_context* context, rmc_index_t connection_index, uint8_t* op_res);
+extern int rmc_pub_read(struct rmc_pub_context* context, rmc_index_t connection_index, uint8_t* op_res);
+extern int rmc_pub_write(struct rmc_pub_context* context, rmc_index_t connection_index, uint8_t* op_res);
 
 // Get stats on what is pending to be sent out.
 //
@@ -299,6 +313,7 @@ extern int rmc_pub_context_get_pending(struct rmc_pub_context* ctx,
 
 extern int rmc_sub_activate_context(struct rmc_sub_context* context);
 extern int rmc_sub_deactivate_context(struct rmc_sub_context* context);
+extern int rmc_sub_delete_context(struct rmc_sub_context* context);
 
 extern int rmc_sub_close_connection(struct rmc_sub_context* ctx, rmc_index_t s_ind);
 
@@ -328,6 +343,34 @@ extern int rmc_sub_set_user_data(struct rmc_sub_context* ctx, user_data_t user_d
 extern user_data_t rmc_sub_user_data(struct rmc_sub_context* ctx);
 extern rmc_node_id_t rmc_sub_node_id(struct rmc_sub_context* ctx);
 
+// Queue a control message, sent via the tcp control channel, to the
+// publisher.
+//
+// Message will be delivered to publisher via the callbac sketup by
+// rmc_pub_set_control_message_callback().
+//
+// If callback has not been set, then control message will be dropped
+// by publisher.
+//
+// publisher_node_id will have been provided through a prior to
+// the callback specified by rmc_sub_set_announce_callback() when
+// the subscription was originally setup.
+//
+extern int rmc_sub_write_control_message_by_node_id(struct rmc_sub_context* ctx,
+                                                    rmc_node_id_t publisher_node_id,
+                                                    void* payload,
+                                                    payload_len_t payload_len);
+
+// publisher_address and publisher_port will have been provided through a prior to
+// the callback specified by rmc_sub_set_announce_callback() when
+// the subscription was originally setup.
+//
+extern int rmc_sub_write_control_message_by_address(struct rmc_sub_context* ctx,
+                                                    uint32_t publisher_address,
+                                                    uint16_t publisher_port,
+                                                    void* payload,
+                                                    payload_len_t payload_len);
+
 extern int rmc_sub_packet_received(struct rmc_sub_context* ctx,
                                    rmc_index_t index,
                                    packet_id_t pid,
@@ -346,6 +389,8 @@ extern int rmc_sub_packet_dispatched(struct rmc_sub_context* context, struct sub
 extern rmc_index_t rmc_sub_get_max_publisher_count(struct rmc_sub_context* ctx);
 extern rmc_index_t rmc_sub_get_publisher_count(struct rmc_sub_context* ctx);
 extern uint32_t rmc_sub_get_socket_count(struct rmc_sub_context* ctx);
+extern void* rmc_sub_packet_payload(struct sub_packet* pack);
+extern payload_len_t rmc_sub_packet_payload_len(struct sub_packet* pack);
 
 
 // If a valid pointer, res will be set to:
@@ -386,18 +431,5 @@ extern uint32_t rmc_sub_get_socket_count(struct rmc_sub_context* ctx);
 
 // Data was sent on TCP connection.
 #define RMC_WRITE_TCP 10
-
-
-typedef struct rmc_conn_command_dispatch {
-    uint8_t command;
-    int (*dispatch)(struct rmc_connection* conn, user_data_t user_data);
-} rmc_conn_command_dispatch_t;
-
-
-extern int rmc_conn_get_pending_send_length(struct rmc_connection* conn, payload_len_t* result);
-extern int rmc_conn_get_max_index_in_use(struct rmc_connection_vector* conn_vec, rmc_index_t *result);
-extern int rmc_conn_get_vector_size(struct rmc_connection_vector* conn_vec, rmc_index_t *result);
-extern int rmc_conn_get_active_connection_count(struct rmc_connection_vector* conn_vec, rmc_index_t *result);
-
 
 #endif // __RELIABLE_MULTICAST_H__

@@ -50,7 +50,7 @@ LIB_SO_TARGET=librmc.so
 TEST_TARGET=rmc_test
 WIRESHARK_TARGET=rmc_wireshark_plugin.so
 
-CFLAGS = -O3 -fpic -Wall
+CFLAGS = -ggdb -fpic -Wall
 .PHONY: all clean etags print_obj install uninstall
 
 all: $(LIB_TARGET) $(LIB_SO_TARGET) $(TEST_TARGET)
