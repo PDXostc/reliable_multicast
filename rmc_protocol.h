@@ -7,7 +7,7 @@
 
 #ifndef __RMC_PROTOCOL_H__
 #define __RMC_PROTOCOL_H__
-#include "rmc_common.h"
+#include "rmc_internal.h"
 
 
 #define RMC_CMD_PACKET 1

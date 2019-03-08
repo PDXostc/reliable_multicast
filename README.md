@@ -1,6 +1,12 @@
 # RELIABLE MULTICAST
-
 Reliable UDP Multicast using a separate TCP ack channel per subscriber.
+
+# BUILDING
+
+    make
+    sudo make DESTDIR=/usr/local install
+
+Replace `/usr/local` with a directory of your choice
 
 # TESTING
 
@@ -50,13 +56,11 @@ The ```-i``` argument sets up node id to distinguish betwen two publishers.<br>
 The ```-e``` argument lists all publishers that the subscriber is to expect announce packets from.<br>
 
     ./rmc_test -S -e1 -e2
-    ./rmc_test -c 1000000 -i1 
+    ./rmc_test -c 1000000 -i1
     ./rmc_test -c 1000000 -i2
-    
+
 ## Send a million signals from one publishers to two subscribers
 
-    ./rmc_test -S 
-    ./rmc_test -S 
-    ./rmc_test -c 1000000 
-
-
+    ./rmc_test -S
+    ./rmc_test -S
+    ./rmc_test -c 1000000

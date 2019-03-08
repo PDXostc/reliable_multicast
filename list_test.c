@@ -11,7 +11,7 @@
 #include <stdio.h>
 
 typedef uint32_t test_id_t;
-#include "rmc_common.h"
+#include "rmc_internal.h"
 
 #include "rmc_list.h"
 #include "rmc_list_template.h"

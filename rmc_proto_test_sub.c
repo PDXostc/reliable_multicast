@@ -6,6 +6,7 @@
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
 #include "rmc_proto_test_common.h"
+#include "rmc_internal.h"
 #include "rmc_log.h"
 
 // Maximum number of publishers an rmc_sub_context_t can have.
@@ -353,18 +354,16 @@ void test_rmc_proto_sub(char* mcast_group_addr,
         exit(255);
     }
 
-    ctx = malloc(sizeof(rmc_sub_context_t));
-
     conn_vec_mem = malloc(sizeof(rmc_connection_t)*RMC_MAX_CONNECTIONS);
     memset(conn_vec_mem, 0, sizeof(rmc_connection_t)*RMC_MAX_CONNECTIONS);
-    rmc_sub_init_context(ctx,
+    rmc_sub_init_context(&ctx,
                          0, // Assign random node id
                          mcast_group_addr,
                          mcast_port,
                          mcast_if_addr,
                          (user_data_t) { .i32 = epollfd },
                          poll_add, poll_modify, poll_remove,
-                         conn_vec_mem, RMC_MAX_CONNECTIONS,
+                         RMC_MAX_CONNECTIONS,
                          0,0);
 
     _test("rmc_proto_test_sub[%d.%d] activate_context(): %s",

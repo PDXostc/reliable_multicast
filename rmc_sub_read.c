@@ -5,7 +5,7 @@
 //
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
-#include "reliable_multicast.h"
+#include "rmc_internal.h"
 #include "rmc_log.h"
 #include <string.h>
 #include <errno.h>
