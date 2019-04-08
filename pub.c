@@ -73,7 +73,6 @@ void pub_reset_subscriber(pub_subscriber_t* sub,
                                                    user_data_t user_data))
 {
     pub_packet_node_t* node = 0; // Packets
-    pub_packet_t* ppack = 0;
     pub_sub_node_t *snode = 0;
 
     assert(sub);
@@ -97,7 +96,6 @@ static packet_id_t pub_queue_packet_with_pid(pub_context_t* ctx,
                                              payload_len_t payload_len,
                                              user_data_t pkg_user_data)
 {
-    pub_packet_node_t *node = 0;
     pub_packet_t* ppack = 0;
     assert(ctx);
     assert(payload);
@@ -182,7 +180,6 @@ void pub_packet_sent(pub_context_t* ctx,
                      usec_timestamp_t send_ts)
 {
     pub_sub_node_t* sub_node = 0; // Subscribers in ctx,
-    pub_packet_node_t* pack_node = 0;
 
     assert(ctx);
     assert(pack);

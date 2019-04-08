@@ -6,10 +6,10 @@
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
 
-#ifndef __REL_MCAST_PUB_H__
-#define __REL_MCAST_PUB_H__
+#ifndef __RMC_PUB_H__
+#define __RMC_PUB_H__
 
-#include "rmc_common.h"
+#include "reliable_multicast.h"
 #include "rmc_list.h"
 
 struct pub_subscriber;

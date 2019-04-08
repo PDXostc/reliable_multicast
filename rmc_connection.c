@@ -8,7 +8,7 @@
 
 
 #define _GNU_SOURCE 1
-#include "reliable_multicast.h"
+#include "rmc_internal.h"
 #include "rmc_log.h"
 #include <string.h>
 #include <errno.h>
@@ -261,7 +261,6 @@ int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
 {
     rmc_index_t c_ind = RMC_NIL_INDEX;
     int res = 0;
-    int err = 0;
     struct sockaddr_in sock_addr;
 
     assert(conn_vec);
@@ -292,7 +291,6 @@ int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
     conn_vec->connections[c_ind].remote_address = address;
     conn_vec->connections[c_ind].node_id = node_id;
     if (res == -1 && errno != EINPROGRESS) {
-        err = errno; // Errno may be reset by close().
         RMC_LOG_INFO("Failed to connect: %s", strerror(errno));
         close(conn_vec->connections[c_ind].descriptor);
         conn_vec->connections[c_ind].descriptor = -1;
@@ -445,6 +443,7 @@ int rmc_conn_get_max_index_in_use(rmc_connection_vector_t* conn_vec, rmc_index_t
         return EINVAL;
 
     *result = conn_vec->max_connection_ind;
+    return 0;
 }
 
 int rmc_conn_get_active_connection_count(rmc_connection_vector_t* conn_vec, rmc_index_t *result)
@@ -453,6 +452,7 @@ int rmc_conn_get_active_connection_count(rmc_connection_vector_t* conn_vec, rmc_
         return EINVAL;
 
     *result = conn_vec->active_connection_count;
+    return 0;
 }
 
 

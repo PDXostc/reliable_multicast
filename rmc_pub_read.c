@@ -7,7 +7,7 @@
 
 
 
-#include "reliable_multicast.h"
+#include "rmc_internal.h"
 #include "rmc_log.h"
 #include <string.h>
 #include <errno.h>
@@ -114,6 +114,7 @@ int rmc_pub_close_connection(rmc_pub_context_t* ctx, rmc_index_t s_ind)
                                  else
                                      free(payload);
                              }));
+    return 0;
 }
 
 int rmc_pub_read(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)

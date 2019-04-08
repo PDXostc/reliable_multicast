@@ -7,7 +7,7 @@
 
 
 #define _GNU_SOURCE
-#include "reliable_multicast.h"
+#include "rmc_internal.h"
 #include "rmc_log.h"
 #include <string.h>
 #include <stdlib.h>
@@ -38,10 +38,6 @@ static void setup_packet_header(rmc_pub_context_t* ctx,
 static int send_single_multicast_packet(rmc_pub_context_t* ctx, pub_packet_t* pack)
 {
     pub_context_t* pctx = &ctx->pub_ctx;
-    uint8_t packet[RMC_MAX_PACKET];
-    uint8_t *packet_ptr = packet;
-    packet_id_t pid = 0;
-    usec_timestamp_t ts = 0;
     ssize_t res = 0;
     packet_header_t pack_hdr;
     struct msghdr msg_hdr;
@@ -238,8 +234,6 @@ rearm:
 int rmc_pub_write(rmc_pub_context_t* ctx, rmc_index_t s_ind, uint8_t* op_res)
 {
     int res = 0;
-    int rearm_write = 0;
-    uint32_t bytes_left_before = 0;
     uint32_t bytes_left_after = 0;
     rmc_poll_action_t old_action = 0;
     rmc_connection_t* conn = 0;
@@ -315,7 +309,6 @@ int rmc_pub_context_get_pending(rmc_pub_context_t* ctx,
                                 uint32_t* send_buf_len,
                                 uint32_t* ack_count)
 {
-    payload_len_t len = 0;
     rmc_index_t ind = 0;
     int count = 0;
     rmc_index_t max_ind = 0;

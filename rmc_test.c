@@ -5,7 +5,7 @@
 //
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
-#include "rmc_common.h"
+#include "rmc_internal.h"
 #include <getopt.h>
 #include <stdio.h>
 #include <string.h>
@@ -14,7 +14,6 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <fcntl.h>
-#include "reliable_multicast.h"
 #include "rmc_log.h"
 
 extern void test_packet_interval();
@@ -75,7 +74,6 @@ void usage(char* prog)
 
 int main(int argc, char* argv[])
 {
-    int tst = 1;
     int opt = 0;
     int publisher = 1;
     char mcast_group_addr[80] = { 0 };
@@ -83,7 +81,6 @@ int main(int argc, char* argv[])
     char listen_if_addr[80];
     int listen_port = TCP_PORT_DEFAULT;
     int mcast_port = MULTICAST_PORT_DEFAULT;
-    pid_t ch_pid = 0;
     int rand_seed = 1;
     uint64_t packet_count = 1;
     rmc_node_id_t node_id = 1;

@@ -8,8 +8,7 @@
 // Simple logging
 
 
-#include "rmc_common.h"
-#include "reliable_multicast.h"
+#include "rmc_internal.h"
 #include "rmc_log.h"
 #include "string.h"
 #include <unistd.h>
@@ -54,7 +53,7 @@ int rmc_set_log_level(int log_level)
 {
     if (log_level < RMC_LOG_LEVEL_NONE || log_level > RMC_LOG_LEVEL_DEBUG) {
 
-        rmc_log(RMC_LOG_LEVEL_WARNING, __FUNCTION__, __FILE__, __LINE__, -1, 
+        rmc_log(RMC_LOG_LEVEL_WARNING, __FUNCTION__, __FILE__, __LINE__, -1,
                 "Illegal log level: %d. Legal values [%d-%d]", log_level, RMC_LOG_LEVEL_NONE, RMC_LOG_LEVEL_DEBUG);
         return 1;
     }
@@ -77,32 +76,32 @@ void rmc_log_set_file(FILE* file)
     }
 }
 
-const char* rmc_log_color_flashing_red() 
+const char* rmc_log_color_flashing_red()
 {
     return _rmc_log_use_color?"\033[5;38;2;192;0;0m":"";
 }
 
-const char* rmc_log_color_light_red() 
+const char* rmc_log_color_light_red()
 {
     return _rmc_log_use_color?"\033[38;2;255;204;204m":"";
 }
 
-const char* rmc_log_color_red() 
+const char* rmc_log_color_red()
 {
     return _rmc_log_use_color?"\033[38;2;192;0;0m":"";
 }
 
-const char* rmc_log_color_dark_red() 
+const char* rmc_log_color_dark_red()
 {
     return _rmc_log_use_color?"\033[38;2;255;0;0m":"";
 }
 
-const char* rmc_log_color_orange() 
+const char* rmc_log_color_orange()
 {
     return _rmc_log_use_color?"\033[38;2;255;128;0m":"";
 }
 
-const char* rmc_log_color_yellow() 
+const char* rmc_log_color_yellow()
 {
     return _rmc_log_use_color?"\033[38;2;255;255;0m":"";
 }
@@ -194,7 +193,7 @@ void rmc_log(int log_level, const char* func, const char* file, int line, uint16
     const char* tag = 0;
     char index_str[32];
     va_list ap;
-    
+
     // Default rmc_log_file, if not set.
     if (!_rmc_log_file)
         _rmc_log_file = stdout;
@@ -264,11 +263,11 @@ void rmc_log(int log_level, const char* func, const char* file, int line, uint16
     }
 
 
-    fprintf(_rmc_log_file, "%s%s%s %ld %s %s%s:%d%s ",
+    fprintf(_rmc_log_file, "%s%s%s %lld %s %s%s:%d%s ",
             color,
             tag,
             rmc_log_color_none(),
-            start_time?((rmc_usec_monotonic_timestamp() - start_time)/1000):0 ,
+            (long long int) (start_time?((rmc_usec_monotonic_timestamp() - start_time)/1000):0) ,
             index_str,
             rmc_log_color_faint(),
             file,
@@ -281,6 +280,3 @@ void rmc_log(int log_level, const char* func, const char* file, int line, uint16
     fputc('\n', _rmc_log_file);
 }
 // 8592
-
-
-

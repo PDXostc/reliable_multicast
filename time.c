@@ -6,7 +6,7 @@
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
 
-#include "rmc_common.h"
+#include "rmc_internal.h"
 #include <time.h>
 
 usec_timestamp_t rmc_usec_monotonic_timestamp(void)

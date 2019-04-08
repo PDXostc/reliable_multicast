@@ -7,7 +7,7 @@
 
 
 
-#include "reliable_multicast.h"
+#include "rmc_internal.h"
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -53,6 +53,7 @@ int rmc_sub_packet_received(rmc_sub_context_t* ctx,
                         rmc_usec_monotonic_timestamp(),
                         user_data_u32(index));
 
+    return 0;
 }
 
 int rmc_sub_get_dispatch_ready_count(rmc_sub_context_t* ctx)
@@ -125,4 +126,20 @@ rmc_index_t rmc_sub_packet_index(sub_packet_t* pack)
         return 0;
 
     return sub_packet_user_data(pack).u32;
+}
+
+payload_len_t rmc_sub_packet_payload_len(sub_packet_t* pack)
+{
+    if (!pack)
+        return 0;
+
+    return pack->payload_len;
+}
+
+void* rmc_sub_packet_payload(sub_packet_t* pack)
+{
+    if (!pack)
+        return 0;
+
+    return pack->payload;
 }

@@ -25,7 +25,6 @@ void poll_add(user_data_t user_data,
               rmc_index_t index,
               rmc_poll_action_t action)
 {
-    char buf[16];
     int epollfd = user_data.i32;
     struct epoll_event ev = {
         .data.u32 = (uint32_t) index,
@@ -91,7 +90,6 @@ void poll_remove(user_data_t user_data,
                  int descriptor,
                  rmc_index_t index)
 {
-    char buf[16];
     int epollfd = user_data.i32;
 
     if (epoll_ctl(epollfd, EPOLL_CTL_DEL, descriptor, 0) == -1) {
