@@ -28,9 +28,9 @@ static int decode_unsubscribed_multicast(rmc_sub_context_t* ctx,
         return 0;
     }
 
+
     if (pack_hdr->node_id == ctx->node_id) {
-        RMC_LOG_DEBUG("Ignoring announce from self.");
-        return 0;
+        RMC_LOG_COMMENT("Processing announce from self.");
     }
 
     RMC_LOG_COMMENT("Len[%d] Pid[%lu] - Announce!",
