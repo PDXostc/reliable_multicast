@@ -79,6 +79,10 @@ typedef struct rmc_connection {
     // are tied toegther through the circ_buf_init() call.
     // One byte extra needed by circ buf for housekeeping reasons.
     // FIXME: Use shared circular buffer across all rmc_connections for both read and write.
+    //        Right now we allocate 128K of ram even if the rmc_connection_t struct is not
+    //        in use (nobody connected), or if there are currently no buffered data.
+    //        At the very least allocate memory only for rmc_connections that are
+    //        actually connected
     uint8_t read_buf_data[RMC_MAX_PACKET];
 
     // Circular buffer of pending data read.
