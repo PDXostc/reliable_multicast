@@ -7,7 +7,7 @@ acknowledgements, and resends. The system is setup as one or more
 publishers sending packets received by one or more subscribers, as
 shown below.
 
-![Network Topology](./images/rmc_fig1.png)
+![Network Topology](./images/rmc_fig1.png?raw=true)
 
 Unlinke TCP-based protocols that have to send the same data
 individually to each subscriber, RMC can add additional subscribers
@@ -30,7 +30,7 @@ The announce-connect sequence allows publishers to make their
 availability known to subscribrers, and subscribers to connect to the
 publisher in order to receive published packets.
 
-![Connect Sequence](./images/rmc_fig2.png)
+![Connect Sequence](./images/rmc_fig2.png?raw=true)
 
 A subscriber who wants to receive published packets starts by adding
 itself as a member of a predefined multicast UDP/IP group using
@@ -63,7 +63,7 @@ The publisher can at any time send out UDP Multicast packets for
 subscribers to pick up. Subscribers will then use the control channel
 to acknowledge sequences of successfully received packets.
 
-![Packet Send](./images/rmc_fig3.png)
+![Packet Send](./images/rmc_fig3.png?raw=true)
 
 In addition to the payload the packet header contains the publisher's
 network-unique Node ID, a runtime-unique packet ID, and the control
@@ -92,7 +92,7 @@ in its received packet stream. The mising packets will be omitted in
 the Packet ID intervals sent back from the subscriber to the publisher in
 an ack message, as shown below.
 
-![Packet Resend](./images/rmc_fig4.png)
+![Packet Resend](./images/rmc_fig4.png?raw=true)
 
 The publisher will respond to missing packets reported by the
 subscriber by resending them over the control channel. This means that
