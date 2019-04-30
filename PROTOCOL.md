@@ -1,11 +1,112 @@
-# RELIABLE UDP MULTICAST PACKETS
+# RELIABLE MULTICAST [RMC] - PROTOCOL SPECIFICATION
 
-Use a reliable TCP backchannel from subscribers to a published to request
-resends.
+# Overview
+RMC uses a combination of UDP Multicast and TCP control
+channel connections to handle bulk data transmission,
+acknowledgements, and resends. The system is setup as one or more
+publishers sending packets received by one or more subscribers, as
+shown below.
 
-The UDP multicast group is purely a performance booster; all traffic can be
-regressed to TCP as UDP losses increase.
+![Network Topology](./images/rmc_fig1.png)
 
+Unlinke TCP-based protocols that have to send the same data
+individually to each subscriber, RMC can add additional subscribers
+with a minimum of overhead.
+
+## Terminology
+Node ID
+Control channel
+Publisher
+Subscriber
+
+
+# Data Transmission overview
+The following chapters describe the sequence for connecting a
+publisher to a subscriber and transmitting packets between them.
+
+## Announce - Connect
+
+The announce-connect sequence allows publishers to make their
+availability known to subscribrers, and subscribers to connect to the
+publisher in order to receive published packets.
+
+![Connect Sequence](./images/rmc_fig2.png)
+
+A subscriber who wants to receive published packets starts by adding
+itself as a member of a predefined multicast UDP/IP group using
+standard POSIX network APIs.
+
+A publisher can announce its availability to the network by sending
+out announce packets to the given multicast group. The announce packet
+contains information about the publisher's Node ID, and the TCP address and
+port of the publisher's control channel.
+
+The subscriber responds to a received announce packet by setting up a
+TCP connection to the control channel address provided in the
+packet. The source address:port tuple of the subscriber will be used
+by the publisher to identify the subscriber.
+
+The establishment of a control channel connection from a subscriber to
+a publisher is all that is needed for a subscription to become active.
+The subscription stays active until the connection is broken either by
+the subscriber or the publisher.
+
+Please note that a subscriber is free to connect to a publisher
+without having received an announce packet. If the subscriber knows
+the IP address and port of the publisher, via config file or similar
+mechanism, it can directly connect to the publisher's control channel
+in order to establish a publisher-subcriber relationship.
+
+## Packet Publishing
+
+The publisher can at any time send out UDP Multicast packets for
+subscribers to pick up. Subscribers will then use the control channel
+to acknowledge sequences of successfully received packets.
+
+![Packet Send](./images/rmc_fig3.png)
+
+In addition to the payload the packet header contains the publisher's
+network-unique Node ID, a runtime-unique packet ID, and the control
+channel IP address and port of the pubhlisher.
+
+A subscriber can check the packet header to determine if the publisher
+is currently subscribed to (through an established control channel
+connection), or not.
+
+Unsubscribed packets are silently dropped by the subscriber.
+
+Successfully received packets are acknowledged by the subscriber
+through an ack message sent over the control channel to the publisher.
+The subscriber waits for a period of time to collect as many packets
+as possible so that only one ack message needs to be sent for all
+packets received. The ack message contains a number of Packet ID
+intervals identifying packets that have been received.
+
+
+## Packet resend
+
+UDP/IP does not guarantee delivery, and published packets are frequently lost
+due to network or host issues. Since one or more packets are frequently lost
+in the middle of a sequence of packets, the subscriber will end up with holes
+in its received packet stream. The mising packets will be omitted in
+the Packet ID intervals sent back from the subscriber to the publisher in
+an ack message, as shown below.
+
+![Packet Resend](./images/rmc_fig4.png)
+
+The publisher will respond to missing packets reported by the
+subscriber by resending them over the control channel. This means that
+the packet will have guaranteed delivery and does not need additional
+resend attempts or acknowledgements.
+
+# Multicast- vs. Control Channel-delivered packets.
+
+
+
+
+
+
+# XXXXXXXXXXXXXXXXXXXXX
 # TCP Protocol
 
 The TCP connection is initiated from the subscriber to connect to a well-known
