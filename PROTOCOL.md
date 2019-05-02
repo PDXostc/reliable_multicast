@@ -1,6 +1,5 @@
 # RELIABLE MULTICAST [RMC] - PROTOCOL SPECIFICATION
 
-# Overview
 RMC uses a combination of UDP Multicast and TCP control
 channel connections to handle bulk data transmission,
 acknowledgements, and resends. The system is setup as one or more
@@ -13,14 +12,17 @@ Unlinke TCP-based protocols that have to send the same data
 individually to each subscriber, RMC can add additional subscribers
 with a minimum of overhead.
 
-## Terminology
-Node ID
-Control channel
-Publisher
-Subscriber
+# TERMINOLOGY
+
+Term                   | Description
+-----------------------|------------
+Node ID                | A unique, per-process ID, that identifies publishers and subscribers.
+Control channel        | A TCP connection setup from the subscriber to the publisher to acknowledge packets and do resends.
+Multicast Address:Port | The channel onto which one or more publishers can send data to be received by subscribers.
 
 
-# Data Transmission overview
+
+# OPERATIONS OVERVIEW
 The following chapters describe the sequence for connecting a
 publisher to a subscriber and transmitting packets between them.
 
@@ -99,9 +101,25 @@ subscriber by resending them over the control channel. This means that
 the packet will have guaranteed delivery and does not need additional
 resend attempts or acknowledgements.
 
-# Multicast- vs. Control Channel-delivered packets.
+## Multicast- vs. Control Channel-delivered packets.
+The multicast delivery method is used as a performance booster. RMC
+can switch to delivering all packets via TCP, albeit at a higher
+per-packet cost, in case UDP/IP cannot deliver data.
 
+## Throttling
+If a subscriber starts lagging in acknowledging packets to a
+subscriber, the publisher can be configure to automatically stop
+sending traffic until the backlog has cleared.
 
+If throttling is not enabled, packets will eventually be dropped and
+RMC will revert to delivering payloads via the Control Channel, which
+is automatically throttled by TCP.
+
+# DETAILED USE CASES
+
+## Announce - Connect
+
+![PlantUML](http://www.plantuml.com/plantuml/png/5Sqxhi9034RX_gxYie5nJvM21L3IHOx78YDv7h9_Y-r3gjETRmkm8xlztTeGowhfzdy2A-v4pf_oRZZpo52NEQ03HMQdv-Cr0qAkrlWmtNiQcd20SbM6xdKABUDnpGaQAEjYDXtrroy0)
 
 
 

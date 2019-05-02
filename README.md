@@ -68,7 +68,3 @@ The ```-e``` argument lists all publishers that the subscriber is to expect anno
     ./rmc_test -S
     ./rmc_test -S
     ./rmc_test -c 1000000
-
-
-
-![PlantUML](http://www.plantuml.com/plantuml/png/5Sqxhi9034RX_gxYie5nJvM21L3IHOx78YDv7h9_Y-r3gjETRmkm8xlztTeGowhfzdy2A-v4pf_oRZZpo52NEQ03HMQdv-Cr0qAkrlWmtNiQcd20SbM6xdKABUDnpGaQAEjYDXtrroy0)

@@ -3,6 +3,12 @@
 # @startuml
 # !includeurl https://raw.githubusercontent.com/PDXostc/reliable_multicast/update_doc/plantuml/test.puml
 # @enduml
+#
+# Replace 'update_doc' with relevant branch.
+# Replace 'test.pump' with relevant file in this directory.
+#
+# Put the resulting URL into an image link
+# ![PlantUML](http://www.plantuml.com/plantuml/png/5Sqxhi9034RX_gxYie5nJvM21L3IHOx78YDv7h9_Y-r3gjETRmkm8xlztTeGowhfzdy2A-v4pf_oRZZpo52NEQ03HMQdv-Cr0qAkrlWmtNiQcd20SbM6xdKABUDnpGaQAEjYDXtrroy0)
 
 @startuml
 Alice -> Bob: Autestthentication Request
