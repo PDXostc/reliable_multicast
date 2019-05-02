@@ -1,5 +1,11 @@
+# Code to put into http://plantuml.com/plantuml/form
+#
+# @startuml
+# !includeurl https://raw.githubusercontent.com/PDXostc/reliable_multicast/update_doc/plantuml/test.puml
+# @enduml
+
 @startuml
-Alice -> Bob: Authentication Request
+Alice -> Bob: Autestthentication Request
 Bob --> Alice: Authentication Response
 
 Alice -> Bob: Another authentication Request
