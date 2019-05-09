@@ -1,0 +1,15 @@
+# Code to put into http://plantuml.com/plantuml/form
+# @startuml
+# !includeurl https://raw.githubusercontent.com/PDXostc/reliable_multicast/update_doc/plantuml/connect.puml
+# @enduml
+#
+# Replace 'update_doc' with relevant branch.
+# Replace 'test.pump' with relevant file in this directory.
+#
+# Put the resulting URL into an image link
+# ![PlantUML](http://www.plantuml.com/plantuml/png/5Oqn3i8m34LtJW4NY7Uc3Xo0aQro7Oj6Sfme-HRNfvdUzDxR9dWWgjqUnSKYQmoxdq2VJwB1l_GjEEE8gKEQGnr9MgNtwzCcX8PQuSDqhs4emXCKFJDqpqse6_kAqwMw2b9VfqqzB_u1)
+
+@startuml
+Publisher -> Subscriber: Announce
+
+@enduml
