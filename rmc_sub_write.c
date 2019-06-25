@@ -6,7 +6,6 @@
 // Author: Magnus Feuer (mfeuer1@jaguarlandrover.com)
 
 
-#define _GNU_SOURCE
 #include "rmc_internal.h"
 #include "rmc_log.h"
 #include <string.h>
