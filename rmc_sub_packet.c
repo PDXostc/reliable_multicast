@@ -77,7 +77,7 @@ sub_packet_t* rmc_sub_get_next_dispatch_ready(rmc_sub_context_t* ctx)
 
 
 // Caller still need to free pack->payload
-int rmc_sub_packet_dispatched(rmc_sub_context_t* ctx, sub_packet_t* pack)
+int rmc_sub_packet_dispatched_keep_payload(rmc_sub_context_t* ctx, sub_packet_t* pack)
 {
     sub_packet_node_t* node = 0;
 
@@ -94,6 +94,18 @@ int rmc_sub_packet_dispatched(rmc_sub_context_t* ctx, sub_packet_t* pack)
 
     sub_packet_list_delete(node);
 
+    return 0;
+}
+
+
+// Will free pack->payload
+int rmc_sub_packet_dispatched(rmc_sub_context_t* ctx, sub_packet_t* pack)
+{
+    int res = rmc_sub_packet_dispatched_keep_payload(ctx, pack);
+
+    if (res)
+        return res;
+
     if (ctx->payload_free)
         (*ctx->payload_free)(pack->payload, pack->payload_len, ctx->user_data);
     else
@@ -101,7 +113,6 @@ int rmc_sub_packet_dispatched(rmc_sub_context_t* ctx, sub_packet_t* pack)
 
     return 0;
 }
-
 
 int rmc_sub_packet_interval_acknowledged(rmc_sub_context_t* ctx, rmc_index_t index, sub_pid_interval_t* interval)
 {

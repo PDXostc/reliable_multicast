@@ -386,6 +386,7 @@ extern int rmc_sub_timeout_process(struct rmc_sub_context* ctx);
 extern int rmc_sub_get_dispatch_ready_count(struct rmc_sub_context* context);
 extern struct sub_packet* rmc_sub_get_next_dispatch_ready(struct rmc_sub_context* context);
 extern int rmc_sub_packet_dispatched(struct rmc_sub_context* context, struct sub_packet* packet);
+extern int rmc_sub_packet_dispatched_keep_payload(struct rmc_sub_context* context, struct sub_packet* packet);
 extern rmc_index_t rmc_sub_get_max_publisher_count(struct rmc_sub_context* ctx);
 extern rmc_index_t rmc_sub_get_publisher_count(struct rmc_sub_context* ctx);
 extern uint32_t rmc_sub_get_socket_count(struct rmc_sub_context* ctx);
