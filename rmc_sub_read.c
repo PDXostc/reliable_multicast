@@ -71,8 +71,8 @@ static int decode_subscribed_multicast(rmc_sub_context_t* ctx,
 
     // Skip announce packets.
     if (!pack_hdr->pid) {
-        RMC_LOG_INDEX_COMMENT(RMC_MULTICAST_INDEX,
-                              "Already subscribing - Ignoring announce");
+        RMC_LOG_INDEX_DEBUG(RMC_MULTICAST_INDEX,
+                            "Already subscribing - Ignoring announce");
         return 0;
     }
 

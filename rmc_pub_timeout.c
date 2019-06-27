@@ -145,7 +145,7 @@ int rmc_pub_timeout_process(rmc_pub_context_t* ctx)
             len = sizeof(buffer);
 
         if (send_announce) {
-            RMC_LOG_COMMENT("Sending announce");
+            RMC_LOG_DEBUG("Sending announce");
             rmc_pub_queue_packet(ctx, buffer, len, 1);
         }
 
