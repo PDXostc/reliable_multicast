@@ -51,7 +51,7 @@ TEST_TARGET=rmc_test
 WIRESHARK_TARGET=rmc_wireshark_plugin.so
 DESTDIR ?= /usr/local
 
-CFLAGS = -O3 -fpic -Wall -D_GNU_SOURCE
+CFLAGS = -O2 -fpic -Wall -D_GNU_SOURCE
 .PHONY: all clean etags print_obj install uninstall
 
 all: $(LIB_TARGET) $(LIB_SO_TARGET) $(TEST_TARGET)
