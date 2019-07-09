@@ -146,7 +146,7 @@ int rmc_pub_init_context(rmc_pub_context_t** context_res,
     pub_init_context(&ctx->pub_ctx);
 
     ctx->subscribers = malloc(sizeof(pub_subscriber_t) * max_subscribers);
-    RMC_LOG_DEBUG("Publisher Context init. node_id[%u] mcast_group[%s:%d] mcast_if[%s] user_data[%u]",
+    RMC_LOG_DEBUG("Publisher Context init. node_id[0x%X] mcast_group[%s:%d] mcast_if[%s] user_data[0x%X]",
                   ctx->node_id, mcast_group_addr, multicast_port,  mcast_if_addr, user_data.u32);
     return 0;
 }
