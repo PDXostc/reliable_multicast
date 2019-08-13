@@ -11,6 +11,10 @@
 #include <stdio.h>
 #include <stdarg.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define RMC_LOG_LEVEL_NONE 0
 #define RMC_LOG_LEVEL_FATAL 1
 #define RMC_LOG_LEVEL_ERROR 2
@@ -53,5 +57,9 @@ extern int _rmc_log_level;
 #define RMC_LOG_INDEX_WARNING(index, fmt, ...) { if (_rmc_log_level >= RMC_LOG_LEVEL_WARNING) rmc_log(RMC_LOG_LEVEL_WARNING, __FUNCTION__, __FILE__, __LINE__, index, fmt, ##__VA_ARGS__); }
 #define RMC_LOG_INDEX_ERROR(index, fmt, ...) { if (_rmc_log_level >= RMC_LOG_LEVEL_ERROR) rmc_log(RMC_LOG_LEVEL_ERROR, __FUNCTION__, __FILE__, __LINE__, index, fmt, ##__VA_ARGS__); }
 #define RMC_LOG_INDEX_FATAL(index, fmt, ...) { if (_rmc_log_level >= RMC_LOG_LEVEL_FATAL) rmc_log(RMC_LOG_LEVEL_FATAL, __FUNCTION__, __FILE__, __LINE__, index, fmt, ##__VA_ARGS__); }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // __RMC_LOG_H__

@@ -7,6 +7,11 @@
 
 #ifndef __RELIABLE_MULTICAST_H__
 #define __RELIABLE_MULTICAST_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdint.h>
 #include <netinet/in.h>
 #include "rmc_list.h"
@@ -432,5 +437,10 @@ extern payload_len_t rmc_sub_packet_payload_len(struct sub_packet* pack);
 
 // Data was sent on TCP connection.
 #define RMC_WRITE_TCP 10
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // __RELIABLE_MULTICAST_H__
