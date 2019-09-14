@@ -8,9 +8,8 @@
 
 #include "rmc_internal.h"
 
-#include <linux/time.h>
 #include <time.h>
-
+#define CLOCK_BOOTTIME 9
 
 usec_timestamp_t rmc_usec_monotonic_timestamp(void)
 {
