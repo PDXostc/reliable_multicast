@@ -8,8 +8,8 @@
 
 #include "rmc_internal.h"
 
-#include <time.h>
-#include <bits/time.h>
+#include <linux/time.h>
+
 
 usec_timestamp_t rmc_usec_monotonic_timestamp(void)
 {
