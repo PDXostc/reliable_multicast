@@ -7,6 +7,7 @@
 
 
 #include "rmc_internal.h"
+#define _POSIX_C_SOURCE 199309L
 #include <time.h>
 
 usec_timestamp_t rmc_usec_monotonic_timestamp(void)
