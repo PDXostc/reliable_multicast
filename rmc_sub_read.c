@@ -347,7 +347,10 @@ static int process_cmd_packet(rmc_connection_t* conn, user_data_t user_data)
     return 0;
 }
 
-
+static void _payload_free_generic(void* payload, payload_len_t payload_len, user_data_t user_data)
+{
+    free(payload);
+}
 
 int rmc_sub_close_connection(rmc_sub_context_t* ctx, rmc_index_t s_ind)
 {
@@ -356,12 +359,7 @@ int rmc_sub_close_connection(rmc_sub_context_t* ctx, rmc_index_t s_ind)
     rmc_conn_close_connection(&ctx->conn_vec, s_ind);
 
     sub_reset_publisher(&ctx->publishers[s_ind],
-                         lambda(void, (void* payload, payload_len_t payload_len, user_data_t user_data) {
-                                 if (ctx->payload_free)
-                                     (*ctx->payload_free)(payload, payload_len, user_data);
-                                 else
-                                     free(payload);
-                             }));
+                        ctx->payload_free?ctx->payload_free:_payload_free_generic);
     return 0;
 }
 

@@ -86,28 +86,30 @@ int rmc_pub_traffic_suspended(rmc_pub_context_t* ctx)
     return ctx->traffic_suspended?EBUSY:0;
 }
 
+
+static void _payload_free_generic(void* payload, payload_len_t payload_len, user_data_t user_data)
+{
+    free(payload);
+}
+
 int rmc_pub_packet_ack(rmc_pub_context_t* ctx, rmc_connection_t* conn, packet_id_t pid)
 {
     pub_packet_ack(&ctx->subscribers[conn->connection_index],
                    pid,
                    // packet free function invoked when the last subscriber acks the packet.
-                   // Also resumes suspende traffic
-                   lambda(void, (void* payload, payload_len_t payload_len, user_data_t user_data) {
-                           // If we currently have suspended traffic,
-                           // check if we are to resume it.
-                           if (ctx->traffic_suspended) {
-                               if (pub_get_unacknowledged_packet_count(&ctx->pub_ctx) <= ctx->traffic_resume_threshold) {
-                                   RMC_LOG_INFO("Resuming traffic");
-                                   ctx->traffic_suspended = 0;
-                               } else
-                                   RMC_LOG_DEBUG("Still suspended unacked[%d] threshold[%d]",
-                                                 pub_get_unacknowledged_packet_count(&ctx->pub_ctx),
-                                                 ctx->traffic_resume_threshold);
-                           }
-                           if (ctx->payload_free)
-                               (*ctx->payload_free)(payload, payload_len, user_data);
-                           else
-                               free(payload);
-                       }));
+                   ctx->payload_free?ctx->payload_free:_payload_free_generic);
+
+    // If we currently have suspended traffic,
+    // check if we are to resume it.
+    if (ctx->traffic_suspended) {
+        if (pub_get_unacknowledged_packet_count(&ctx->pub_ctx) <= ctx->traffic_resume_threshold) {
+            RMC_LOG_INFO("Resuming traffic");
+            ctx->traffic_suspended = 0;
+        } else
+            RMC_LOG_DEBUG("Still suspended unacked[%d] threshold[%d]",
+                          pub_get_unacknowledged_packet_count(&ctx->pub_ctx),
+                          ctx->traffic_resume_threshold);
+    }
+
     return 0;
 }

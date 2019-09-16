@@ -37,13 +37,6 @@ typedef union {
 #define user_data_i32(_i32) ((user_data_t) { .i32 = _i32 })
 #define user_data_ptr(_ptr) ((user_data_t) { .ptr = _ptr })
 
-// Used for iterators etc.
-#define lambda(return_type, function_body) \
-    ({                                     \
-        return_type __fn__ function_body   \
-            __fn__;                        \
-    })
-
 
 extern usec_timestamp_t rmc_usec_monotonic_timestamp(void);
 

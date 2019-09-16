@@ -306,7 +306,9 @@
     NODETYPE* LISTTYPE##_find_node(LISTTYPE* list,                      \
                                    DATATYPE data,                       \
                                    int (*compare_func)(DATATYPE needle, \
-                                                       DATATYPE haystack)) \
+                                                       DATATYPE haystack, \
+                                                       void* user_data), \
+                                   void* user_data)                     \
     {                                                                   \
         NODETYPE* node = 0;                                             \
                                                                         \
@@ -314,7 +316,7 @@
         node = LISTTYPE##_head(list);                                   \
                                                                         \
         while(node) {                                                   \
-            int res = (*compare_func)(data, node->data);                \
+            int res = (*compare_func)(data, node->data, user_data);     \
                                                                         \
             if (res == -1)                                              \
                 return 0;                                               \
@@ -328,9 +330,11 @@
     }                                                                   \
                                                                         \
     NODETYPE* LISTTYPE##_find_node_rev(LISTTYPE* list,                  \
-                                   DATATYPE data,                       \
-                                   int (*compare_func)(DATATYPE needle, \
-                                                       DATATYPE haystack)) \
+                                       DATATYPE data,                   \
+                                       int (*compare_func)(DATATYPE needle, \
+                                                           DATATYPE haystack, \
+                                                           void* user_data), \
+                                       void* user_data)                 \
     {                                                                   \
         NODETYPE* node = 0;                                             \
                                                                         \
@@ -338,7 +342,7 @@
         node = LISTTYPE##_tail(list);                                   \
                                                                         \
         while(node) {                                                   \
-            int res = (*compare_func)(data, node->data);                \
+            int res = (*compare_func)(data, node->data, user_data);     \
                                                                         \
             if (res == -1)                                              \
                 return 0;                                               \
@@ -355,7 +359,9 @@
     NODETYPE* LISTTYPE##_insert_sorted_node(LISTTYPE* list,             \
                                             NODETYPE* new_node,         \
                                             int (*compare_func)(DATATYPE new_elem, \
-                                                                DATATYPE existing_elem)) \
+                                                                DATATYPE existing_elem, \
+                                                                void* user_data), \
+                                            void* user_data)            \
     {                                                                   \
         NODETYPE* node = 0;                                             \
                                                                         \
@@ -363,7 +369,7 @@
         node = LISTTYPE##_head(list);                                   \
                                                                         \
         while(node) {                                                   \
-            if ((*compare_func)(new_node->data, node->data) >= 0) {     \
+            if ((*compare_func)(new_node->data, node->data, user_data) >= 0) {    \
                 return LISTTYPE##_insert_before_node(node, new_node);   \
             }                                                           \
             node = LISTTYPE##_next(node);                               \
@@ -375,7 +381,9 @@
     NODETYPE* LISTTYPE##_insert_sorted_node_rev(LISTTYPE* list,         \
                                                 NODETYPE* new_node,     \
                                                 int (*compare_func)(DATATYPE new_elem, \
-                                                                    DATATYPE existing_elem)) \
+                                                                    DATATYPE existing_elem, \
+                                                                    void* user_data), \
+                                                void* user_data)        \
     {                                                                   \
         NODETYPE* node = 0;                                             \
                                                                         \
@@ -383,7 +391,7 @@
         node = LISTTYPE##_tail(list);                                   \
                                                                         \
         while(node) {                                                   \
-            if ((*compare_func)(new_node->data, node->data) >= 0) {     \
+            if ((*compare_func)(new_node->data, node->data, user_data) >= 0) {    \
                 return LISTTYPE##_insert_after_node(node, new_node);   \
             }                                                           \
             node = LISTTYPE##_prev(node);                               \
@@ -396,7 +404,9 @@
     NODETYPE* LISTTYPE##_insert_sorted(LISTTYPE* list,                  \
                                        DATATYPE new_elem,               \
                                        int (*compare_func)(DATATYPE new_elem, \
-                                                           DATATYPE existing_elem)) \
+                                                           DATATYPE existing_elem, \
+                                                           void* user_data), \
+                                       void* user_data)                 \
     {                                                                   \
         NODETYPE* new_node = 0;                                         \
                                                                         \
@@ -406,13 +416,15 @@
         assert(new_node);                                               \
                                                                         \
         new_node->data = new_elem;                                      \
-        return LISTTYPE##_insert_sorted_node(list, new_node, compare_func); \
+        return LISTTYPE##_insert_sorted_node(list, new_node, compare_func, user_data); \
     }                                                                   \
                                                                         \
     NODETYPE* LISTTYPE##_insert_sorted_rev(LISTTYPE* list,              \
                                            DATATYPE new_elem,           \
                                            int (*compare_func)(DATATYPE new_elem, \
-                                                               DATATYPE existing_elem)) \
+                                                               DATATYPE existing_elem, \
+                                                               void* user_data), \
+                                           void* user_data)             \
     {                                                                   \
         NODETYPE* new_node = 0;                                         \
         assert(list);                                                   \
@@ -421,7 +433,7 @@
         assert(new_node);                                               \
                                                                         \
         new_node->data = new_elem;                                      \
-        return LISTTYPE##_insert_sorted_node_rev(list, new_node, compare_func); \
+        return LISTTYPE##_insert_sorted_node_rev(list, new_node, compare_func, user_data); \
     }                                                                   \
                                                                         \
     inline void LISTTYPE##_empty(LISTTYPE* list)                        \

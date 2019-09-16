@@ -82,6 +82,10 @@ static int process_control_message(rmc_connection_t* conn, user_data_t user_data
     return 0;
 }
 
+static void _generic_payload_free(void* payload, payload_len_t payload_len, user_data_t user_data)
+{
+    free(payload);
+}
 
 int rmc_pub_close_connection(rmc_pub_context_t* ctx, rmc_index_t s_ind)
 {
@@ -108,12 +112,7 @@ int rmc_pub_close_connection(rmc_pub_context_t* ctx, rmc_index_t s_ind)
 
     RMC_LOG_INDEX_INFO(s_ind, "rmc_pub_close_connection() - ok");
     pub_reset_subscriber(&ctx->subscribers[s_ind],
-                         lambda(void, (void* payload, payload_len_t payload_len, user_data_t user_data) {
-                                 if (ctx->payload_free)
-                                     (*ctx->payload_free)(payload, payload_len, user_data);
-                                 else
-                                     free(payload);
-                             }));
+                         ctx->payload_free?ctx->payload_free:_generic_payload_free);
     return 0;
 }
 

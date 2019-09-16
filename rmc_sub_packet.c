@@ -13,6 +13,20 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+static int _compare_oldest_unackowledged_packet(rmc_index_t n_ind, rmc_index_t o_ind, void* user_data)
+{
+    rmc_sub_context_t* ctx = (rmc_sub_context_t*) user_data;
+    usec_timestamp_t n_oldest;
+    usec_timestamp_t o_oldest;
+
+    n_oldest = sub_oldest_unacknowledged_packet(&ctx->publishers[n_ind]);
+    o_oldest = sub_oldest_unacknowledged_packet(&ctx->publishers[o_ind]);
+
+    return (n_oldest < o_oldest)?-1:
+        ((n_oldest > o_oldest)?1:0);
+
+}
+
 
 int rmc_sub_packet_received(rmc_sub_context_t* ctx,
                             rmc_index_t index, // Into ctx->connections and ctx->publishers
@@ -33,17 +47,8 @@ int rmc_sub_packet_received(rmc_sub_context_t* ctx,
     if (!sub_oldest_unacknowledged_packet(pub))
         rmc_index_list_insert_sorted_rev(&ctx->pub_ack_list,
                                          index,
-                                         lambda(int, (rmc_index_t n_ind, rmc_index_t o_ind) {
-                                                 usec_timestamp_t n_oldest;
-                                                 usec_timestamp_t o_oldest;
-
-                                                 n_oldest = sub_oldest_unacknowledged_packet(&ctx->publishers[n_ind]);
-                                                 o_oldest = sub_oldest_unacknowledged_packet(&ctx->publishers[o_ind]);
-
-                                                 return (n_oldest < o_oldest)?-1:
-                                                     ((n_oldest > o_oldest)?1:0);
-
-                                                  }));
+                                         _compare_oldest_unackowledged_packet,
+                                         ctx);
 
     sub_packet_received(&ctx->publishers[index],
                         pid,
@@ -75,6 +80,10 @@ sub_packet_t* rmc_sub_get_next_dispatch_ready(rmc_sub_context_t* ctx)
     return 0;
 }
 
+static int _compare_packet(sub_packet_t* needle, sub_packet_t* haystack, void* user_dat)
+{
+    return needle == haystack;
+}
 
 // Caller still need to free pack->payload
 int rmc_sub_packet_dispatched_keep_payload(rmc_sub_context_t* ctx, sub_packet_t* pack)
@@ -86,9 +95,7 @@ int rmc_sub_packet_dispatched_keep_payload(rmc_sub_context_t* ctx, sub_packet_t*
 
     node = sub_packet_list_find_node(&ctx->dispatch_ready,
                                      pack,
-                                     lambda(int, (sub_packet_t* needle, sub_packet_t* haystack) {
-                                             return needle == haystack;
-                                         }));
+                                     _compare_packet, 0);
     if (!node)
         return ENOENT;
 

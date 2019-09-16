@@ -33,6 +33,26 @@ static void _free_pending_packet(sub_packet_t* ppack)
     free((void*) ppack);
 }
 
+static int _is_duplicate(sub_packet_t* needle,
+                         sub_packet_t* haystack,
+                         void* user_data)
+{
+    int *is_duplicate = (int*) user_data;
+    // We found an actual duplicate!
+    if (needle->pid == haystack->pid) {
+        *is_duplicate = 1;
+        return 1;
+    }
+
+    // Since received_pid is sorted, we will know when
+    // we will never find pid in the list
+    if (needle->pid > haystack->pid) {
+        *is_duplicate = 0;
+        return -1;
+    }
+    return 0;
+}
+
 int sub_packet_is_duplicate(sub_publisher_t* pub, packet_id_t pid)
 {
     sub_packet_t cmp_pack = { .pid = pid };
@@ -53,22 +73,7 @@ int sub_packet_is_duplicate(sub_publisher_t* pub, packet_id_t pid)
 
     sub_packet_list_find_node_rev(&pub->received_pid,
                                   &cmp_pack,
-                                  lambda(int, (sub_packet_t* needle,
-                                               sub_packet_t* haystack) {
-                                             // We found an actual duplicate!
-                                             if (needle->pid == haystack->pid) {
-                                                 is_duplicate = 1;
-                                                 return 1;
-                                             }
-
-                                             // Since received_pid is sorted, we will know when
-                                             // we will never find pid in the list
-                                             if (needle->pid > haystack->pid) {
-                                                 is_duplicate = 0;
-                                                 return -1;
-                                             }
-                                             return 0;
-                                         }));
+                                  _is_duplicate, &is_duplicate);
 
     if (is_duplicate == 1) {
         return 1;
@@ -77,6 +82,11 @@ int sub_packet_is_duplicate(sub_publisher_t* pub, packet_id_t pid)
 }
 
 
+static int _compare_pid(sub_packet_t* n_dt, sub_packet_t* o_dt, void* user_data) {
+    return (n_dt->pid < o_dt->pid)?-1:
+        ((n_dt->pid > o_dt->pid)?1:
+         0);
+}
 int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
                         void* payload,
                         payload_len_t payload_len,
@@ -102,11 +112,7 @@ int sub_packet_received(sub_publisher_t* pub, packet_id_t pid,
     // the received list than the beginning
     sub_packet_list_insert_sorted_rev(&pub->received_pid,
                                       pack,
-                                      lambda(int, (sub_packet_t* n_dt, sub_packet_t* o_dt) {
-                                              return (n_dt->pid < o_dt->pid)?-1:
-                                                  ((n_dt->pid > o_dt->pid)?1:
-                                                   0);
-                                          }));
+                                      _compare_pid, 0);
 
     if (store_receive_interval_data)
         sub_packet_add_to_received_interval(pub, pid);
