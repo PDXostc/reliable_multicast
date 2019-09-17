@@ -138,7 +138,7 @@ typedef struct rmc_connection_vector {
 
 
 // A publisher single context.
-typedef struct rmc_pub_context {
+struct rmc_pub_context {
     pub_context_t pub_ctx;
 
     rmc_connection_vector_t conn_vec;
@@ -246,10 +246,10 @@ typedef struct rmc_pub_context {
                          user_data_t user_data);
 
 
-} rmc_pub_context_t;
+};
 
 // A single subscriber context
-typedef struct rmc_sub_context {
+struct rmc_sub_context {
     rmc_connection_vector_t conn_vec;
 
     // Array of publishers maintained with the same index as conn_vec
@@ -371,7 +371,7 @@ typedef struct rmc_sub_context {
     void (*payload_free)(void* payload,
                          payload_len_t payload_len,
                          user_data_t user_data);
-} rmc_sub_context_t;
+};
 
 typedef struct rmc_conn_command_dispatch {
     uint8_t command;
