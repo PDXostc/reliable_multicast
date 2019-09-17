@@ -8,6 +8,7 @@
 
 #include "rmc_internal.h"
 
+#define _POSIX_C_SOURCE 199309L
 #include <time.h>
 #define CLOCK_BOOTTIME 9
 
