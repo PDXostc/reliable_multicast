@@ -342,6 +342,7 @@ int rmc_conn_process_accept(int listen_descriptor,
     rmc_index_t c_ind = -1;
     int tr = 1;
     int sock_err = 0;
+    int desc_flags = 0;
 
     // Find a free slot.
     c_ind = _get_free_slot(conn_vec);
@@ -355,6 +356,10 @@ int rmc_conn_process_accept(int listen_descriptor,
 
     if (conn_vec->connections[c_ind].descriptor == -1)
         return errno;
+
+    // Set nonblocking mode on the socket.
+    desc_flags = fcntl(conn_vec->connections[c_ind].descriptor, F_GETFL, 0);
+    fcntl(conn_vec->connections[c_ind].descriptor, F_SETFL, desc_flags | O_NONBLOCK);
 
     RMC_LOG_INDEX_COMMENT(c_ind, "%s:%d assigned to index %d",
                           inet_ntoa(src_addr.sin_addr), ntohs(src_addr.sin_port), c_ind);
