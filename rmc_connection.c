@@ -15,6 +15,7 @@
 
 #include <stdio.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <assert.h>
@@ -262,7 +263,7 @@ int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
     rmc_index_t c_ind = RMC_NIL_INDEX;
     int res = 0;
     struct sockaddr_in sock_addr;
-
+    int desc_flags = 0;
     assert(conn_vec);
 
     sock_addr = (struct sockaddr_in) {
@@ -277,10 +278,13 @@ int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
         return ENOMEM;
 
 
-    conn_vec->connections[c_ind].descriptor = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
-
+    conn_vec->connections[c_ind].descriptor = socket(AF_INET, SOCK_STREAM, 0);
     if (conn_vec->connections[c_ind].descriptor == -1)
         return errno;
+
+    // Set nonblocking mode on the socket.
+    desc_flags = fcntl(conn_vec->connections[c_ind].descriptor, F_GETFL, 0);
+    fcntl(conn_vec->connections[c_ind].descriptor, F_SETFL, desc_flags | O_NONBLOCK);
 
     RMC_LOG_INDEX_COMMENT(c_ind, "Connecting to control tcp addr[%s:%d]", inet_ntoa(sock_addr.sin_addr), ntohs(sock_addr.sin_port));
 
