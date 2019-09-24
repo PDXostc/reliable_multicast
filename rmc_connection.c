@@ -350,9 +350,9 @@ int rmc_conn_process_accept(int listen_descriptor,
     if (c_ind == RMC_NIL_INDEX)
         return ENOMEM;
 
-    conn_vec->connections[c_ind].descriptor = accept4(listen_descriptor,
+    conn_vec->connections[c_ind].descriptor = accept(listen_descriptor,
                                                       (struct sockaddr*) &src_addr,
-                                                      &addr_len, SOCK_NONBLOCK);
+                                                      &addr_len);
 
     if (conn_vec->connections[c_ind].descriptor == -1)
         return errno;
