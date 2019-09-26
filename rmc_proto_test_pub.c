@@ -125,6 +125,7 @@ void queue_test_data(rmc_pub_context_t* ctx, uint8_t* payload, int payload_len, 
     // Patch node with the correct pid.
     // Find the correct payload and update its pid
     /* TO BE REINTRODUCED WHEN WE DO PACKET FLIPPING ON SENDER SIDE
+       Replace lambda() with a static function in this file and provide a pointer to it.
     pub_packet_list_for_each(&ctx->pub_ctx.queued,
                              lambda (uint8_t, (pub_packet_node_t* node, void* dt) {
                                      pub_packet_t *pack = node->data;
@@ -144,7 +145,39 @@ void queue_test_data(rmc_pub_context_t* ctx, uint8_t* payload, int payload_len, 
 
 }
 
+// Shared between _subscriber_connect_callback() and test_rmc_proto_pub()
+int subscriber_count = 0;
 
+static uint8_t _subscriber_connect_callback(rmc_pub_context_t*ctx,
+                                            uint32_t remote_addr,
+                                            in_port_t remote_port)
+{
+    char* addr_str = inet_ntoa( (struct in_addr) { .s_addr = htonl( remote_addr) });
+    RMC_LOG_INFO("Subscriber [%s:%d] connected",
+                 addr_str,
+                 remote_port);
+    if (!subscriber_count)
+        rmc_log_set_start_time();
+
+    subscriber_count++;
+    return 1;
+}
+static void _subscriber_disconnect_callback(rmc_pub_context_t*ctx,
+                                            uint32_t remote_addr,
+                                            in_port_t remote_port)
+{
+    char* addr_str = inet_ntoa( (struct in_addr) { .s_addr = htonl( remote_addr) });
+    RMC_LOG_INFO("Subscriber [%s:%d] disconnected",
+                 addr_str,
+                 remote_port);
+    subscriber_count--;
+    return;
+}
+
+static void _free_payload(void* pl, payload_len_t len, user_data_t dt)
+{
+    free(pl);
+}
 
 void test_rmc_proto_pub(char* mcast_group_addr,
                         char* mcast_if_addr,
@@ -165,7 +198,6 @@ void test_rmc_proto_pub(char* mcast_group_addr,
     uint64_t signal_ind = 0;
     uint64_t packet_ind = 0;
     uint8_t *conn_vec_mem = 0;
-    int subscriber_count = 0;
     usec_timestamp_t current_ts = 0;
 
 
@@ -188,36 +220,12 @@ void test_rmc_proto_pub(char* mcast_group_addr,
                          (user_data_t) { .i32 = epollfd },
                          poll_add, poll_modify, poll_remove,
                          RMC_MAX_CONNECTIONS,
-                         lambda(void, (void* pl, payload_len_t len, user_data_t dt) { free(pl); }));
+                         _free_payload);
 
 
-    rmc_pub_set_subscriber_connect_callback(ctx,
-                                            lambda(uint8_t, (rmc_pub_context_t*ctx,
-                                                             uint32_t remote_addr,
-                                                             in_port_t remote_port) {
-                                                       char* addr_str = inet_ntoa( (struct in_addr) { .s_addr = htonl( remote_addr) });
-                                                       RMC_LOG_INFO("Subscriber [%s:%d] connected",
-                                                                    addr_str,
-                                                                    remote_port);
-                                                       if (!subscriber_count)
-                                                           rmc_log_set_start_time();
+    rmc_pub_set_subscriber_connect_callback(ctx, _subscriber_connect_callback);
+    rmc_pub_set_subscriber_disconnect_callback(ctx, _subscriber_disconnect_callback);
 
-                                                       subscriber_count++;
-                                                       return 1;
-                                                   }));
-
-
-    rmc_pub_set_subscriber_disconnect_callback(ctx,
-                                               lambda(void, (rmc_pub_context_t*ctx,
-                                                             uint32_t remote_addr,
-                                                             in_port_t remote_port) {
-                                                          char* addr_str = inet_ntoa( (struct in_addr) { .s_addr = htonl( remote_addr) });
-                                                          RMC_LOG_INFO("Subscriber [%s:%d] disconnected",
-                                                                       addr_str,
-                                                                       remote_port);
-                                                          subscriber_count--;
-                                                          return;
-                                                      }));
 
     // Send an announcement every 0.3 second.
     rmc_pub_set_announce_interval(ctx, 300000);

@@ -65,6 +65,11 @@ void pub_init_subscriber(pub_subscriber_t* sub, pub_context_t* ctx, user_data_t 
     pub_sub_list_push_tail(&ctx->subscribers, sub);
 }
 
+static int _find_subcriber(pub_subscriber_t* a, pub_subscriber_t* b, void* user_data)
+{
+    return a == b;
+}
+
 
 // Clean up all pending data.
 void pub_reset_subscriber(pub_subscriber_t* sub,
@@ -82,12 +87,24 @@ void pub_reset_subscriber(pub_subscriber_t* sub,
 
 
     snode = pub_sub_list_find_node(&sub->context->subscribers, sub,
-                                   lambda(int, (pub_subscriber_t* a, pub_subscriber_t* b) {
-                                           return a == b;
-                                       }));
+                                   _find_subcriber,
+                                   0);
     assert(snode);
     pub_sub_list_delete(snode);
 }
+
+
+static int _compare_pid(pub_packet_t* new_pack, pub_packet_t* existing_pack, void* user_data)
+{
+    if (new_pack->pid > existing_pack->pid)
+        return 1;
+
+    if (new_pack->pid < existing_pack->pid)
+        return -1;
+
+    return 0;
+}
+
 
 
 static packet_id_t pub_queue_packet_with_pid(pub_context_t* ctx,
@@ -116,16 +133,8 @@ static packet_id_t pub_queue_packet_with_pid(pub_context_t* ctx,
     ppack->parent_node =
         pub_packet_list_insert_sorted(&ctx->queued,
                                       ppack,
-                                      lambda(int, (pub_packet_t* new_pack, pub_packet_t* existing_pack) {
-                                              if (new_pack->pid > existing_pack->pid)
-                                                  return 1;
-
-                                               if (new_pack->pid < existing_pack->pid)
-                                                   return -1;
-
-                                               return 0;
-                                          }
-                                          ));
+                                      _compare_pid,
+                                      0);
 
     return ppack->pid;
 }
@@ -203,16 +212,7 @@ void pub_packet_sent(pub_context_t* ctx,
     // Sorted on ascending pid.
     pub_packet_list_insert_sorted_node(&ctx->inflight,
                                        pack->parent_node,
-                                       lambda(int, (pub_packet_t* new_pack, pub_packet_t* existing_pack) {
-                                               if (new_pack->pid > existing_pack->pid)
-                                                   return 1;
-
-                                               if (new_pack->pid < existing_pack->pid)
-                                                   return -1;
-
-                                               return 0;
-                                           }
-                                           ));
+                                       _compare_pid, 0);
 
     // Traverse all subscribers and insert pack into their
     // inflight list.
@@ -225,17 +225,8 @@ void pub_packet_sent(pub_context_t* ctx,
         // Insert the new pub_packet_t in the descending
         // packet_id sorted list of the subscriber's inflight packets.
         pub_packet_list_insert_sorted(&sub->inflight,
-                                pack,
-                                lambda(int, (pub_packet_t* new_pack, pub_packet_t* existing_pack) {
-                                   if (new_pack->pid < existing_pack->pid)
-                                       return -1;
-
-                                   if (new_pack->pid > existing_pack->pid)
-                                       return 1;
-
-                                   return 0;
-                               }
-                               ));
+                                      pack,
+                                      _compare_pid, 0);
         pack->ref_count++;
         sub_node = pub_sub_list_next(sub_node);
     }
@@ -311,17 +302,18 @@ void pub_get_timed_out_subscribers(pub_context_t* ctx,
                                    usec_timestamp_t timeout_period, // Number of usecs until timeout
                                    pub_sub_list_t* result)
 {
-    // Traverse all subscribers.
-    pub_sub_list_for_each(&ctx->subscribers,
-                          // For each subscriber, check if their oldest inflight packet has a sent_ts
-                          // timestamp older than max_age. If so, add the subscriber to result.
-                          lambda(uint8_t, (pub_sub_node_t* sub_node, void* udata) {
-                                  if (pub_packet_list_size(&sub_node->data->inflight) &&
-                                      pub_packet_list_tail(&sub_node->data->inflight)->data->send_ts + timeout_period <= current_ts)
-                                      pub_sub_list_push_tail(result, sub_node->data);
-                                  return 1;
-                              }), 0);
+    pub_sub_node_t* sub_node = pub_sub_list_head(&ctx->subscribers);
 
+
+    // Traverse all subscribers.
+    while(sub_node)  {
+        // For each subscriber, check if their oldest inflight packet has a sent_ts
+        // timestamp older than max_age. If so, add the subscriber to result.
+        if (pub_packet_list_size(&sub_node->data->inflight) &&
+            pub_packet_list_tail(&sub_node->data->inflight)->data->send_ts + timeout_period <= current_ts)
+            pub_sub_list_push_tail(result, sub_node->data);
+        sub_node = pub_sub_list_next(sub_node);
+    }
 }
 
 
@@ -330,17 +322,16 @@ void pub_get_timed_out_packets(pub_subscriber_t* sub,
                                usec_timestamp_t timeout_period, // Number of usecs until timeout
                                pub_packet_list_t* result)
 {
+    pub_packet_node_t* pack_node = pub_packet_list_head(&sub->inflight);
+
     // Traverse all inflight packets for subscriber until we find one that is not timed out.x
-    pub_packet_list_for_each_rev(&sub->inflight,
-                                 // For each packet, check if their oldest inflight packet has a sent_ts
-                                 // timestamp older than max_age. If so, add it to result.
-                                 lambda(uint8_t, (pub_packet_node_t* pnode, void* udata) {
-                                         if (pnode->data->send_ts + timeout_period <= current_ts) {
-                                             pub_packet_list_push_tail(result, pnode->data);
-                                             return 1;
-                                         }
-                                         return 0;
-                                     }), 0);
+    while(pack_node &&
+          pack_node->data->send_ts + timeout_period <= current_ts) {
+        pub_packet_list_push_tail(result, pack_node->data);
+        pack_node = pub_packet_list_next(pack_node);
+    }
+
+    return;
 }
 
 
@@ -349,26 +340,31 @@ void pub_get_timed_out_packets(pub_subscriber_t* sub,
 int pub_get_oldest_unackowledged_packet(pub_context_t* ctx, usec_timestamp_t* timeout_ack)
 {
     usec_timestamp_t oldest = -1;
+    pub_sub_node_t* sub_node = 0;
 
     if (!ctx || !timeout_ack)
         return 0;
 
-    // Traverse all subscribers.
-    pub_sub_list_for_each(&ctx->subscribers,
-                          // Check if the oldest inflight packet of this subscriber is older
-                          // than the oldest inflight packet found so far.
-                          lambda(uint8_t, (pub_sub_node_t* sub_node, void* udata) {
-                                  pub_packet_list_t* lst = &sub_node->data->inflight;
-                                  pub_packet_t* pack = 0;
-                                  if (!pub_packet_list_size(lst))
-                                      return 1;
+    sub_node = pub_sub_list_head(&ctx->subscribers);
 
-                                  pack = pub_packet_list_tail(lst)->data;
-                                  if (oldest == -1 || pack->send_ts < oldest) {
-                                      oldest = pack->send_ts;
-                                  }
-                                  return 1;
-                              }), 0);
+
+    // Traverse all subscribers.
+    while(sub_node)  {
+        // Check if the oldest inflight packet of this subscriber is older
+        // than the oldest inflight packet found so far.
+        pub_packet_list_t* lst = &sub_node->data->inflight;
+        pub_packet_t* pack = 0;
+        if (!pub_packet_list_size(lst)) {
+            sub_node = pub_sub_list_next(sub_node);
+            continue;
+        }
+        pack = pub_packet_list_tail(lst)->data;
+        if (oldest == -1 || pack->send_ts < oldest) {
+            oldest = pack->send_ts;
+        }
+        sub_node = pub_sub_list_next(sub_node);
+    }
+
 
     *timeout_ack = oldest;
     return 1;

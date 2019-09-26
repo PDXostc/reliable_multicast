@@ -333,7 +333,7 @@ int rmc_pub_context_get_pending(rmc_pub_context_t* ctx,
     rmc_conn_get_max_index_in_use(&ctx->conn_vec, &max_ind);
 
     // If we have no subscribers, just return immediately
-    if (max_ind == -1)
+    if (max_ind == RMC_NIL_INDEX)
         // Return EBUSY if we have pending data to transmit
         return busy?EBUSY:0;
 

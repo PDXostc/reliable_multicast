@@ -13,7 +13,7 @@ usec_timestamp_t rmc_usec_monotonic_timestamp(void)
 {
     struct timespec res;
 
-    clock_gettime(CLOCK_BOOTTIME, &res);
+    clock_gettime(CLOCK_MONOTONIC, &res);
 
     return (usec_timestamp_t) res.tv_sec * 1000000 + res.tv_nsec / 1000;
 }

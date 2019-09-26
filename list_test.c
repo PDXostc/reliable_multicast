@@ -95,7 +95,7 @@ static uint8_t _test_sequence(test_list* list, test_id_t start, test_id_t stop)
     return 0;
 }
 
-static int _compare_pid(test_id_t existing_pid, test_id_t new_pid)
+static int _compare_pid(test_id_t existing_pid, test_id_t new_pid, void* user_data)
 {
     if (existing_pid > new_pid)
         return 1;
@@ -107,7 +107,7 @@ static int _compare_pid(test_id_t existing_pid, test_id_t new_pid)
 
 }
 
-static int _find_pid(test_id_t pid1, test_id_t pid2)
+static int _find_pid(test_id_t pid1, test_id_t pid2, void* user_data)
 {
     return pid1 == pid2;
 
@@ -224,41 +224,41 @@ void run_list_tests()
     }
 
 
-    test_list_insert_sorted(&p1, 2, _compare_pid);
+    test_list_insert_sorted(&p1, 2, _compare_pid, 0);
     if (_test_sequence(&p1, 2, 2)) {
         puts("Failed list test 4.1.\n");
         exit(255);
     }
 
-    test_list_insert_sorted(&p1, 1, _compare_pid);
+    test_list_insert_sorted(&p1, 1, _compare_pid, 0);
     if (_test_sequence(&p1, 2, 1)) {
         puts("Failed list test 4.2.\n");
         exit(255);
     }
 
-    test_list_insert_sorted(&p1, 3, _compare_pid);
+    test_list_insert_sorted(&p1, 3, _compare_pid, 0);
     if (_test_sequence(&p1, 3, 1)) {
         puts("Failed list test 4.3.\n");
         exit(255);
     }
 
-    test_list_insert_sorted(&p1, 7, _compare_pid);
-    test_list_insert_sorted(&p1, 6, _compare_pid);
-    test_list_insert_sorted(&p1, 5, _compare_pid);
+    test_list_insert_sorted(&p1, 7, _compare_pid, 0);
+    test_list_insert_sorted(&p1, 6, _compare_pid, 0);
+    test_list_insert_sorted(&p1, 5, _compare_pid, 0);
 
-    test_list_insert_sorted(&p1, 4, _compare_pid);
+    test_list_insert_sorted(&p1, 4, _compare_pid, 0);
     if (_test_sequence(&p1, 7, 1)) {
         puts("Failed list test 4.4.\n");
         exit(255);
     }
 
-    test_list_insert_sorted(&p1, 8, _compare_pid);
+    test_list_insert_sorted(&p1, 8, _compare_pid, 0);
     if (_test_sequence(&p1, 8, 1)) {
         puts("Failed list test 4.5.\n");
         exit(255);
     }
 
-    node = test_list_find_node(&p1, 1, _find_pid);
+    node = test_list_find_node(&p1, 1, _find_pid, 0);
 
     if (node->data != 1) {
         puts("Failed list test 5.1.\n");
@@ -267,13 +267,13 @@ void run_list_tests()
 
     test_list_delete(node);
 
-    node = test_list_find_node(&p1, 1, _find_pid);
+    node = test_list_find_node(&p1, 1, _find_pid, 0);
     if (node) {
         puts("Failed list test 5.2.\n");
         exit(255);
     }
 
-    node = test_list_find_node(&p1, 2, _find_pid);
+    node = test_list_find_node(&p1, 2, _find_pid, 0);
     if (node->data != 2) {
         puts("Failed list test 5.3.\n");
         exit(255);
@@ -281,13 +281,13 @@ void run_list_tests()
 
     test_list_delete(node);
 
-    node = test_list_find_node(&p1, 2, _find_pid);
+    node = test_list_find_node(&p1, 2, _find_pid, 0);
     if (node) {
         puts("Failed list test 5.4.\n");
         exit(255);
     }
 
-    node = test_list_find_node(&p1, 7, _find_pid);
+    node = test_list_find_node(&p1, 7, _find_pid, 0);
     if (node->data != 7) {
         puts("Failed list test 5.5.\n");
         exit(255);
@@ -295,7 +295,7 @@ void run_list_tests()
 
     test_list_delete(node);
 
-    node = test_list_find_node(&p1, 7, _find_pid);
+    node = test_list_find_node(&p1, 7, _find_pid, 0);
     if (node) {
         puts("Failed list test 5.6.\n");
         exit(255);

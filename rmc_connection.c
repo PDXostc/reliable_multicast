@@ -15,6 +15,7 @@
 
 #include <stdio.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <assert.h>
@@ -262,7 +263,7 @@ int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
     rmc_index_t c_ind = RMC_NIL_INDEX;
     int res = 0;
     struct sockaddr_in sock_addr;
-
+    int desc_flags = 0;
     assert(conn_vec);
 
     sock_addr = (struct sockaddr_in) {
@@ -277,10 +278,13 @@ int rmc_conn_connect_tcp_by_address(rmc_connection_vector_t* conn_vec,
         return ENOMEM;
 
 
-    conn_vec->connections[c_ind].descriptor = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
-
+    conn_vec->connections[c_ind].descriptor = socket(AF_INET, SOCK_STREAM, 0);
     if (conn_vec->connections[c_ind].descriptor == -1)
         return errno;
+
+    // Set nonblocking mode on the socket.
+    desc_flags = fcntl(conn_vec->connections[c_ind].descriptor, F_GETFL, 0);
+    fcntl(conn_vec->connections[c_ind].descriptor, F_SETFL, desc_flags | O_NONBLOCK);
 
     RMC_LOG_INDEX_COMMENT(c_ind, "Connecting to control tcp addr[%s:%d]", inet_ntoa(sock_addr.sin_addr), ntohs(sock_addr.sin_port));
 
@@ -338,6 +342,7 @@ int rmc_conn_process_accept(int listen_descriptor,
     rmc_index_t c_ind = -1;
     int tr = 1;
     int sock_err = 0;
+    int desc_flags = 0;
 
     // Find a free slot.
     c_ind = _get_free_slot(conn_vec);
@@ -345,12 +350,16 @@ int rmc_conn_process_accept(int listen_descriptor,
     if (c_ind == RMC_NIL_INDEX)
         return ENOMEM;
 
-    conn_vec->connections[c_ind].descriptor = accept4(listen_descriptor,
+    conn_vec->connections[c_ind].descriptor = accept(listen_descriptor,
                                                       (struct sockaddr*) &src_addr,
-                                                      &addr_len, SOCK_NONBLOCK);
+                                                      &addr_len);
 
     if (conn_vec->connections[c_ind].descriptor == -1)
         return errno;
+
+    // Set nonblocking mode on the socket.
+    desc_flags = fcntl(conn_vec->connections[c_ind].descriptor, F_GETFL, 0);
+    fcntl(conn_vec->connections[c_ind].descriptor, F_SETFL, desc_flags | O_NONBLOCK);
 
     RMC_LOG_INDEX_COMMENT(c_ind, "%s:%d assigned to index %d",
                           inet_ntoa(src_addr.sin_addr), ntohs(src_addr.sin_port), c_ind);

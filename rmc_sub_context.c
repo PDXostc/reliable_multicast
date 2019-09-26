@@ -365,5 +365,5 @@ uint32_t rmc_sub_get_socket_count(rmc_sub_context_t* ctx)
         return 0;
 
     return rmc_sub_get_publisher_count(ctx) +
-        (ctx->mcast_recv_descriptor != -1)?1:0;
+        ((ctx->mcast_recv_descriptor != -1)?1:0);
 }

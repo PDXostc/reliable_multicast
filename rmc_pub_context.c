@@ -284,7 +284,7 @@ int rmc_pub_deactivate_context(rmc_pub_context_t* ctx)
 
     rmc_conn_get_max_index_in_use(&ctx->conn_vec, &max);
 
-    if (max != -1) {
+    if (max != RMC_NIL_INDEX) {
         for(ind = 0; ind <= max; ++ind) {
             rmc_connection_t* conn = rmc_conn_find_by_index(&ctx->conn_vec,
                                                             ind);
@@ -468,8 +468,8 @@ uint32_t rmc_pub_get_socket_count(rmc_pub_context_t* ctx)
         return 0;
 
     return rmc_pub_get_subscriber_count(ctx) +
-        (ctx->mcast_send_descriptor != -1)?1:0 +
-        (ctx->listen_descriptor != -1 )?1:0;
+        ((ctx->mcast_send_descriptor != -1)?1:0) +
+        ((ctx->listen_descriptor != -1 )?1:0);
 }
 
 int rmc_pub_throttling(rmc_pub_context_t* ctx,
