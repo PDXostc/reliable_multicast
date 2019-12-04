@@ -69,7 +69,7 @@ $(LIB_TARGET): $(OBJ)
 	ar q $(LIB_TARGET) $(OBJ)
 
 $(LIB_SO_TARGET): $(OBJ)
-	$(CC)  -shared $(CFLAGS) -o $(LIB_SO_TARGET) $(OBJ)
+	$(LD)  -shared $(LDFLAGS) -o $(LIB_SO_TARGET) $(OBJ)
 
 install: all
 	install -d ${DESTDIR}/lib
