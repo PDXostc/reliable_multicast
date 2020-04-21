@@ -66,7 +66,7 @@ $(TEST_TARGET): $(LIB_SO_TARGET) $(OBJ) $(TEST_OBJ)
 	$(CC) $(CFLAGS) -L. -lrmc $^ -o $@
 
 $(LIB_TARGET): $(OBJ)
-	ar q $(LIB_TARGET) $(OBJ)
+	$(AR) q $(LIB_TARGET) $(OBJ)
 
 $(LIB_SO_TARGET): $(OBJ)
 	$(CC)  -shared $(CFLAGS) -o $(LIB_SO_TARGET) $(OBJ)
