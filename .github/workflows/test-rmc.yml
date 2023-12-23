@@ -1,0 +1,11 @@
+name: Reliable Multicast Test
+run-name: ${{github.actor}} testing Reliable Multicast
+on: 
+  workflow_call:
+    
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Test triggered"
+        

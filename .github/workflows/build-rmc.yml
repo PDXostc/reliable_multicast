@@ -1,0 +1,101 @@
+name: Reliable Multicast Build
+run-name: ${{github.actor}} building Reliable Multicast
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      DESTDIR: ./out
+    steps:
+      - run: echo "Build ${{github.event_name}} event."
+      - run: echo "The job was automatically triggered by a ${{ github.event_name }} event."
+      - run: echo "This job is now running on a ${{ runner.os }} server hosted by GitHub!"
+      - run: echo "The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
+      - name: Check out code
+        uses: actions/checkout@v4
+      - run: echo "The ${{ github.repository }} repository has been cloned to the runner."
+      - run: echo "The workflow is now ready to test your code on the runner."
+      - run: echo "This job's status is ${{ job.status }}."
+      - name: make
+        run: make all install 
+      - run: ls -R
+
+      - name: Cache build
+        id: cache-rmc-build
+        uses: actions/cache@v3
+        with: 
+          path: ./out
+          key: ${{runner.os}}-rmclib
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - run: echo "Client test trigger ${{github.event_name}} event."
+      - name: Restore build
+        id: restore-rmc-build
+        uses: actions/cache@v3
+        with:
+          path: ./out
+          key: ${{runner.os}}-rmclib
+
+      - name: Basic test of 1000 signals sent from single publisher to single subscriber
+        run: |
+          ./out/bin/rmc_test -S &
+          ./out/bin/rmc_test -c 1000 & 
+          wait
+          wait
+
+
+      - name: Test of five publishers sending 1,000,000 signals each to a single subscriber
+        run: |
+          ./out/bin/rmc_test -S -e1 -e2 -e3 -e4 -e5 &
+          ./out/bin/rmc_test -i1 -c 1000000 & 
+          ./out/bin/rmc_test -i2 -c 1000000 & 
+          ./out/bin/rmc_test -i3 -c 1000000 & 
+          ./out/bin/rmc_test -i4 -c 1000000 & 
+          ./out/bin/rmc_test -i5 -c 1000000 & 
+          wait
+          wait
+          wait
+          wait
+          wait
+          wait
+
+      - name: Test of five subscribers receiving 1,000,000 signals from a single publisher
+        run: |
+          ./out/bin/rmc_test -S &
+          ./out/bin/rmc_test -S &
+          ./out/bin/rmc_test -S &
+          ./out/bin/rmc_test -S &
+          ./out/bin/rmc_test -S &
+          ./out/bin/rmc_test -c 10000000 & 
+          wait
+          wait
+          wait
+          wait
+          wait
+          wait
+
+      - name: Test of five publishers sending 1,000,000 signals each to five subscribers
+        run: |
+          ./out/bin/rmc_test -S -e1 -e2 -e3 -e4 -e5 &
+          ./out/bin/rmc_test -S -e1 -e2 -e3 -e4 -e5 &
+          ./out/bin/rmc_test -S -e1 -e2 -e3 -e4 -e5 &
+          ./out/bin/rmc_test -S -e1 -e2 -e3 -e4 -e5 &
+          ./out/bin/rmc_test -S -e1 -e2 -e3 -e4 -e5 &
+          ./out/bin/rmc_test -i1 -c 1000000 & 
+          ./out/bin/rmc_test -i2 -c 1000000 & 
+          ./out/bin/rmc_test -i3 -c 1000000 & 
+          ./out/bin/rmc_test -i4 -c 1000000 & 
+          ./out/bin/rmc_test -i5 -c 1000000 & 
+          wait
+          wait
+          wait
+          wait
+          wait
+          wait
+          wait
+          wait
+          wait
+          wait
