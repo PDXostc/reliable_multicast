@@ -42,18 +42,24 @@ jobs:
       - name: Basic test of 1000 signals sent from single publisher to single subscriber
         run: |
           ./out/bin/rmc_test -S &
+          sleep 0.2
           ./out/bin/rmc_test -c 1000 & 
           wait
           wait
-
+          echo "Basic test done"
 
       - name: Test of five publishers sending 1,000,000 signals each to a single subscriber
         run: |
           ./out/bin/rmc_test -S -e1 -e2 -e3 -e4 -e5 &
+          sleep 0.2
           ./out/bin/rmc_test -i1 -c 1000000 & 
+          sleep 0.2
           ./out/bin/rmc_test -i2 -c 1000000 & 
+          sleep 0.2
           ./out/bin/rmc_test -i3 -c 1000000 & 
+          sleep 0.2
           ./out/bin/rmc_test -i4 -c 1000000 & 
+          sleep 0.2
           ./out/bin/rmc_test -i5 -c 1000000 & 
           wait
           wait
@@ -61,34 +67,52 @@ jobs:
           wait
           wait
           wait
+          echo "Five pub test done"
+
 
       - name: Test of five subscribers receiving 1,000,000 signals from a single publisher
         run: |
           ./out/bin/rmc_test -S &
+          sleep 0.2
           ./out/bin/rmc_test -S &
+          sleep 0.2
           ./out/bin/rmc_test -S &
+          sleep 0.2
           ./out/bin/rmc_test -S &
+          sleep 0.2
           ./out/bin/rmc_test -S &
-          ./out/bin/rmc_test -c 10000000 & 
+          sleep 0.2
+          ./out/bin/rmc_test -E5 -c 10000000 & 
           wait
           wait
           wait
           wait
           wait
           wait
+          echo "Fivs sub test Done"
+
 
       - name: Test of five publishers sending 1,000,000 signals each to five subscribers
         run: |
           ./out/bin/rmc_test -S -e1 -e2 -e3 -e4 -e5 &
+          sleep 0.2
           ./out/bin/rmc_test -S -e1 -e2 -e3 -e4 -e5 &
+          sleep 0.2
           ./out/bin/rmc_test -S -e1 -e2 -e3 -e4 -e5 &
+          sleep 0.2
           ./out/bin/rmc_test -S -e1 -e2 -e3 -e4 -e5 &
+          sleep 0.2
           ./out/bin/rmc_test -S -e1 -e2 -e3 -e4 -e5 &
-          ./out/bin/rmc_test -i1 -c 1000000 & 
-          ./out/bin/rmc_test -i2 -c 1000000 & 
-          ./out/bin/rmc_test -i3 -c 1000000 & 
-          ./out/bin/rmc_test -i4 -c 1000000 & 
-          ./out/bin/rmc_test -i5 -c 1000000 & 
+          sleep 0.2
+          ./out/bin/rmc_test -i1 -E5 -c 1000000 & 
+          sleep 0.2
+          ./out/bin/rmc_test -i2 -E5 -c 1000000 & 
+          sleep 0.2
+          ./out/bin/rmc_test -i3 -E5 -c 1000000 & 
+          sleep 0.2
+          ./out/bin/rmc_test -i4 -E5 -c 1000000 & 
+          sleep 0.2
+          ./out/bin/rmc_test -i5 -E5 -c 1000000 & 
           wait
           wait
           wait
@@ -99,3 +123,37 @@ jobs:
           wait
           wait
           wait
+          echo "Five pub and five sub test done"
+
+      - name: Jitter and packet loss test
+        run: |
+          ./out/bin/rmc_test -S -e1 -e2 -e3 -e4 -e5 -d 0.8 -j 100000 &
+          sleep 0.2
+          ./out/bin/rmc_test -S -e1 -e2 -e3 -e4 -e5 -d 0.8 -j 100000 &
+          sleep 0.2
+          ./out/bin/rmc_test -S -e1 -e2 -e3 -e4 -e5 -d 0.8 -j 100000 &
+          sleep 0.2
+          ./out/bin/rmc_test -S -e1 -e2 -e3 -e4 -e5 -d 0.8 -j 100000 &
+          sleep 0.2
+          ./out/bin/rmc_test -S -e1 -e2 -e3 -e4 -e5 -d 0.8 -j 100000 &
+          sleep 0.2
+          ./out/bin/rmc_test -i1 -E5 -c 100000 -d 0.8 -j 100000 & 
+          sleep 0.2
+          ./out/bin/rmc_test -i2 -E5 -c 100000 -d 0.8 -j 100000 & 
+          sleep 0.2
+          ./out/bin/rmc_test -i3 -E5 -c 100000 -d 0.8 -j 100000 & 
+          sleep 0.2
+          ./out/bin/rmc_test -i4 -E5 -c 100000 -d 0.8 -j 100000 & 
+          sleep 0.2
+          ./out/bin/rmc_test -i5 -E5 -c 100000 -d 0.8 -j 100000 & 
+          wait
+          wait
+          wait
+          wait
+          wait
+          wait
+          wait
+          wait
+          wait
+          wait
+          echo "Jitter and packet loss test done"
