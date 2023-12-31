@@ -1,0 +1,61 @@
+name: Reliable Multicast Release
+
+run-name: ${{github.actor}} Debian Release Reliable Multicast
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release-build:
+    uses: ./.github/workflows/build-rmc.yml
+    
+  create-debian-pkg:
+    runs-on: ubuntu-latest
+    needs: release-build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore build
+        id: restore-rmc-build
+        uses: actions/cache@v3
+        with:
+          path: ./out
+          key: ${{runner.os}}-rmclib
+
+      - name: create sample script
+        run: |
+          mkdir -p .debpkg/usr/local
+          cp -r out/* .debpkg/usr/local
+
+      - uses: jiro4989/build-deb-action@v3
+        with:
+          package: reliable-multicast
+          package_root: .debpkg
+          maintainer: Magnus Feuer 
+          version: ${{ github.ref }} # refs/tags/v*.*.*
+          arch: 'amd64'
+          depends: 'libc6 (>= 2.2.1)'
+          desc: 'This is the reliable multicast package.'
+
+
+      - run: ls -R .
+
+      - uses: ncipollo/release-action@v1
+        with:
+          artifacts: "*.deb"
+          name: Reliable Multicast Debian Release ${{ github.ref }}
+#          bodyFile: "body.md"
+
+      # - uses: actions/create-release@v1
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+
+      #   with:
+      #     tag_name: ${{ github.ref }}-src
+      #     release_name: Reliable Multicast Source Release ${{ github.ref }}
+      #     body: |
+      #        - Some kund of change
+      #     draft: false
+      #     prerelease: false
