@@ -1,9 +1,9 @@
 #
-# Doodling
-#
+# Makefile to build binaries, tests, tarballs, and debian packages.
+# To make life easier, consider using the Reliable Multicast build docker container:
+# github.com/magnusfeuer/rmc-docker-build
+# 
 
-
-# OBJ=list.o interval.o time.o pub.o
 OBJ= pub.o \
 	time.o \
 	sub.o \
@@ -46,14 +46,29 @@ HDR=    ${INST_HDR} \
 		rmc_protocol.h
 
 LIB_TARGET=librmc.a
-LIB_SO_TARGET=librmc.so
+VERSION ?= $(shell grep -v '#' VERSION)
+VERSION_MAJOR ?= $(word 1, $(subst ., ,$(VERSION)))
+LIB_SO_TARGET=librmc.so.${VERSION}
+LIB_SO_SONAME_TARGET=librmc.so.${VERSION_MAJOR}
+ARCHITECTURE=amd64
 TEST_TARGET=rmc_test
+
+#
+# Has fallen behind. Untested.
+#
 WIRESHARK_TARGET=rmc_wireshark_plugin.so
 DESTDIR ?= /usr/local
-
 CFLAGS ?= -O2 -fpic -Wall -D_GNU_SOURCE
 
-.PHONY: all clean etags print_obj install uninstall
+PACKAGE_BASE_NAME=reliable-multicast
+DEBIAN_PACKAGE_BASE_NAME=${PACKAGE_BASE_NAME}_${VERSION}-1_${ARCHITECTURE}
+DEBIAN_PACKAGE_NAME=${DEBIAN_PACKAGE_BASE_NAME}.deb
+DEBIAN_PACKAGE_DEV_NAME=${DEBIAN_PACKAGE_BASE_NAME}-dev.deb
+
+TARBALL_BASE_NAME=${PACKAGE_BASE_NAME}-${VERSION}
+TARBALL_NAME=${TARBALL_BASE_NAME}.tar.gz
+
+.PHONY: all clean etags print_obj install uninstall tar debian
 
 all: $(LIB_TARGET) $(LIB_SO_TARGET) $(TEST_TARGET)
 
@@ -71,26 +86,74 @@ $(LIB_TARGET): $(OBJ)
 $(LIB_SO_TARGET): $(OBJ)
 	$(CC)  -shared $(CFLAGS) -o $(LIB_SO_TARGET) $(OBJ)
 
-install: all
-	install -d ${DESTDIR}/lib
+install: all uninstall
 	install -d ${DESTDIR}/bin
+	install -d ${DESTDIR}/lib
 	install -d ${DESTDIR}/include
 	install -m 0644 ${LIB_TARGET} ${DESTDIR}/lib
-	install -m 0644 ${LIB_SO_TARGET} ${DESTDIR}/lib
-	install -m 0755 ${TEST_TARGET} ${DESTDIR}/bin
+	install -m 0644 ${LIB_SO_TARGET} ${DESTDIR}/lib/
+	(cd ${DESTDIR}/lib && ln -s ${LIB_SO_TARGET} ${LIB_SO_SONAME_TARGET})
+	install -m 0755 ${TEST_TARGET} ${DESTDIR}/bin/
 	install -m 0644 ${INST_HDR} ${DESTDIR}/include
 
 uninstall:
 	rm -f ${DESTDIR}/lib/${LIB_TARGET}
 	rm -f ${DESTDIR}/lib/${LIB_SO_TARGET}
+	rm -f ${DESTDIR}/lib/${LIB_SO_SONAME_TARGET}
 	rm -f ${DESTDIR}/bin/${TEST_TARGET}
-	(cd ${DESTDIR}/include; rm -f ${INST_HDR})
+	-(cd ${DESTDIR}/include && rm -f ${INST_HDR})
+
+tar: ${TARBALL_NAME}
+
+${TARBALL_NAME}: clean
+	tar  -cvzf ${@} --transform "s,^,${TARBALL_BASE_NAME}/,"  *
+
+
+# Requires fpm https://fpm.readthedocs.io/en/v1.15.1/index.html
+#
+debian: ${DEBIAN_PACKAGE_DEV_NAME} ${DEBIAN_PACKAGE_NAME} 
+
+${DEBIAN_PACKAGE_NAME}: DESTDIR=/tmp/rmc-install
+${DEBIAN_PACKAGE_NAME}: install
+	fpm -s dir -t deb \
+		-p ${@} \
+		--name ${PACKAGE_BASE_NAME} \
+		--license mplv2 \
+		--version ${VERSION} \
+		--architecture ${ARCHITECTURE} \
+		--deb-shlibs "librmc ${VERSION_MAJOR} ${LIB_SO_SONAME_TARGET} (>= ${VERSION})" \
+		--depends "libc6 (>= 2.31)" \
+		--description "Reliable Multicast library" \
+		--url "https://github.com/magnusfeuer/reliable_multicast" \
+		--maintainer "Magnus Feuer" \
+		${DESTDIR}/lib/librmc.so.${VERSION_MAJOR}=/usr/local/lib/librmc.so.${VERSION_MAJOR} \
+		${DESTDIR}/lib/librmc.so.${VERSION}=/usr/local/lib/librmc.so.${VERSION} \
+		${DESTDIR}/bin/rmc_test=/usr/local/bin/rmc_test
+
+${DEBIAN_PACKAGE_DEV_NAME}: DESTDIR=/tmp/rmc-install
+${DEBIAN_PACKAGE_DEV_NAME}: install
+	fpm -s dir -t deb \
+		-p ${@} \
+		--name ${PACKAGE_BASE_NAME} \
+		--license mplv2 \
+		--version ${VERSION} \
+		--architecture any \
+		--description "Reliable Multicast development package" \
+		--url "https://github.com/magnusfeuer/reliable_multicast" \
+		--maintainer "Magnus Feuer" \
+		${DESTDIR}/include/reliable_multicast.h=/usr/local/include/reliable_multicast.h \
+		${DESTDIR}/include/rmc_list.h=/usr/local/include/rmc_list.h \
+		${DESTDIR}/include/rmc_list_template.h=/usr/local/include/rmc_list_template.h
+
 etags:
 	@rm -f TAGS
 	find . -name '*.h' -o -name '*.c' -print | etags -
 
 clean:
-	rm -f $(OBJ) *~ $(TEST_TARGET) $(TEST_OBJ) $(WIRESHARK_TARGET) $(LIB_TARGET) $(LIB_SO_TARGET)
+	rm -f $(OBJ) *~ $(TEST_TARGET) $(TEST_OBJ) $(WIRESHARK_TARGET) $(LIB_TARGET) $(LIB_SO_TARGET) \
+		${DEBIAN_PACKAGE_NAME} ${DEBIAN_PACKAGE_DEV_NAME} \
+		${TARBALL_NAME}
+
 
 $(OBJ): $(HDR) Makefile
 
