@@ -1,0 +1,5 @@
+#
+# Version number to use when creating libraries and packages.
+# Please make sure that this is synced with any git tags
+#
+1.8.1
